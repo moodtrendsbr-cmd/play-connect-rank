@@ -168,6 +168,7 @@ const Payment = () => {
 
       // 2. Create payment
       const paymentBody: any = {
+        tournament_id: id,
         tournament_name: tournament.name,
         entry_fee: tournament.entry_fee,
         enrollment_ids: ids,
