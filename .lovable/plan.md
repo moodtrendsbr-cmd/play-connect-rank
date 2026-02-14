@@ -1,69 +1,136 @@
-# 🏐 MOOD PLAY — Plano de Implementação
 
-## Visão Geral
 
-Plataforma de gestão de torneios esportivos com rede social, ranking e pagamentos via Mercado Pago. Design escuro e esportivo com cores vibrantes (verde neon, amarelo).
+# Implementacao de Split Payment com Mercado Pago
 
----
+## Resumo
 
-## Fase 1 — Design System & Landing Page
+O pagamento das inscricoes sera dividido automaticamente entre o organizador do torneio e a plataforma Mood. Se o organizador nao tiver conta no Mercado Pago, a Mood recebe o valor total e o organizador pode solicitar o saque pelo perfil.
 
-- Tema escuro com acentos verde neon (#39FF14) e amarelo
-- Tipografia bold e esportiva
-- Landing page com hero "Onde jogos viram ranking", CTAs para atleta e organizador
-- Layout responsivo mobile-first
+## Cenarios de pagamento
 
-## Fase 2 — Backend (Lovable Cloud)
+```text
++--------------------------------------------------+
+|  Atleta paga inscricao (PIX ou Cartao)           |
++--------------------------------------------------+
+            |
+            v
++---------------------------+
+| Organizador tem conta MP? |
++---------------------------+
+     |              |
+    SIM            NAO
+     |              |
+     v              v
++-----------------+  +-------------------------+
+| Split Payment   |  | Mood recebe 100%        |
+| MP Marketplace  |  | Saldo fica no sistema   |
+| Org: valor - %  |  | Organizador solicita    |
+| Mood: comissao  |  | saque pelo perfil       |
++-----------------+  +-------------------------+
+```
 
-- **Autenticação**: Login/cadastro por email (organizadores e atletas)
-- **Tabelas**: tournaments, enrollments, athlete_profiles, match_results, posts, comments, likes
-- **Storage**: Bucket para imagens de torneios
-- **Políticas de segurança (RLS)**: Organizador gerencia seus torneios, atleta vê seus dados
+## Mudancas no banco de dados
 
-## Fase 3 — Fluxo do Organizador
+### 1. Adicionar campo na tabela `profiles`
+- `mp_collector_id` (text, nullable) -- ID do vendedor no Mercado Pago (para split)
 
-- Dashboard com resumo (torneios, inscritos, confirmados, pendentes, saldo)
-- Formulário completo de criação de torneio (nome, categoria, tipo, local, datas, valor, vagas, prazo de pagamento, regulamento, imagem)
-- Tela de gerenciamento: lista de inscritos por status (✅ Pagos, ⏳ Pendentes, ❌ Expirados)
-- Botão "Enviar lembrete" para pendentes
-- Geração de chaveamento (eliminatórias simples)
-- Lançamento de resultados das partidas
+### 2. Nova tabela `organizer_balances`
+Armazena o saldo acumulado de organizadores que nao tem conta MP:
 
-## Fase 4 — Fluxo do Atleta
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid | PK |
+| organizer_id | uuid | FK para auth.users |
+| tournament_id | uuid | FK para tournaments |
+| amount | numeric | Valor devido ao organizador |
+| commission | numeric | Comissao da Mood |
+| payment_id | text | ID do pagamento MP |
+| status | text | pending / paid / withdrawn |
+| created_at | timestamptz | Data de criacao |
+| withdrawn_at | timestamptz | Data do saque (quando aplicavel) |
 
-- Página pública do torneio com informações e botão de inscrição
-- Formulário de inscrição (nome, email, WhatsApp)
-- Reserva de vaga com prazo definido pelo organizador
-- Perfil do atleta com ranking, torneios jogados e vitórias
-- Edição de perfil
+RLS: organizador ve apenas seus proprios registros.
 
-## Fase 5 — Pagamento com Mercado Pago
+### 3. Nova tabela `withdrawal_requests`
+Solicitacoes de saque feitas pelo organizador:
 
-- Integração via edge function com API do Mercado Pago (Checkout Pro)
-- Fluxo: Inscrição → Pagamento → Confirmação automática
-- Webhook para receber notificação de pagamento aprovado
-- Ao aprovar: status muda para "paid", notificação para atleta e organizador
-- Expiração automática de vagas não pagas dentro do prazo
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid | PK |
+| organizer_id | uuid | Quem solicita |
+| amount | numeric | Valor solicitado |
+| status | text | pending / approved / paid / rejected |
+| pix_key | text | Chave PIX do organizador |
+| created_at | timestamptz | |
+| processed_at | timestamptz | |
 
-## Fase 6 — Chaveamento & Ranking
+## Mudancas nas Edge Functions
 
-- Geração automática de chaves (usuario escolhe chaveamento) insira 3 tipos e opção de personalizar chavemanto
-- Visualização das chaves com resultados
-- Sistema de pontuação (vitórias = pontos)
-- Ranking geral com posição, nome e pontuação
-- Link do ranking para perfil do atleta
+### `create-payment` (atualizar)
 
-## Fase 7 — Feed Social
+1. Receber `tournament_id` no body
+2. Buscar o torneio e o perfil do organizador para checar `mp_collector_id`
+3. **Se organizador tem MP**: usar a API de split payment do Mercado Pago, enviando `application_fee` (comissao Mood) e o `collector_id` do organizador
+4. **Se organizador NAO tem MP**: criar pagamento normal (Mood recebe tudo), apos aprovacao registrar o saldo na tabela `organizer_balances`
 
-- Feed com posts automáticos (vitórias, inscrições em torneios)
-- Criação de posts manuais pelos atletas
-- Curtir e comentar em posts
-- Timeline cronológica
+### `mercadopago-webhook` (atualizar)
 
----
+Apos confirmar pagamento aprovado:
+1. Atualizar enrollments (ja existente)
+2. Se o pagamento foi sem split (organizador sem MP), registrar credito na `organizer_balances`
 
-## Notas Técnicas
+### Nova edge function: `request-withdrawal`
 
-- **Mercado Pago**: Será necessário fornecer a Access Token do Mercado Pago para configurar os pagamentos
-- **Expiração automática**: Implementada via lógica no backend (edge function schedulada ou verificação on-demand)
-- **Rodapé**: "Mood Play — Powered by Grupo MOOD"
+Organizador solicita saque do saldo acumulado:
+- Valida autenticacao
+- Calcula saldo disponivel (sum de `organizer_balances` com status=paid menos saques ja feitos)
+- Cria registro em `withdrawal_requests`
+- Envia notificacao (futuro: webhook/email)
+
+## Mudancas no Frontend
+
+### Perfil do Organizador (`Profile.tsx`)
+
+Adicionar secao visivel apenas para organizadores:
+- **Conta Mercado Pago**: campo para informar o `collector_id` MP (com instrucoes de onde encontrar)
+- **Saldo disponivel**: mostra soma dos valores em `organizer_balances` que nao foram sacados
+- **Botao "Solicitar Saque"**: abre dialog para informar chave PIX e confirmar valor
+- **Historico de saques**: lista de `withdrawal_requests` com status
+
+### Pagina de Gerenciamento do Torneio (`ManageTournament.tsx`)
+
+Adicionar card mostrando:
+- Total arrecadado (inscricoes pagas)
+- Comissao Mood
+- Valor liquido do organizador
+- Aviso se nao tem conta MP vinculada
+
+### Pagina de Criacao de Torneio ou Configuracoes
+
+Aviso/banner: "Conecte sua conta Mercado Pago para receber pagamentos automaticamente"
+
+## Detalhes Tecnicos
+
+### Comissao da Mood
+- Definir como percentual fixo (ex: 10%) ou valor configuravel
+- Sera armazenado como constante na edge function inicialmente (pode virar configuracao no futuro)
+
+### Split Payment no Mercado Pago (API Marketplace)
+Quando o organizador tem `mp_collector_id`, o body do pagamento inclui:
+
+```text
+{
+  ...paymentBody,
+  application_fee: comissaoMood,    // valor que fica com a Mood
+  collector_id: organizador.mp_collector_id  // quem recebe
+}
+```
+
+Obs: Para split funcionar, o organizador precisa autorizar a aplicacao Mood no Mercado Pago (OAuth). Inicialmente pode ser feito com collector_id manual; futuramente pode-se implementar OAuth completo.
+
+### Seguranca
+- RLS em `organizer_balances`: organizador ve apenas seus registros
+- RLS em `withdrawal_requests`: organizador ve/cria apenas seus registros
+- Edge function `request-withdrawal` valida JWT do usuario
+- Saldo calculado server-side para evitar manipulacao
+
