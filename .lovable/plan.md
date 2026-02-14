@@ -1,136 +1,126 @@
 
 
-# Implementacao de Split Payment com Mercado Pago
+# Painel de Administracao - Mood Play
 
 ## Resumo
 
-O pagamento das inscricoes sera dividido automaticamente entre o organizador do torneio e a plataforma Mood. Se o organizador nao tiver conta no Mercado Pago, a Mood recebe o valor total e o organizador pode solicitar o saque pelo perfil.
-
-## Cenarios de pagamento
-
-```text
-+--------------------------------------------------+
-|  Atleta paga inscricao (PIX ou Cartao)           |
-+--------------------------------------------------+
-            |
-            v
-+---------------------------+
-| Organizador tem conta MP? |
-+---------------------------+
-     |              |
-    SIM            NAO
-     |              |
-     v              v
-+-----------------+  +-------------------------+
-| Split Payment   |  | Mood recebe 100%        |
-| MP Marketplace  |  | Saldo fica no sistema   |
-| Org: valor - %  |  | Organizador solicita    |
-| Mood: comissao  |  | saque pelo perfil       |
-+-----------------+  +-------------------------+
-```
+Criar um painel administrativo completo acessivel apenas por usuarios com role "admin". O painel permite gerenciamento total da plataforma: usuarios, organizadores, torneios, inscricoes, pagamentos, saldos e metricas.
 
 ## Mudancas no banco de dados
 
-### 1. Adicionar campo na tabela `profiles`
-- `mp_collector_id` (text, nullable) -- ID do vendedor no Mercado Pago (para split)
+### 1. Adicionar role "admin" ao enum `app_role`
 
-### 2. Nova tabela `organizer_balances`
-Armazena o saldo acumulado de organizadores que nao tem conta MP:
+O enum atual tem apenas `organizer` e `athlete`. Sera adicionado o valor `admin`.
 
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid | PK |
-| organizer_id | uuid | FK para auth.users |
-| tournament_id | uuid | FK para tournaments |
-| amount | numeric | Valor devido ao organizador |
-| commission | numeric | Comissao da Mood |
-| payment_id | text | ID do pagamento MP |
-| status | text | pending / paid / withdrawn |
-| created_at | timestamptz | Data de criacao |
-| withdrawn_at | timestamptz | Data do saque (quando aplicavel) |
+### 2. RLS e seguranca
 
-RLS: organizador ve apenas seus proprios registros.
+- Criar funcao auxiliar `is_admin()` usando `has_role` existente para simplificar policies
+- Adicionar policies de SELECT em todas as tabelas para admins (para que o admin consiga ler todos os dados)
+- Policies necessarias:
+  - `profiles`: admin pode ver e atualizar todos
+  - `enrollments`: admin pode ver e atualizar todos
+  - `tournaments`: admin pode ver, atualizar e deletar todos
+  - `organizer_balances`: admin pode ver e atualizar todos
+  - `withdrawal_requests`: admin pode ver e atualizar todos (aprovar/rejeitar saques)
+  - `user_roles`: admin pode ver todos e inserir/atualizar
 
-### 3. Nova tabela `withdrawal_requests`
-Solicitacoes de saque feitas pelo organizador:
+### 3. Atribuir role admin
 
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid | PK |
-| organizer_id | uuid | Quem solicita |
-| amount | numeric | Valor solicitado |
-| status | text | pending / approved / paid / rejected |
-| pix_key | text | Chave PIX do organizador |
-| created_at | timestamptz | |
-| processed_at | timestamptz | |
+Sera necessario inserir manualmente o role admin para o primeiro usuario (via SQL). Futuramente, admins podem promover outros usuarios pelo painel.
 
-## Mudancas nas Edge Functions
+## Estrutura do Frontend
 
-### `create-payment` (atualizar)
-
-1. Receber `tournament_id` no body
-2. Buscar o torneio e o perfil do organizador para checar `mp_collector_id`
-3. **Se organizador tem MP**: usar a API de split payment do Mercado Pago, enviando `application_fee` (comissao Mood) e o `collector_id` do organizador
-4. **Se organizador NAO tem MP**: criar pagamento normal (Mood recebe tudo), apos aprovacao registrar o saldo na tabela `organizer_balances`
-
-### `mercadopago-webhook` (atualizar)
-
-Apos confirmar pagamento aprovado:
-1. Atualizar enrollments (ja existente)
-2. Se o pagamento foi sem split (organizador sem MP), registrar credito na `organizer_balances`
-
-### Nova edge function: `request-withdrawal`
-
-Organizador solicita saque do saldo acumulado:
-- Valida autenticacao
-- Calcula saldo disponivel (sum de `organizer_balances` com status=paid menos saques ja feitos)
-- Cria registro em `withdrawal_requests`
-- Envia notificacao (futuro: webhook/email)
-
-## Mudancas no Frontend
-
-### Perfil do Organizador (`Profile.tsx`)
-
-Adicionar secao visivel apenas para organizadores:
-- **Conta Mercado Pago**: campo para informar o `collector_id` MP (com instrucoes de onde encontrar)
-- **Saldo disponivel**: mostra soma dos valores em `organizer_balances` que nao foram sacados
-- **Botao "Solicitar Saque"**: abre dialog para informar chave PIX e confirmar valor
-- **Historico de saques**: lista de `withdrawal_requests` com status
-
-### Pagina de Gerenciamento do Torneio (`ManageTournament.tsx`)
-
-Adicionar card mostrando:
-- Total arrecadado (inscricoes pagas)
-- Comissao Mood
-- Valor liquido do organizador
-- Aviso se nao tem conta MP vinculada
-
-### Pagina de Criacao de Torneio ou Configuracoes
-
-Aviso/banner: "Conecte sua conta Mercado Pago para receber pagamentos automaticamente"
-
-## Detalhes Tecnicos
-
-### Comissao da Mood
-- Definir como percentual fixo (ex: 10%) ou valor configuravel
-- Sera armazenado como constante na edge function inicialmente (pode virar configuracao no futuro)
-
-### Split Payment no Mercado Pago (API Marketplace)
-Quando o organizador tem `mp_collector_id`, o body do pagamento inclui:
+### Novas paginas e componentes
 
 ```text
-{
-  ...paymentBody,
-  application_fee: comissaoMood,    // valor que fica com a Mood
-  collector_id: organizador.mp_collector_id  // quem recebe
-}
+src/pages/admin/
+  AdminDashboard.tsx    -- Metricas gerais e visao geral
+  AdminUsers.tsx        -- Lista de usuarios/organizadores
+  AdminTournaments.tsx  -- Todos os torneios
+  AdminEnrollments.tsx  -- Inscricoes por torneio
+  AdminFinances.tsx     -- Saldos, pagamentos, saques
+  AdminLayout.tsx       -- Layout com sidebar de navegacao
 ```
 
-Obs: Para split funcionar, o organizador precisa autorizar a aplicacao Mood no Mercado Pago (OAuth). Inicialmente pode ser feito com collector_id manual; futuramente pode-se implementar OAuth completo.
+### AdminLayout (Layout compartilhado)
 
-### Seguranca
-- RLS em `organizer_balances`: organizador ve apenas seus registros
-- RLS em `withdrawal_requests`: organizador ve/cria apenas seus registros
-- Edge function `request-withdrawal` valida JWT do usuario
-- Saldo calculado server-side para evitar manipulacao
+- Sidebar com navegacao entre as secoes do painel
+- Header com titulo e botao de voltar
+- Verificacao de role admin no carregamento (redireciona se nao for admin)
+- Links: Dashboard, Usuarios, Torneios, Inscricoes, Financeiro
+
+### AdminDashboard - Metricas gerais
+
+Cards com:
+- Total de usuarios na plataforma
+- Total de organizadores
+- Total de torneios (ativos/finalizados)
+- Total de inscricoes (pagas/pendentes)
+- Receita total da plataforma (comissoes Mood)
+- Saques pendentes
+
+### AdminUsers - Gerenciamento de usuarios
+
+- Tabela com todos os profiles + roles
+- Filtro por role (admin/organizer/athlete)
+- Busca por nome ou email
+- Acoes: ver detalhes, alterar role, ver torneios do organizador
+- Indicador de conta MP vinculada (para organizadores)
+
+### AdminTournaments - Gerenciamento de torneios
+
+- Tabela com todos os torneios
+- Filtros: status (ativo/encerrado), cidade, organizador
+- Informacoes: nome, organizador, datas, vagas, inscritos, receita
+- Acoes: ver detalhes, ver inscricoes, editar, deletar
+
+### AdminEnrollments - Inscricoes
+
+- Selecionar torneio para ver inscricoes
+- Tabela: atleta, status, data, pagamento
+- Acoes: confirmar pagamento manual, cancelar inscricao
+
+### AdminFinances - Financeiro
+
+- Visao geral de receitas e comissoes
+- Lista de saldos pendentes por organizador
+- Lista de solicitacoes de saque com acoes (aprovar/rejeitar)
+- Historico de pagamentos
+
+## Mudancas em arquivos existentes
+
+### App.tsx
+- Adicionar rotas `/admin`, `/admin/users`, `/admin/tournaments`, `/admin/enrollments`, `/admin/finances`
+
+### AuthContext.tsx
+- Nenhuma mudanca necessaria (ja carrega `userRole` do `user_roles`)
+
+### Dashboard.tsx
+- Adicionar link para painel admin (visivel apenas se role === "admin")
+
+## Detalhes tecnicos
+
+### Protecao de rotas
+
+O `AdminLayout` verifica se o usuario logado tem role "admin" via `useAuth()`. Se nao tiver, redireciona para `/dashboard`. Todas as paginas admin sao filhas desse layout.
+
+### Queries do admin
+
+As queries usam o client Supabase normal, mas as RLS policies com `has_role(auth.uid(), 'admin')` permitem que o admin acesse todos os registros de todas as tabelas.
+
+### Gerenciamento de saques
+
+O admin pode atualizar o status de `withdrawal_requests` para "approved" ou "rejected" diretamente pela tabela, e marcar `organizer_balances` como "withdrawn" quando o pagamento manual for feito.
+
+### Sequencia de implementacao
+
+1. Migracao SQL (adicionar "admin" ao enum, criar policies)
+2. Criar `AdminLayout.tsx` com sidebar e protecao de rota
+3. Criar `AdminDashboard.tsx` com metricas
+4. Criar `AdminUsers.tsx` com tabela e acoes
+5. Criar `AdminTournaments.tsx` com tabela e filtros
+6. Criar `AdminEnrollments.tsx` com lista por torneio
+7. Criar `AdminFinances.tsx` com saldos e saques
+8. Atualizar `App.tsx` com as novas rotas
+9. Adicionar link no `Dashboard.tsx` para admins
 
