@@ -432,6 +432,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
       is_tournament_owner: {
         Args: { _tournament_id: string; _user_id: string }
         Returns: boolean
