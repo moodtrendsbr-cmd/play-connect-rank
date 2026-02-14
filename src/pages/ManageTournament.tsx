@@ -15,6 +15,7 @@ const ManageTournament = () => {
   const { user } = useAuth();
   const [tournament, setTournament] = useState<any>(null);
   const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [hasMpAccount, setHasMpAccount] = useState(false);
 
   useEffect(() => {
@@ -24,9 +25,22 @@ const ManageTournament = () => {
 
       const { data: e } = await supabase
         .from("enrollments")
-        .select("*, profiles:user_id(full_name, whatsapp)")
+        .select("*")
         .eq("tournament_id", id!);
-      setEnrollments(e || []);
+      const enrollData = e || [];
+      setEnrollments(enrollData);
+
+      // Fetch profiles separately
+      const userIds = enrollData.map((en) => en.user_id).filter(Boolean);
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("user_id, full_name, whatsapp")
+          .in("user_id", userIds);
+        const map: Record<string, any> = {};
+        (profiles || []).forEach((p) => { map[p.user_id] = p; });
+        setProfileMap(map);
+      }
 
       // Check if organizer has MP account
       if (t) {
@@ -45,8 +59,10 @@ const ManageTournament = () => {
   const pending = enrollments.filter((e) => e.status === "pending");
   const expired = enrollments.filter((e) => e.status === "expired");
 
+  const getName = (enrollment: any) => profileMap[enrollment.user_id]?.full_name || enrollment.athlete_name || "Atleta";
+
   const sendReminder = (enrollment: any) => {
-    toast({ title: "Lembrete enviado", description: `Lembrete enviado para ${enrollment.profiles?.full_name || "atleta"}.` });
+    toast({ title: "Lembrete enviado", description: `Lembrete enviado para ${getName(enrollment)}.` });
   };
 
   if (!tournament) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
@@ -116,7 +132,7 @@ const ManageTournament = () => {
           <div className="space-y-2 mb-8">
             {paid.map((e) => (
               <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-                <span>{e.profiles?.full_name || "Atleta"}</span>
+                <span>{getName(e)}</span>
                 <Badge className="bg-primary/20 text-primary">✅ Pago</Badge>
               </div>
             ))}
@@ -130,7 +146,7 @@ const ManageTournament = () => {
             {pending.map((e) => (
               <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3">
                 <div>
-                  <span>{e.profiles?.full_name || "Atleta"}</span>
+                  <span>{getName(e)}</span>
                   <p className="text-xs text-muted-foreground">Vence: {e.expires_at ? new Date(e.expires_at).toLocaleDateString("pt-BR") : "—"}</p>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => sendReminder(e)}>Enviar lembrete</Button>
@@ -145,7 +161,7 @@ const ManageTournament = () => {
           <div className="space-y-2 mb-8">
             {expired.map((e) => (
               <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3 opacity-60">
-                <span>{e.profiles?.full_name || "Atleta"}</span>
+                <span>{getName(e)}</span>
                 <Badge variant="destructive">Expirado</Badge>
               </div>
             ))}

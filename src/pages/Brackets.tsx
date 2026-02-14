@@ -15,33 +15,61 @@ const Brackets = () => {
   const [tournament, setTournament] = useState<any>(null);
   const [matches, setMatches] = useState<any[]>([]);
   const [players, setPlayers] = useState<any[]>([]);
+  const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [bracketType, setBracketType] = useState<BracketType>("single_elimination");
   const [generated, setGenerated] = useState(false);
+
+  const fetchProfiles = async (ids: string[]) => {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (uniqueIds.length === 0) return {};
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, full_name")
+      .in("user_id", uniqueIds);
+    const map: Record<string, any> = {};
+    (profiles || []).forEach((p) => { map[p.user_id] = p; });
+    return map;
+  };
+
+  const fetchMatches = async () => {
+    const { data: m } = await supabase
+      .from("match_results")
+      .select("*")
+      .eq("tournament_id", id!)
+      .order("round")
+      .order("match_number");
+    const matchData = m || [];
+
+    if (matchData.length > 0) {
+      const playerIds = matchData.flatMap((mt) => [mt.player1_id, mt.player2_id, mt.winner_id]);
+      const map = await fetchProfiles(playerIds);
+      setProfileMap((prev) => ({ ...prev, ...map }));
+      setMatches(matchData);
+      setGenerated(true);
+    }
+    return matchData;
+  };
 
   useEffect(() => {
     const fetch = async () => {
       const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).single();
       setTournament(t);
 
-      const { data: m } = await supabase
-        .from("match_results")
-        .select("*, p1:player1_id(full_name), p2:player2_id(full_name), w:winner_id(full_name)")
-        .eq("tournament_id", id!)
-        .order("round")
-        .order("match_number");
-
-      if (m && m.length > 0) {
-        setMatches(m);
-        setGenerated(true);
-      }
+      await fetchMatches();
 
       // Get paid enrollments for bracket generation
       const { data: enrollments } = await supabase
         .from("enrollments")
-        .select("user_id, profiles:user_id(full_name)")
+        .select("user_id")
         .eq("tournament_id", id!)
         .eq("status", "paid");
-      setPlayers(enrollments || []);
+      const enrollData = enrollments || [];
+
+      // Fetch profile names for enrolled players
+      const userIds = enrollData.map((e) => e.user_id).filter(Boolean);
+      const map = await fetchProfiles(userIds);
+      setProfileMap((prev) => ({ ...prev, ...map }));
+      setPlayers(enrollData);
     };
     if (id) fetch();
   }, [id]);
@@ -58,7 +86,6 @@ const Brackets = () => {
     let newMatches: any[] = [];
 
     if (bracketType === "single_elimination") {
-      // Single elimination bracket
       const totalRounds = Math.ceil(Math.log2(shuffled.length));
       const firstRoundMatches = Math.ceil(shuffled.length / 2);
 
@@ -72,7 +99,6 @@ const Brackets = () => {
         });
       }
 
-      // Create empty matches for subsequent rounds
       for (let round = 2; round <= totalRounds; round++) {
         const matchesInRound = Math.ceil(firstRoundMatches / Math.pow(2, round - 1));
         for (let i = 0; i < matchesInRound; i++) {
@@ -99,7 +125,6 @@ const Brackets = () => {
         }
       }
     } else if (bracketType === "double_elimination") {
-      // Winners bracket (same as single elim for first round)
       const firstRoundMatches = Math.ceil(shuffled.length / 2);
       for (let i = 0; i < firstRoundMatches; i++) {
         newMatches.push({
@@ -110,7 +135,6 @@ const Brackets = () => {
           player2_id: shuffled[i * 2 + 1]?.user_id || null,
         });
       }
-      // Losers bracket slots
       for (let i = 0; i < firstRoundMatches; i++) {
         newMatches.push({
           tournament_id: id!,
@@ -128,19 +152,16 @@ const Brackets = () => {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Chaves geradas!" });
-      // Refetch
-      const { data: m } = await supabase
-        .from("match_results")
-        .select("*, p1:player1_id(full_name), p2:player2_id(full_name), w:winner_id(full_name)")
-        .eq("tournament_id", id!)
-        .order("round")
-        .order("match_number");
-      setMatches(m || []);
-      setGenerated(true);
+      await fetchMatches();
     }
   };
 
   if (!tournament) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
+
+  const getName = (playerId: string | null) => {
+    if (!playerId) return "A definir";
+    return profileMap[playerId]?.full_name || "A definir";
+  };
 
   // Group matches by round
   const rounds = matches.reduce((acc: Record<number, any[]>, m) => {
@@ -196,12 +217,12 @@ const Brackets = () => {
                         <div className="flex items-center justify-between">
                           <div className="space-y-1">
                             <p className={`text-sm font-medium ${m.winner_id === m.player1_id ? "text-primary" : ""}`}>
-                              {m.p1?.full_name || "A definir"}
+                              {getName(m.player1_id)}
                               {m.score1 !== null && <span className="ml-2 text-muted-foreground">{m.score1}</span>}
                             </p>
                             <p className="text-xs text-muted-foreground">vs</p>
                             <p className={`text-sm font-medium ${m.winner_id === m.player2_id ? "text-primary" : ""}`}>
-                              {m.p2?.full_name || "A definir"}
+                              {getName(m.player2_id)}
                               {m.score2 !== null && <span className="ml-2 text-muted-foreground">{m.score2}</span>}
                             </p>
                           </div>
