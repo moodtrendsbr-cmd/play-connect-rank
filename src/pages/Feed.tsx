@@ -15,12 +15,28 @@ const Feed = () => {
   const [loading, setLoading] = useState(false);
 
   const fetchPosts = async () => {
-    const { data } = await supabase
+    const { data: postsData } = await supabase
       .from("posts")
-      .select("*, profiles:author_id(full_name), likes(count), comments(count)")
+      .select("*, likes(count), comments(count)")
       .order("created_at", { ascending: false })
       .limit(50);
-    setPosts(data || []);
+
+    if (!postsData || postsData.length === 0) {
+      setPosts([]);
+      return;
+    }
+
+    // Fetch profiles for all unique author_ids
+    const authorIds = [...new Set(postsData.map((p) => p.author_id))];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, full_name")
+      .in("user_id", authorIds);
+
+    const profileMap: Record<string, string> = {};
+    (profiles || []).forEach((p) => { profileMap[p.user_id] = p.full_name; });
+
+    setPosts(postsData.map((p) => ({ ...p, author_name: profileMap[p.author_id] || "Atleta" })));
   };
 
   useEffect(() => { fetchPosts(); }, []);
@@ -94,7 +110,7 @@ const Feed = () => {
             <Card key={post.id} className="hover:border-primary/20 transition-colors">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold text-sm">{post.profiles?.full_name || "Atleta"}</span>
+                  <span className="font-bold text-sm">{post.author_name || "Atleta"}</span>
                   <span className="text-xs text-muted-foreground">{new Date(post.created_at).toLocaleDateString("pt-BR")}</span>
                 </div>
                 <p className="text-foreground">{post.content}</p>
