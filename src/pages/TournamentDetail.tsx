@@ -36,31 +36,12 @@ const TournamentDetail = () => {
     if (id) fetch();
   }, [id, user]);
 
-  const handleEnroll = async () => {
+  const handleEnroll = () => {
     if (!user) {
       navigate("/login");
       return;
     }
-    setLoading(true);
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + (tournament?.payment_deadline_days || 3));
-
-    const { error } = await supabase.from("enrollments").insert({
-      tournament_id: id!,
-      user_id: user.id,
-      status: "pending",
-      expires_at: expiresAt.toISOString(),
-    });
-
-    setLoading(false);
-
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Inscrição realizada!", description: "Redirecionando para pagamento..." });
-      navigate(`/payment/${id}`);
-    }
+    navigate(`/payment/${id}`);
   };
 
   if (!tournament) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
@@ -107,8 +88,8 @@ const TournamentDetail = () => {
           ) : available <= 0 ? (
             <Button disabled className="w-full h-14 text-lg">Vagas esgotadas</Button>
           ) : (
-            <Button onClick={handleEnroll} disabled={loading} className="w-full h-14 text-lg font-bold box-glow">
-              {loading ? "Inscrevendo..." : "🟢 Inscrever-se"}
+            <Button onClick={handleEnroll} className="w-full h-14 text-lg font-bold box-glow">
+              🟢 Inscrever-se
             </Button>
           )}
         </div>
