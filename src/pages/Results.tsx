@@ -1,0 +1,128 @@
+import { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
+
+const Results = () => {
+  const { id } = useParams();
+  const [tournament, setTournament] = useState<any>(null);
+  const [matches, setMatches] = useState<any[]>([]);
+
+  const fetchData = async () => {
+    const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).single();
+    setTournament(t);
+
+    const { data: m } = await supabase
+      .from("match_results")
+      .select("*, p1:player1_id(full_name, user_id), p2:player2_id(full_name, user_id)")
+      .eq("tournament_id", id!)
+      .order("round")
+      .order("match_number");
+    setMatches(m || []);
+  };
+
+  useEffect(() => { if (id) fetchData(); }, [id]);
+
+  const updateResult = async (matchId: string, score1: number, score2: number, winnerId: string | null) => {
+    const { error } = await supabase
+      .from("match_results")
+      .update({ score1, score2, winner_id: winnerId })
+      .eq("id", matchId);
+
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Resultado atualizado!" });
+      fetchData();
+    }
+  };
+
+  if (!tournament) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border bg-card">
+        <div className="container flex h-16 items-center">
+          <Link to={`/tournaments/${id}/manage`} className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
+        </div>
+      </header>
+
+      <main className="container max-w-3xl py-8">
+        <h1 className="mb-2 text-4xl font-display text-foreground">LANÇAR RESULTADOS</h1>
+        <p className="text-muted-foreground mb-8">{tournament.name}</p>
+
+        {matches.length === 0 ? (
+          <Card className="p-8 text-center">
+            <p className="text-muted-foreground">Gere as chaves primeiro.</p>
+            <Button className="mt-4" asChild>
+              <Link to={`/tournaments/${id}/brackets`}>Gerar Chaves</Link>
+            </Button>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {matches.map((m) => (
+              <MatchResultCard key={m.id} match={m} onUpdate={updateResult} />
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+const MatchResultCard = ({ match, onUpdate }: { match: any; onUpdate: (id: string, s1: number, s2: number, w: string | null) => void }) => {
+  const [score1, setScore1] = useState(match.score1?.toString() || "");
+  const [score2, setScore2] = useState(match.score2?.toString() || "");
+  const [winner, setWinner] = useState(match.winner_id || "");
+
+  const p1Name = match.p1?.full_name || "A definir";
+  const p2Name = match.p2?.full_name || "A definir";
+
+  const handleSave = () => {
+    onUpdate(match.id, parseInt(score1) || 0, parseInt(score2) || 0, winner || null);
+  };
+
+  return (
+    <Card className={match.winner_id ? "border-primary/30" : ""}>
+      <CardContent className="py-4 space-y-3">
+        <p className="text-xs text-muted-foreground">Rodada {match.round} — Partida {match.match_number}</p>
+
+        <div className="grid grid-cols-5 items-center gap-2">
+          <span className="col-span-2 text-sm font-medium truncate">{p1Name}</span>
+          <Input type="number" value={score1} onChange={(e) => setScore1(e.target.value)} className="text-center" placeholder="0" />
+          <span className="text-center text-muted-foreground">vs</span>
+          <div />
+        </div>
+        <div className="grid grid-cols-5 items-center gap-2">
+          <span className="col-span-2 text-sm font-medium truncate">{p2Name}</span>
+          <Input type="number" value={score2} onChange={(e) => setScore2(e.target.value)} className="text-center" placeholder="0" />
+          <div />
+          <div />
+        </div>
+
+        {match.player1_id && match.player2_id && (
+          <div>
+            <label className="text-xs text-muted-foreground">Vencedor</label>
+            <Select value={winner} onValueChange={setWinner}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={match.player1_id}>{p1Name}</SelectItem>
+                <SelectItem value={match.player2_id}>{p2Name}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <Button size="sm" onClick={handleSave} disabled={!match.player1_id || !match.player2_id}>
+          Salvar resultado
+        </Button>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default Results;
