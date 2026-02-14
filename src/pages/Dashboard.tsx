@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, Users, Clock, DollarSign, Plus, LogOut } from "lucide-react";
+import { Trophy, Users, Clock, DollarSign, Plus, LogOut, Shield } from "lucide-react";
 
 const Dashboard = () => {
   const { user, userRole, signOut } = useAuth();
@@ -68,6 +68,11 @@ const Dashboard = () => {
             <Link to="/feed" className="text-sm text-muted-foreground hover:text-foreground">Feed</Link>
             <Link to="/ranking" className="text-sm text-muted-foreground hover:text-foreground">Ranking</Link>
             <Link to="/profile" className="text-sm text-muted-foreground hover:text-foreground">Perfil</Link>
+            {userRole === "admin" && (
+              <Link to="/admin" className="text-sm text-primary font-medium hover:text-primary/80 flex items-center gap-1">
+                <Shield className="h-4 w-4" /> Admin
+              </Link>
+            )}
             <Button variant="ghost" size="icon" onClick={signOut}>
               <LogOut className="h-4 w-4" />
             </Button>

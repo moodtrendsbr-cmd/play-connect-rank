@@ -19,6 +19,12 @@ import Profile from "./pages/Profile";
 import Ranking from "./pages/Ranking";
 import Feed from "./pages/Feed";
 import NotFound from "./pages/NotFound";
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminTournaments from "./pages/admin/AdminTournaments";
+import AdminEnrollments from "./pages/admin/AdminEnrollments";
+import AdminFinances from "./pages/admin/AdminFinances";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +50,13 @@ const App = () => (
             <Route path="/profile" element={<Profile />} />
             <Route path="/ranking" element={<Ranking />} />
             <Route path="/feed" element={<Feed />} />
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="users" element={<AdminUsers />} />
+              <Route path="tournaments" element={<AdminTournaments />} />
+              <Route path="enrollments" element={<AdminEnrollments />} />
+              <Route path="finances" element={<AdminFinances />} />
+            </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
