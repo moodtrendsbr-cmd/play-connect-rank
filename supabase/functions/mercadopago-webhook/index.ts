@@ -19,15 +19,11 @@ serve(async (req) => {
 
     const body = await req.json();
 
-    // Mercado Pago sends notification with topic and id
     if (body.type === "payment" || body.topic === "payment") {
       const paymentId = body.data?.id || body.id;
 
-      // Fetch payment details from Mercado Pago
       const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-        headers: {
-          Authorization: `Bearer ${MERCADO_PAGO_ACCESS_TOKEN}`,
-        },
+        headers: { Authorization: `Bearer ${MERCADO_PAGO_ACCESS_TOKEN}` },
       });
 
       const payment = await paymentResponse.json();
@@ -37,21 +33,25 @@ serve(async (req) => {
       }
 
       if (payment.status === "approved") {
-        const enrollmentId = payment.external_reference;
+        let enrollmentIds: string[] = [];
+        try {
+          enrollmentIds = JSON.parse(payment.external_reference);
+        } catch {
+          enrollmentIds = [payment.external_reference];
+        }
 
-        if (enrollmentId) {
-          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-          const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-          const supabase = createClient(supabaseUrl, supabaseKey);
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const supabase = createClient(supabaseUrl, supabaseKey);
 
-          // Update enrollment to paid
+        for (const enrollmentId of enrollmentIds) {
           const { error } = await supabase
             .from("enrollments")
             .update({ status: "paid", payment_id: String(paymentId) })
             .eq("id", enrollmentId);
 
           if (error) {
-            console.error("Error updating enrollment:", error);
+            console.error(`Error updating enrollment ${enrollmentId}:`, error);
           } else {
             console.log(`Enrollment ${enrollmentId} marked as paid`);
           }
