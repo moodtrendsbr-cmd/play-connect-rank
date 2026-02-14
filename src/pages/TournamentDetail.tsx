@@ -58,9 +58,8 @@ const TournamentDetail = () => {
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Inscrição realizada!", description: "Sua vaga está reservada. Efetue o pagamento." });
-      setAlreadyEnrolled(true);
-      setEnrollmentCount((c) => c + 1);
+      toast({ title: "Inscrição realizada!", description: "Redirecionando para pagamento..." });
+      navigate(`/payment/${id}`);
     }
   };
 
@@ -102,7 +101,9 @@ const TournamentDetail = () => {
 
         <div className="mt-8">
           {alreadyEnrolled ? (
-            <Button disabled className="w-full h-14 text-lg">Já inscrito ✅</Button>
+            <Button className="w-full h-14 text-lg font-bold" asChild>
+              <Link to={`/payment/${id}`}>Continuar para pagamento</Link>
+            </Button>
           ) : available <= 0 ? (
             <Button disabled className="w-full h-14 text-lg">Vagas esgotadas</Button>
           ) : (

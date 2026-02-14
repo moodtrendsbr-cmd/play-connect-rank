@@ -12,6 +12,9 @@ import CreateTournament from "./pages/CreateTournament";
 import Tournaments from "./pages/Tournaments";
 import TournamentDetail from "./pages/TournamentDetail";
 import ManageTournament from "./pages/ManageTournament";
+import Brackets from "./pages/Brackets";
+import Results from "./pages/Results";
+import Payment from "./pages/Payment";
 import Profile from "./pages/Profile";
 import Ranking from "./pages/Ranking";
 import Feed from "./pages/Feed";
@@ -35,6 +38,9 @@ const App = () => (
             <Route path="/tournaments" element={<Tournaments />} />
             <Route path="/tournaments/:id" element={<TournamentDetail />} />
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
+            <Route path="/tournaments/:id/brackets" element={<Brackets />} />
+            <Route path="/tournaments/:id/results" element={<Results />} />
+            <Route path="/payment/:id" element={<Payment />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/ranking" element={<Ranking />} />
             <Route path="/feed" element={<Feed />} />
