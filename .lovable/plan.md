@@ -1,64 +1,71 @@
 
+# Correcao: Acesso Admin Bloqueado (Race Condition)
 
-# Plano: Criar Dados de Teste (Torneios, Perfis, Feed, Chaveamentos)
+## Problema
+O `AuthContext.tsx` tem uma race condition critica:
 
-O banco de dados esta completamente vazio. Para popular com dados de teste, vou criar uma Edge Function de seed que usa a Admin API para criar usuarios reais e depois inserir todos os dados relacionados.
+1. `onAuthStateChange` dispara **antes** de `getSession` com a sessao do usuario
+2. Dentro do callback, o codigo faz `await fetchRole()` -- que chama Supabase **dentro** de um callback de auth, causando deadlock
+3. O `loading` fica `true` indefinidamente, ou `userRole` fica `null` quando o `AdminLayout` verifica
+4. Resultado: o admin e redirecionado para `/dashboard`
 
----
+## Solucao
 
-## O que sera criado
+Reescrever o `useEffect` do `AuthContext.tsx` seguindo o padrao correto:
 
-### Usuarios (6 no total)
-- **2 Organizadores**: "Carlos Silva" e "Marina Santos"
-- **3 Atletas**: "Lucas Oliveira", "Ana Costa", "Pedro Souza"
-- **1 Admin**: "Admin Mood Play"
+1. **`onAuthStateChange`**: Nunca fazer `await` de chamadas Supabase dentro dele. Usar `setTimeout` para despachar a busca de role fora do callback (evita deadlock)
+2. **`getSession`**: Buscar a role **antes** de setar `loading = false` -- este e o unico lugar que controla o loading inicial
+3. Adicionar flag `isMounted` para evitar updates em componentes desmontados
 
-Cada usuario tera um email no formato `teste_xxx@moodplay.test` e senha `Test1234!`.
+### Codigo alterado em `src/contexts/AuthContext.tsx`:
 
-### Torneios (3 no total)
-1. **Copa Mood Play 2026** - Masculino, Individual, 16 vagas, R$50 (Organizador: Carlos)
-2. **Torneio Feminino de Praia** - Feminino, Duplas, 8 vagas, R$80 (Organizador: Marina)
-3. **Arena Mista Inverno** - Misto, Equipes, 12 vagas, R$120 (Organizador: Carlos)
+```text
+useEffect(() => {
+  let isMounted = true;
 
-### Inscricoes
-- Todos os 3 atletas inscritos nos 3 torneios (mistura de status: paid/pending)
+  // Listener - NÃO controla loading inicial
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    (_event, session) => {
+      if (!isMounted) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        setTimeout(() => {
+          fetchRole(session.user.id);
+        }, 0);
+      } else {
+        setUserRole(null);
+      }
+    }
+  );
 
-### Chaveamentos (match_results)
-- Copa Mood Play: 4 partidas (quartas e semi) com placares definidos
-- Torneio Feminino: 2 partidas com resultados
+  // Inicializacao - CONTROLA loading
+  const initialize = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!isMounted) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        await fetchRole(session.user.id);
+      }
+    } finally {
+      if (isMounted) setLoading(false);
+    }
+  };
 
-### Feed (posts + likes + comments)
-- 6 posts manuais dos atletas e organizadores
-- 3 posts automaticos (tipo "enrollment" e "win")
-- Likes distribuidos entre os usuarios
-- Comentarios nos posts
+  initialize();
 
----
+  return () => {
+    isMounted = false;
+    subscription.unsubscribe();
+  };
+}, []);
+```
 
-## Implementacao Tecnica
+Pontos-chave:
+- `onAuthStateChange` usa `setTimeout` para evitar deadlock (nunca await dentro do callback)
+- `setLoading(false)` so acontece **depois** de `fetchRole` completar na inicializacao
+- `isMounted` previne memory leaks
 
-### 1. Criar Edge Function `seed-test-data`
-- Usa `SUPABASE_SERVICE_ROLE_KEY` para criar usuarios via `supabase.auth.admin.createUser()`
-- O trigger `handle_new_user` criara automaticamente profiles e user_roles
-- Depois atualiza profiles com cidade/estado/whatsapp
-- Atualiza roles dos organizadores e admin
-- Insere torneios, enrollments, match_results, posts, likes e comments
-- Retorna um resumo do que foi criado
-
-### 2. Chamar a Edge Function
-- Executar a funcao uma vez para popular o banco
-- Depois disso a funcao pode ser removida ou mantida para resets futuros
-
-### Credenciais de Login para Teste
-
-| Email | Senha | Role |
-|-------|-------|------|
-| `organizer1@moodplay.test` | `Test1234!` | organizer |
-| `organizer2@moodplay.test` | `Test1234!` | organizer |
-| `athlete1@moodplay.test` | `Test1234!` | athlete |
-| `athlete2@moodplay.test` | `Test1234!` | athlete |
-| `athlete3@moodplay.test` | `Test1234!` | athlete |
-| `admin@moodplay.test` | `Test1234!` | admin |
-
-> **Nota sobre a tela branca**: O tema escuro esta funcionando corretamente no codigo. Se voce ainda esta vendo fundo branco, tente abrir em uma aba anonima ou limpar o cache do navegador com Ctrl+Shift+R.
-
+Nenhuma alteracao necessaria no `AdminLayout.tsx` -- a logica de protecao la esta correta, o problema e exclusivamente no timing do AuthContext.
