@@ -438,7 +438,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "organizer" | "athlete"
+      app_role: "organizer" | "athlete" | "admin"
       enrollment_status: "pending" | "paid" | "expired"
       tournament_category: "masculino" | "feminino" | "misto"
       tournament_type: "individual" | "duplas" | "equipes"
@@ -569,7 +569,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["organizer", "athlete"],
+      app_role: ["organizer", "athlete", "admin"],
       enrollment_status: ["pending", "paid", "expired"],
       tournament_category: ["masculino", "feminino", "misto"],
       tournament_type: ["individual", "duplas", "equipes"],
