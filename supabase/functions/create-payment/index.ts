@@ -1,9 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+const MOOD_COMMISSION_PERCENT = 10; // 10% commission
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -16,7 +19,12 @@ serve(async (req) => {
       throw new Error("MERCADO_PAGO_ACCESS_TOKEN not configured");
     }
 
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
     const {
+      tournament_id,
       tournament_name,
       entry_fee,
       enrollment_ids,
@@ -26,17 +34,38 @@ serve(async (req) => {
       payer_doc_type,
       payer_doc_number,
       payment_method,
-      token, // card token from MercadoPago.js
+      token,
       installments,
       issuer_id,
     } = await req.json();
 
     const totalAmount = Number(entry_fee) * enrollment_ids.length;
+    const commissionAmount = Math.round(totalAmount * MOOD_COMMISSION_PERCENT) / 100;
+
+    // Lookup organizer's mp_collector_id
+    let mpCollectorId: string | null = null;
+    if (tournament_id) {
+      const { data: tournament } = await supabase
+        .from("tournaments")
+        .select("organizer_id")
+        .eq("id", tournament_id)
+        .single();
+
+      if (tournament) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("mp_collector_id")
+          .eq("user_id", tournament.organizer_id)
+          .single();
+
+        mpCollectorId = profile?.mp_collector_id || null;
+      }
+    }
 
     const paymentBody: any = {
       transaction_amount: totalAmount,
       description: `Inscrição ${tournament_name} (${enrollment_ids.length} atleta${enrollment_ids.length > 1 ? "s" : ""})`,
-      external_reference: JSON.stringify(enrollment_ids),
+      external_reference: JSON.stringify({ enrollment_ids, tournament_id, has_split: !!mpCollectorId }),
       payer: {
         email: payer_email,
         first_name: payer_first_name || "",
@@ -47,6 +76,12 @@ serve(async (req) => {
         },
       },
     };
+
+    // Split payment if organizer has MP account
+    if (mpCollectorId) {
+      paymentBody.application_fee = commissionAmount;
+      paymentBody.collector_id = mpCollectorId;
+    }
 
     if (payment_method === "pix") {
       paymentBody.payment_method_id = "pix";
@@ -74,7 +109,6 @@ serve(async (req) => {
       throw new Error(`Mercado Pago API error [${response.status}]: ${JSON.stringify(data)}`);
     }
 
-    // For PIX, return QR code data
     const result: any = {
       id: data.id,
       status: data.status,
@@ -87,18 +121,34 @@ serve(async (req) => {
       result.pix_copy_paste = data.point_of_interaction.transaction_data.qr_code;
     }
 
-    // If approved immediately (credit card), update enrollments
+    // If approved immediately (credit card)
     if (data.status === "approved") {
-      const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-      const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
       for (const enrollmentId of enrollment_ids) {
         await supabase
           .from("enrollments")
           .update({ status: "paid", payment_id: String(data.id) })
           .eq("id", enrollmentId);
+      }
+
+      // If no split, credit organizer balance
+      if (!mpCollectorId && tournament_id) {
+        const { data: tournament } = await supabase
+          .from("tournaments")
+          .select("organizer_id")
+          .eq("id", tournament_id)
+          .single();
+
+        if (tournament) {
+          const orgAmount = totalAmount - commissionAmount;
+          await supabase.from("organizer_balances").insert({
+            organizer_id: tournament.organizer_id,
+            tournament_id,
+            amount: orgAmount,
+            commission: commissionAmount,
+            payment_id: String(data.id),
+            status: "paid",
+          });
+        }
       }
     }
 

@@ -188,6 +188,50 @@ export type Database = {
           },
         ]
       }
+      organizer_balances: {
+        Row: {
+          amount: number
+          commission: number
+          created_at: string
+          id: string
+          organizer_id: string
+          payment_id: string | null
+          status: string
+          tournament_id: string
+          withdrawn_at: string | null
+        }
+        Insert: {
+          amount?: number
+          commission?: number
+          created_at?: string
+          id?: string
+          organizer_id: string
+          payment_id?: string | null
+          status?: string
+          tournament_id: string
+          withdrawn_at?: string | null
+        }
+        Update: {
+          amount?: number
+          commission?: number
+          created_at?: string
+          id?: string
+          organizer_id?: string
+          payment_id?: string | null
+          status?: string
+          tournament_id?: string
+          withdrawn_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organizer_balances_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           author_id: string
@@ -233,6 +277,7 @@ export type Database = {
           created_at: string
           full_name: string
           id: string
+          mp_collector_id: string | null
           state: string | null
           updated_at: string
           user_id: string
@@ -244,6 +289,7 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          mp_collector_id?: string | null
           state?: string | null
           updated_at?: string
           user_id: string
@@ -255,6 +301,7 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          mp_collector_id?: string | null
           state?: string | null
           updated_at?: string
           user_id?: string
@@ -340,6 +387,36 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      withdrawal_requests: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          organizer_id: string
+          pix_key: string
+          processed_at: string | null
+          status: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          organizer_id: string
+          pix_key: string
+          processed_at?: string | null
+          status?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          organizer_id?: string
+          pix_key?: string
+          processed_at?: string | null
+          status?: string
         }
         Relationships: []
       }
