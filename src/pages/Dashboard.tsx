@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ const Dashboard = () => {
   const [tournaments, setTournaments] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || userRole === "admin") return;
 
     const fetchData = async () => {
       if (userRole === "organizer") {
@@ -58,6 +58,9 @@ const Dashboard = () => {
 
     fetchData();
   }, [user, userRole]);
+
+  // Redirect admin to admin panel (after all hooks)
+  if (userRole === "admin") return <Navigate to="/admin" replace />;
 
   return (
     <div className="min-h-screen bg-background">

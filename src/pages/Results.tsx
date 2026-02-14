@@ -11,6 +11,19 @@ const Results = () => {
   const { id } = useParams();
   const [tournament, setTournament] = useState<any>(null);
   const [matches, setMatches] = useState<any[]>([]);
+  const [profileMap, setProfileMap] = useState<Record<string, any>>({});
+
+  const fetchProfiles = async (ids: string[]) => {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (uniqueIds.length === 0) return {};
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, full_name")
+      .in("user_id", uniqueIds);
+    const map: Record<string, any> = {};
+    (profiles || []).forEach((p) => { map[p.user_id] = p; });
+    return map;
+  };
 
   const fetchData = async () => {
     const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).single();
@@ -18,11 +31,16 @@ const Results = () => {
 
     const { data: m } = await supabase
       .from("match_results")
-      .select("*, p1:player1_id(full_name, user_id), p2:player2_id(full_name, user_id)")
+      .select("*")
       .eq("tournament_id", id!)
       .order("round")
       .order("match_number");
-    setMatches(m || []);
+    const matchData = m || [];
+    setMatches(matchData);
+
+    const playerIds = matchData.flatMap((mt) => [mt.player1_id, mt.player2_id]);
+    const map = await fetchProfiles(playerIds);
+    setProfileMap(map);
   };
 
   useEffect(() => { if (id) fetchData(); }, [id]);
@@ -65,7 +83,7 @@ const Results = () => {
         ) : (
           <div className="space-y-4">
             {matches.map((m) => (
-              <MatchResultCard key={m.id} match={m} onUpdate={updateResult} />
+              <MatchResultCard key={m.id} match={m} profileMap={profileMap} onUpdate={updateResult} />
             ))}
           </div>
         )}
@@ -74,13 +92,13 @@ const Results = () => {
   );
 };
 
-const MatchResultCard = ({ match, onUpdate }: { match: any; onUpdate: (id: string, s1: number, s2: number, w: string | null) => void }) => {
+const MatchResultCard = ({ match, profileMap, onUpdate }: { match: any; profileMap: Record<string, any>; onUpdate: (id: string, s1: number, s2: number, w: string | null) => void }) => {
   const [score1, setScore1] = useState(match.score1?.toString() || "");
   const [score2, setScore2] = useState(match.score2?.toString() || "");
   const [winner, setWinner] = useState(match.winner_id || "");
 
-  const p1Name = match.p1?.full_name || "A definir";
-  const p2Name = match.p2?.full_name || "A definir";
+  const p1Name = profileMap[match.player1_id]?.full_name || "A definir";
+  const p2Name = profileMap[match.player2_id]?.full_name || "A definir";
 
   const handleSave = () => {
     onUpdate(match.id, parseInt(score1) || 0, parseInt(score2) || 0, winner || null);
