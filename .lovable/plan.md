@@ -1,71 +1,58 @@
 
-# Correcao: Acesso Admin Bloqueado (Race Condition)
+# Correcao Completa: Queries com Joins Invalidos + Dashboard Admin
 
-## Problema
-O `AuthContext.tsx` tem uma race condition critica:
+## Problema Raiz
+As foreign keys de `enrollments.user_id`, `match_results.player1_id`, `match_results.player2_id`, etc. apontam para `auth.users`, mas o codigo tenta fazer joins PostgREST com a tabela `profiles` (ex: `profiles:user_id(full_name)`). Isso causa erro 400 e as paginas mostram dados vazios/incorretos.
 
-1. `onAuthStateChange` dispara **antes** de `getSession` com a sessao do usuario
-2. Dentro do callback, o codigo faz `await fetchRole()` -- que chama Supabase **dentro** de um callback de auth, causando deadlock
-3. O `loading` fica `true` indefinidamente, ou `userRole` fica `null` quando o `AdminLayout` verifica
-4. Resultado: o admin e redirecionado para `/dashboard`
+## Paginas Afetadas e Correcoes
 
-## Solucao
+### 1. ManageTournament.tsx (enrollments com nomes)
+**Problema**: Query `profiles:user_id(full_name, whatsapp)` falha (FK vai para auth.users, nao profiles).
+**Correcao**: Buscar enrollments sem join, depois buscar profiles separadamente e mapear por user_id.
 
-Reescrever o `useEffect` do `AuthContext.tsx` seguindo o padrao correto:
+### 2. Brackets.tsx (nomes dos jogadores nas chaves)
+**Problema**: Queries `p1:player1_id(full_name)` e `profiles:user_id(full_name)` falham.
+**Correcao**: Buscar match_results sem joins, coletar todos player IDs, buscar profiles separadamente e mapear.
 
-1. **`onAuthStateChange`**: Nunca fazer `await` de chamadas Supabase dentro dele. Usar `setTimeout` para despachar a busca de role fora do callback (evita deadlock)
-2. **`getSession`**: Buscar a role **antes** de setar `loading = false` -- este e o unico lugar que controla o loading inicial
-3. Adicionar flag `isMounted` para evitar updates em componentes desmontados
+### 3. Results.tsx (nomes nos resultados)
+**Problema**: Query `p1:player1_id(full_name, user_id)` falha.
+**Correcao**: Mesma abordagem - buscar matches simples, depois profiles separadamente.
 
-### Codigo alterado em `src/contexts/AuthContext.tsx`:
+### 4. Dashboard.tsx (admin ve zeros)
+**Problema**: Admin nao e organizer nem athlete, entao o dashboard mostra "MEUS TORNEIOS" com tudo zerado.
+**Correcao**: Quando `userRole === "admin"`, mostrar um resumo geral (total torneios, total inscricoes) ou redirecionar para /admin. Adicionar tratamento para role admin.
+
+## Detalhes Tecnicos
+
+O padrao de correcao e o mesmo para todas as paginas:
 
 ```text
-useEffect(() => {
-  let isMounted = true;
+// ANTES (falha com 400):
+const { data } = await supabase
+  .from("enrollments")
+  .select("*, profiles:user_id(full_name)")
+  .eq("tournament_id", id);
 
-  // Listener - NÃO controla loading inicial
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(
-    (_event, session) => {
-      if (!isMounted) return;
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        setTimeout(() => {
-          fetchRole(session.user.id);
-        }, 0);
-      } else {
-        setUserRole(null);
-      }
-    }
-  );
+// DEPOIS (funciona):
+const { data: enrollments } = await supabase
+  .from("enrollments")
+  .select("*")
+  .eq("tournament_id", id);
 
-  // Inicializacao - CONTROLA loading
-  const initialize = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!isMounted) return;
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await fetchRole(session.user.id);
-      }
-    } finally {
-      if (isMounted) setLoading(false);
-    }
-  };
+const userIds = (enrollments || []).map(e => e.user_id).filter(Boolean);
+const { data: profiles } = await supabase
+  .from("profiles")
+  .select("user_id, full_name, whatsapp")
+  .in("user_id", userIds.length ? userIds : ["none"]);
 
-  initialize();
+const profileMap = {};
+(profiles || []).forEach(p => { profileMap[p.user_id] = p; });
 
-  return () => {
-    isMounted = false;
-    subscription.unsubscribe();
-  };
-}, []);
+// Usar profileMap[enrollment.user_id]?.full_name nas renderizacoes
 ```
 
-Pontos-chave:
-- `onAuthStateChange` usa `setTimeout` para evitar deadlock (nunca await dentro do callback)
-- `setLoading(false)` so acontece **depois** de `fetchRole` completar na inicializacao
-- `isMounted` previne memory leaks
-
-Nenhuma alteracao necessaria no `AdminLayout.tsx` -- a logica de protecao la esta correta, o problema e exclusivamente no timing do AuthContext.
+### Arquivos a editar:
+1. `src/pages/ManageTournament.tsx` - Remover join, mapear profiles manualmente
+2. `src/pages/Brackets.tsx` - Remover joins em match_results e enrollments, mapear profiles
+3. `src/pages/Results.tsx` - Remover joins em match_results, mapear profiles
+4. `src/pages/Dashboard.tsx` - Adicionar tratamento para userRole "admin" (redirecionar para /admin ou mostrar dados gerais)
