@@ -48,34 +48,46 @@ export type Database = {
       }
       enrollments: {
         Row: {
+          athlete_email: string | null
+          athlete_name: string | null
+          athlete_whatsapp: string | null
           created_at: string
           expires_at: string | null
           id: string
+          payer_id: string | null
           payment_id: string | null
           status: Database["public"]["Enums"]["enrollment_status"]
           tournament_id: string
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
+          athlete_email?: string | null
+          athlete_name?: string | null
+          athlete_whatsapp?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string
+          payer_id?: string | null
           payment_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
           tournament_id: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
+          athlete_email?: string | null
+          athlete_name?: string | null
+          athlete_whatsapp?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string
+          payer_id?: string | null
           payment_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
           tournament_id?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
