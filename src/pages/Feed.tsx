@@ -1,133 +1,274 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Heart, MessageCircle } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import FeedLayout from "@/components/feed/FeedLayout";
+import FeedTopBar from "@/components/feed/FeedTopBar";
+import FeedBottomNav from "@/components/feed/FeedBottomNav";
+import PostCard, { PostData } from "@/components/feed/PostCard";
+import PostSkeleton from "@/components/feed/PostSkeleton";
+import CreatePostDialog from "@/components/feed/CreatePostDialog";
+
+const PAGE_SIZE = 20;
 
 const Feed = () => {
   const { user } = useAuth();
-  const [posts, setPosts] = useState<any[]>([]);
-  const [newPost, setNewPost] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [posts, setPosts] = useState<PostData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef(0);
 
-  const fetchPosts = async () => {
-    const { data: postsData } = await supabase
-      .from("posts")
-      .select("*, likes(count), comments(count)")
-      .order("created_at", { ascending: false })
-      .limit(50);
+  const enrichPosts = useCallback(
+    async (rawPosts: any[]): Promise<PostData[]> => {
+      if (rawPosts.length === 0) return [];
 
-    if (!postsData || postsData.length === 0) {
-      setPosts([]);
-      return;
-    }
+      const postIds = rawPosts.map((p) => p.id);
+      const authorIds = [...new Set(rawPosts.map((p) => p.author_id))];
 
-    // Fetch profiles for all unique author_ids
-    const authorIds = [...new Set(postsData.map((p) => p.author_id))];
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("user_id, full_name")
-      .in("user_id", authorIds);
+      // Parallel fetches
+      const [profilesRes, mediaRes, commentsRes, likesCountRes, commentsCountRes, myLikesRes, mySavesRes] =
+        await Promise.all([
+          supabase.from("profiles").select("user_id, full_name, avatar_url").in("user_id", authorIds),
+          supabase.from("post_media").select("*").in("post_id", postIds).order("order_index"),
+          supabase.from("comments").select("id, post_id, author_id, content, created_at").in("post_id", postIds).order("created_at", { ascending: true }),
+          supabase.from("likes").select("post_id").in("post_id", postIds),
+          supabase.from("comments").select("post_id").in("post_id", postIds),
+          user ? supabase.from("likes").select("post_id").in("post_id", postIds).eq("user_id", user.id) : Promise.resolve({ data: [] }),
+          user ? supabase.from("post_saves").select("post_id").in("post_id", postIds).eq("user_id", user.id) : Promise.resolve({ data: [] }),
+        ]);
 
-    const profileMap: Record<string, string> = {};
-    (profiles || []).forEach((p) => { profileMap[p.user_id] = p.full_name; });
+      const profileMap: Record<string, { name: string; avatar: string | null }> = {};
+      (profilesRes.data || []).forEach((p) => {
+        profileMap[p.user_id] = { name: p.full_name, avatar: p.avatar_url };
+      });
 
-    setPosts(postsData.map((p) => ({ ...p, author_name: profileMap[p.author_id] || "Atleta" })));
-  };
+      const mediaMap: Record<string, { media_url: string; order_index: number }[]> = {};
+      (mediaRes.data || []).forEach((m) => {
+        if (!mediaMap[m.post_id]) mediaMap[m.post_id] = [];
+        mediaMap[m.post_id].push({ media_url: m.media_url, order_index: m.order_index });
+      });
 
-  useEffect(() => { fetchPosts(); }, []);
+      // Group comments by post for top 2
+      const commentsByPost: Record<string, any[]> = {};
+      const commentAuthorIds = new Set<string>();
+      (commentsRes.data || []).forEach((c) => {
+        if (!commentsByPost[c.post_id]) commentsByPost[c.post_id] = [];
+        commentsByPost[c.post_id].push(c);
+        commentAuthorIds.add(c.author_id);
+      });
 
-  const handlePost = async () => {
-    if (!user || !newPost.trim()) return;
-    setLoading(true);
-    const { error } = await supabase.from("posts").insert({
-      author_id: user.id,
-      content: newPost.trim(),
-      type: "manual",
-    });
-    setLoading(false);
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      setNewPost("");
-      fetchPosts();
-    }
-  };
+      // Fetch comment author names
+      let commentProfileMap: Record<string, string> = {};
+      if (commentAuthorIds.size > 0) {
+        const { data: cp } = await supabase
+          .from("profiles")
+          .select("user_id, full_name")
+          .in("user_id", Array.from(commentAuthorIds));
+        (cp || []).forEach((p) => {
+          commentProfileMap[p.user_id] = p.full_name;
+        });
+      }
+
+      // Count likes/comments per post
+      const likesCount: Record<string, number> = {};
+      (likesCountRes.data || []).forEach((l: any) => {
+        likesCount[l.post_id] = (likesCount[l.post_id] || 0) + 1;
+      });
+      const commentsCount: Record<string, number> = {};
+      (commentsCountRes.data || []).forEach((c: any) => {
+        commentsCount[c.post_id] = (commentsCount[c.post_id] || 0) + 1;
+      });
+
+      const myLikedSet = new Set((myLikesRes.data || []).map((l: any) => l.post_id));
+      const mySavedSet = new Set((mySavesRes.data || []).map((s: any) => s.post_id));
+
+      return rawPosts.map((p) => {
+        const profile = profileMap[p.author_id] || { name: "Atleta", avatar: null };
+        const postComments = commentsByPost[p.id] || [];
+        const top2 = postComments.slice(-2).map((c) => ({
+          id: c.id,
+          content: c.content,
+          author_name: commentProfileMap[c.author_id] || "Atleta",
+          created_at: c.created_at,
+        }));
+
+        return {
+          id: p.id,
+          author_id: p.author_id,
+          author_name: profile.name,
+          author_avatar: profile.avatar,
+          content: p.content,
+          type: p.type,
+          created_at: p.created_at,
+          media: mediaMap[p.id] || [],
+          likes_count: likesCount[p.id] || 0,
+          comments_count: commentsCount[p.id] || 0,
+          top_comments: top2,
+          liked_by_me: myLikedSet.has(p.id),
+          saved_by_me: mySavedSet.has(p.id),
+        };
+      });
+    },
+    [user]
+  );
+
+  const fetchPosts = useCallback(
+    async (page = 0, append = false) => {
+      if (page === 0) setLoading(true);
+      else setLoadingMore(true);
+
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      let query = supabase
+        .from("posts")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (searchQuery.trim()) {
+        query = query.ilike("content", `%${searchQuery.trim()}%`);
+      }
+
+      const { data: rawPosts } = await query;
+
+      if (!rawPosts || rawPosts.length < PAGE_SIZE) setHasMore(false);
+      else setHasMore(true);
+
+      const enriched = await enrichPosts(rawPosts || []);
+
+      if (append) {
+        setPosts((prev) => [...prev, ...enriched]);
+      } else {
+        setPosts(enriched);
+      }
+
+      setLoading(false);
+      setLoadingMore(false);
+    },
+    [enrichPosts, searchQuery]
+  );
+
+  // Initial + search
+  useEffect(() => {
+    pageRef.current = 0;
+    setHasMore(true);
+    fetchPosts(0, false);
+  }, [fetchPosts]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          pageRef.current += 1;
+          fetchPosts(pageRef.current, true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, fetchPosts]);
 
   const handleLike = async (postId: string) => {
     if (!user) return;
-    const { data: existing } = await supabase
-      .from("likes")
-      .select("id")
-      .eq("post_id", postId)
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
 
-    if (existing) {
-      await supabase.from("likes").delete().eq("id", existing.id);
+    // Optimistic update
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              liked_by_me: !p.liked_by_me,
+              likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1,
+            }
+          : p
+      )
+    );
+
+    if (post.liked_by_me) {
+      await supabase.from("likes").delete().eq("post_id", postId).eq("user_id", user.id);
     } else {
       await supabase.from("likes").insert({ user_id: user.id, post_id: postId });
     }
-    fetchPosts();
+  };
+
+  const handleSave = async (postId: string) => {
+    if (!user) return;
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+
+    setPosts((prev) =>
+      prev.map((p) => (p.id === postId ? { ...p, saved_by_me: !p.saved_by_me } : p))
+    );
+
+    if (post.saved_by_me) {
+      await supabase.from("post_saves").delete().eq("post_id", postId).eq("user_id", user.id);
+    } else {
+      await supabase.from("post_saves").insert({ user_id: user.id, post_id: postId });
+    }
+  };
+
+  const handleRefresh = () => {
+    pageRef.current = 0;
+    fetchPosts(0, false);
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container flex h-16 items-center justify-between">
-          <Link to="/" className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
-          <div className="flex items-center gap-4">
-            <Link to="/ranking" className="text-sm text-muted-foreground hover:text-foreground">Ranking</Link>
-            <Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">Dashboard</Link>
+    <FeedLayout>
+      <FeedTopBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+
+      <main className="pt-16 pb-20 px-4 max-w-xl mx-auto space-y-4">
+        {loading ? (
+          <>
+            <PostSkeleton />
+            <PostSkeleton />
+            <PostSkeleton />
+          </>
+        ) : posts.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-lg font-display" style={{ color: "#9CA3AF" }}>
+              Nenhum post encontrado
+            </p>
+            <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>
+              Seja o primeiro a publicar!
+            </p>
           </div>
-        </div>
-      </header>
-
-      <main className="container max-w-2xl py-8">
-        <h1 className="mb-8 text-4xl font-display text-foreground">FEED</h1>
-
-        {user && (
-          <Card className="mb-8">
-            <CardContent className="pt-6 space-y-4">
-              <Textarea
-                placeholder="O que está acontecendo?"
-                value={newPost}
-                onChange={(e) => setNewPost(e.target.value)}
-              />
-              <Button onClick={handlePost} disabled={loading || !newPost.trim()}>
-                {loading ? "Publicando..." : "Publicar"}
-              </Button>
-            </CardContent>
-          </Card>
+        ) : (
+          posts.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              userId={user?.id}
+              onLike={handleLike}
+              onSave={handleSave}
+              onRefresh={handleRefresh}
+            />
+          ))
         )}
 
-        <div className="space-y-4">
-          {posts.map((post) => (
-            <Card key={post.id} className="hover:border-primary/20 transition-colors">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold text-sm">{post.author_name || "Atleta"}</span>
-                  <span className="text-xs text-muted-foreground">{new Date(post.created_at).toLocaleDateString("pt-BR")}</span>
-                </div>
-                <p className="text-foreground">{post.content}</p>
-                <div className="mt-4 flex items-center gap-6">
-                  <button onClick={() => handleLike(post.id)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors">
-                    <Heart className="h-4 w-4" /> {post.likes?.[0]?.count || 0}
-                  </button>
-                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <MessageCircle className="h-4 w-4" /> {post.comments?.[0]?.count || 0}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {loadingMore && <PostSkeleton />}
+        <div ref={loadMoreRef} className="h-4" />
       </main>
-    </div>
+
+      <FeedBottomNav onCreatePost={() => setCreateOpen(true)} />
+
+      {user && (
+        <CreatePostDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          userId={user.id}
+          onCreated={handleRefresh}
+        />
+      )}
+    </FeedLayout>
   );
 };
 
