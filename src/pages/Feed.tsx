@@ -5,6 +5,7 @@ import FeedTopBar from "@/components/feed/FeedTopBar";
 import PostCard, { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
 import ClipsBar from "@/components/feed/ClipsBar";
+import FriendSuggestions from "@/components/feed/FriendSuggestions";
 
 const PAGE_SIZE = 20;
 
@@ -167,6 +168,9 @@ const Feed = () => {
       }
 
       let query = supabase.from("posts").select("*").order("created_at", { ascending: false });
+      if (user) {
+        query = query.neq("author_id", user.id);
+      }
       if (postIds) {
         query = query.in("id", postIds);
       }
@@ -246,6 +250,7 @@ const Feed = () => {
       <FeedTopBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
       <main ref={mainRef} className="pt-16 pb-20 px-4 max-w-xl mx-auto space-y-4">
         <ClipsBar />
+        <FriendSuggestions />
         {loading ? (
           <><PostSkeleton /><PostSkeleton /><PostSkeleton /></>
         ) : posts.length === 0 ? (
