@@ -58,10 +58,17 @@ const Marketplace = () => {
         .select("*, companies(*)")
         .eq("status", "approved");
 
-      if (search) query = query.ilike("name", `%${search}%`);
 
       const { data } = await query;
       let list = (data || []).filter((p: any) => p.companies?.status === "approved");
+
+      // Filter by search (product name or company name)
+      if (search) {
+        const term = search.toLowerCase();
+        list = list.filter((p: any) =>
+          p.name?.toLowerCase().includes(term) || p.companies?.name?.toLowerCase().includes(term)
+        );
+      }
 
       // Filter by company category
       if (category) {
@@ -120,7 +127,7 @@ const Marketplace = () => {
             <Search className="h-4 w-4 text-muted-foreground shrink-0" />
             <input
               type="text"
-              placeholder="Buscar..."
+              placeholder="Buscar produtos ou empresas..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
