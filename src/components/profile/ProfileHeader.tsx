@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { MapPin, Users, FileText, Trophy, MessageCircle, Camera, LinkIcon, ExternalLink, Mail } from "lucide-react";
+import { MapPin, Users, FileText, Trophy, MessageCircle, Camera, LinkIcon, ExternalLink, Mail, Pencil, Video } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import FollowListDialog from "./FollowListDialog";
@@ -35,9 +35,11 @@ const getInitials = (name: string) =>
 
 interface HighlightItem {
   id: string;
-  post_id: string;
+  post_id?: string;
+  clip_id?: string;
   image_url: string | null;
   content: string;
+  isClip?: boolean;
 }
 
 const ProfileHeader = ({
@@ -70,30 +72,49 @@ const ProfileHeader = ({
 
   useEffect(() => {
     const fetchHighlights = async () => {
+      // Fetch post highlights
       const { data: hl } = await supabase
         .from("profile_highlights")
         .select("id, post_id")
         .eq("user_id", profileUserId)
         .order("created_at", { ascending: false })
         .limit(20);
-      if (!hl || hl.length === 0) { setHighlights([]); return; }
 
-      const postIds = hl.map((h: any) => h.post_id);
-      const [postsRes, mediaRes] = await Promise.all([
-        supabase.from("posts").select("id, content").in("id", postIds),
-        supabase.from("post_media").select("post_id, media_url").in("post_id", postIds).order("order_index").limit(50),
-      ]);
+      let postHighlights: HighlightItem[] = [];
+      if (hl && hl.length > 0) {
+        const postIds = hl.map((h: any) => h.post_id);
+        const [postsRes, mediaRes] = await Promise.all([
+          supabase.from("posts").select("id, content").in("id", postIds),
+          supabase.from("post_media").select("post_id, media_url").in("post_id", postIds).order("order_index").limit(50),
+        ]);
+        const mediaMap: Record<string, string> = {};
+        (mediaRes.data || []).forEach((m: any) => { if (!mediaMap[m.post_id]) mediaMap[m.post_id] = m.media_url; });
+        const contentMap: Record<string, string> = {};
+        (postsRes.data || []).forEach((p: any) => { contentMap[p.id] = p.content; });
+        postHighlights = hl.map((h: any) => ({
+          id: h.id, post_id: h.post_id,
+          image_url: mediaMap[h.post_id] || null,
+          content: contentMap[h.post_id] || "",
+        }));
+      }
 
-      const mediaMap: Record<string, string> = {};
-      (mediaRes.data || []).forEach((m: any) => { if (!mediaMap[m.post_id]) mediaMap[m.post_id] = m.media_url; });
-      const contentMap: Record<string, string> = {};
-      (postsRes.data || []).forEach((p: any) => { contentMap[p.id] = p.content; });
+      // Fetch clips
+      const { data: clips } = await supabase
+        .from("clips")
+        .select("id, thumbnail_url, caption, media_url")
+        .eq("author_id", profileUserId)
+        .order("created_at", { ascending: false })
+        .limit(10);
 
-      setHighlights(hl.map((h: any) => ({
-        id: h.id, post_id: h.post_id,
-        image_url: mediaMap[h.post_id] || null,
-        content: contentMap[h.post_id] || "",
-      })));
+      const clipHighlights: HighlightItem[] = (clips || []).map((c: any) => ({
+        id: `clip-${c.id}`,
+        clip_id: c.id,
+        image_url: c.thumbnail_url || null,
+        content: c.caption || "",
+        isClip: true,
+      }));
+
+      setHighlights([...postHighlights, ...clipHighlights]);
     };
     fetchHighlights();
   }, [profileUserId]);
@@ -218,11 +239,15 @@ const ProfileHeader = ({
 
       {/* Follow / Edit / Message buttons */}
       <div className="flex gap-2">
-        {isOwnProfile ? (
+      {isOwnProfile ? (
           onEditClick && (
-            <Button variant="outline" size="sm" onClick={onEditClick} className="border-[#2BFF88]/30 text-white">
-              Editar perfil
-            </Button>
+            <button
+              onClick={onEditClick}
+              className="p-2 rounded-full transition-colors"
+              style={{ background: "rgba(43,255,136,0.1)", color: "#2BFF88" }}
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
           )
         ) : currentUserId ? (
           <>
@@ -264,12 +289,17 @@ const ProfileHeader = ({
           <h3 className="text-xs font-semibold mb-2" style={{ color: "#9CA3AF" }}>Destaques</h3>
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {highlights.map((h) => (
-              <div key={h.id} className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border" style={{ borderColor: "rgba(43,255,136,0.2)" }}>
+              <div key={h.id} className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border relative" style={{ borderColor: "rgba(43,255,136,0.2)" }}>
                 {h.image_url ? (
                   <img src={h.image_url} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[10px] p-1 text-center" style={{ background: "rgba(43,255,136,0.1)", color: "#9CA3AF" }}>
-                    <FileText className="h-5 w-5" style={{ color: "#2BFF88" }} />
+                    {h.isClip ? <Video className="h-5 w-5" style={{ color: "#2BFF88" }} /> : <FileText className="h-5 w-5" style={{ color: "#2BFF88" }} />}
+                  </div>
+                )}
+                {h.isClip && (
+                  <div className="absolute bottom-0.5 right-0.5">
+                    <Video className="h-3 w-3" style={{ color: "#2BFF88" }} />
                   </div>
                 )}
               </div>

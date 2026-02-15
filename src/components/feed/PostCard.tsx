@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Trash2, Link2, Flag, Star } from "lucide-react";
+import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Trash2, Link2, Flag, Star, Pin } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -31,6 +31,7 @@ export interface PostData {
   liked_by_me: boolean;
   saved_by_me: boolean;
   followed_by_me?: boolean;
+  pinned_at?: string | null;
 }
 
 interface PostCardProps {
@@ -116,6 +117,15 @@ const PostCard = ({ post, userId, onLike, onSave, onRefresh }: PostCardProps) =>
     toast({ title: "Adicionado aos destaques!" });
   };
 
+  const handlePin = async () => {
+    if (!userId) return;
+    const isPinned = !!post.pinned_at;
+    const { error } = await supabase.from("posts").update({ pinned_at: isPinned ? null : new Date().toISOString() } as any).eq("id", post.id).eq("author_id", userId);
+    if (error) { toast({ title: "Erro", variant: "destructive" }); return; }
+    toast({ title: isPinned ? "Post desafixado" : "Post fixado no perfil!" });
+    onRefresh();
+  };
+
   return (
     <article
       className="rounded-xl overflow-hidden"
@@ -171,6 +181,11 @@ const PostCard = ({ post, userId, onLike, onSave, onRefresh }: PostCardProps) =>
             {isAuthor && (
               <DropdownMenuItem onClick={handleHighlight} className="text-white hover:text-white cursor-pointer">
                 <Star className="h-4 w-4 mr-2" /> Adicionar aos Destaques
+              </DropdownMenuItem>
+            )}
+            {isAuthor && (
+              <DropdownMenuItem onClick={handlePin} className="text-white hover:text-white cursor-pointer">
+                <Pin className="h-4 w-4 mr-2" /> {post.pinned_at ? "Desafixar do perfil" : "Fixar no perfil"}
               </DropdownMenuItem>
             )}
             {isAuthor && (
