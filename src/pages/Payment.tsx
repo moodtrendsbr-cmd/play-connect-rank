@@ -302,12 +302,15 @@ const Payment = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
-        <div className="container flex h-16 items-center">
+        <div className="container flex h-16 items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate(`/tournaments/${id}`)}>
+            ← Voltar
+          </Button>
           <Link to={`/tournaments/${id}`} className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
         </div>
       </header>
 
-      <main className="container max-w-2xl py-8">
+      <main className="container max-w-2xl py-8 pb-24">
         <h1 className="mb-2 text-4xl font-display text-foreground">INSCRIÇÃO & PAGAMENTO</h1>
         <p className="text-muted-foreground mb-8">{tournament.name} — R$ {Number(tournament.entry_fee).toFixed(2)} por atleta</p>
 

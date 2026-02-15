@@ -50,11 +50,11 @@ const App = () => (
               <Route path="/tournaments/:id" element={<TournamentDetail />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/profile/:userId" element={<UserProfile />} />
+              <Route path="/payment/:id" element={<Payment />} />
             </Route>
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />
             <Route path="/tournaments/:id/results" element={<Results />} />
-            <Route path="/payment/:id" element={<Payment />} />
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
               <Route path="users" element={<AdminUsers />} />

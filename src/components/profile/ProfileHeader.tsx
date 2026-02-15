@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { MapPin, Users, FileText, Trophy, MessageCircle, Camera, LinkIcon, ExternalLink } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import FollowListDialog from "./FollowListDialog";
 
 interface ProfileHeaderProps {
@@ -65,6 +66,7 @@ const ProfileHeader = ({
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [highlights, setHighlights] = useState<HighlightItem[]>([]);
+  const [medalPosition, setMedalPosition] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchHighlights = async () => {
@@ -94,6 +96,20 @@ const ProfileHeader = ({
       })));
     };
     fetchHighlights();
+  }, [profileUserId]);
+
+  // Fetch medal position from victory ranking
+  useEffect(() => {
+    const fetchMedal = async () => {
+      const { data: matchData } = await supabase.from("match_results").select("winner_id").not("winner_id", "is", null);
+      if (!matchData || matchData.length === 0) return;
+      const counts: Record<string, number> = {};
+      matchData.forEach((r) => { if (r.winner_id) counts[r.winner_id] = (counts[r.winner_id] || 0) + 1; });
+      const sorted = Object.entries(counts).sort(([, a], [, b]) => b - a);
+      const idx = sorted.findIndex(([uid]) => uid === profileUserId);
+      if (idx >= 0 && idx < 3) setMedalPosition(idx + 1);
+    };
+    fetchMedal();
   }, [profileUserId]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -144,7 +160,21 @@ const ProfileHeader = ({
           )}
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-display text-white">{fullName || "Atleta"}</h1>
+          <h1 className="text-2xl font-display text-white flex items-center gap-2">
+            {fullName || "Atleta"}
+            {medalPosition && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xl cursor-help">
+                    {medalPosition === 1 ? "🥇" : medalPosition === 2 ? "🥈" : "🥉"}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{medalPosition}º lugar no Ranking de Vitórias</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </h1>
           {(city || state) && (
             <p className="text-sm flex items-center gap-1 mt-1" style={{ color: "#9CA3AF" }}>
               <MapPin className="h-3 w-3" /> {city}{city && state ? " - " : ""}{state}

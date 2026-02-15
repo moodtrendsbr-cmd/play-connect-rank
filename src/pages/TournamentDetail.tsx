@@ -56,7 +56,7 @@ const TournamentDetail = () => {
         </div>
       </header>
 
-      <main className="container max-w-2xl py-8">
+      <main className="container max-w-2xl py-8 pb-24">
         <h1 className="text-4xl font-display text-foreground">🏐 {tournament.name}</h1>
 
         <div className="mt-6 space-y-3 text-foreground">
