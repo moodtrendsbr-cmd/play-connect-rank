@@ -116,6 +116,7 @@ export type Database = {
       }
       companies: {
         Row: {
+          address: string | null
           billing_status: string
           category: string | null
           city: string | null
@@ -136,8 +137,11 @@ export type Database = {
           status: string
           tournament_visibility: boolean
           updated_at: string
+          whatsapp: string | null
+          zip_code: string | null
         }
         Insert: {
+          address?: string | null
           billing_status?: string
           category?: string | null
           city?: string | null
@@ -158,8 +162,11 @@ export type Database = {
           status?: string
           tournament_visibility?: boolean
           updated_at?: string
+          whatsapp?: string | null
+          zip_code?: string | null
         }
         Update: {
+          address?: string | null
           billing_status?: string
           category?: string | null
           city?: string | null
@@ -180,6 +187,8 @@ export type Database = {
           status?: string
           tournament_visibility?: boolean
           updated_at?: string
+          whatsapp?: string | null
+          zip_code?: string | null
         }
         Relationships: [
           {
@@ -442,35 +451,56 @@ export type Database = {
       }
       marketplace_orders: {
         Row: {
+          buyer_confirmed: boolean | null
           buyer_user_id: string
           company_amount: number
+          company_confirmed: boolean | null
           created_at: string
           id: string
+          items: Json | null
           mood_commission: number
+          payment_id: string | null
+          payment_method: string | null
           product_id: string
           quantity: number
+          shipping_cost: number | null
+          shipping_zip: string | null
           status: string
           total_amount: number
         }
         Insert: {
+          buyer_confirmed?: boolean | null
           buyer_user_id: string
           company_amount?: number
+          company_confirmed?: boolean | null
           created_at?: string
           id?: string
+          items?: Json | null
           mood_commission?: number
+          payment_id?: string | null
+          payment_method?: string | null
           product_id: string
           quantity?: number
+          shipping_cost?: number | null
+          shipping_zip?: string | null
           status?: string
           total_amount: number
         }
         Update: {
+          buyer_confirmed?: boolean | null
           buyer_user_id?: string
           company_amount?: number
+          company_confirmed?: boolean | null
           created_at?: string
           id?: string
+          items?: Json | null
           mood_commission?: number
+          payment_id?: string | null
+          payment_method?: string | null
           product_id?: string
           quantity?: number
+          shipping_cost?: number | null
+          shipping_zip?: string | null
           status?: string
           total_amount?: number
         }

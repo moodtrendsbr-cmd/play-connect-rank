@@ -2,18 +2,21 @@ import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCart } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Store, ExternalLink } from "lucide-react";
+import { ArrowLeft, Store, ExternalLink, ShoppingCart, Minus, Plus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const MarketplaceProduct = () => {
   const { productId } = useParams();
   const { user } = useAuth();
+  const { addToCart } = useCart();
   const navigate = useNavigate();
   const [product, setProduct] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
   const [currentImg, setCurrentImg] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
     const fetch = async () => {
@@ -28,23 +31,23 @@ const MarketplaceProduct = () => {
     if (productId) fetch();
   }, [productId]);
 
-  const handleBuy = async () => {
+  const handleAddToCart = () => {
     if (!user) { navigate("/login"); return; }
     if (product.external_link) {
       window.open(product.external_link, "_blank");
       return;
     }
-    const commission = Number(product.price) * (Number(company?.commission_rate || 10) / 100);
-    const companyAmount = Number(product.price) - commission;
-    const { error } = await supabase.from("marketplace_orders").insert({
-      product_id: product.id,
-      buyer_user_id: user.id,
-      total_amount: product.price,
-      mood_commission: commission,
-      company_amount: companyAmount,
-    });
-    if (error) toast({ title: "Erro", description: "Não foi possível criar o pedido", variant: "destructive" });
-    else toast({ title: "Pedido criado!", description: "Entraremos em contato em breve." });
+    const success = addToCart({
+      productId: product.id,
+      name: product.name,
+      price: Number(product.price),
+      imageUrl: product.image_urls?.[0] || "",
+      companyId: product.company_id,
+      companyName: company?.name || "",
+    }, quantity);
+    if (success) {
+      toast({ title: "Adicionado ao carrinho! 🛒", description: `${quantity}x ${product.name}` });
+    }
   };
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">Carregando...</div>;
@@ -86,11 +89,27 @@ const MarketplaceProduct = () => {
         </div>
       )}
 
-      <Button onClick={handleBuy} className="w-full h-12 mt-6 text-lg font-bold">
+      {/* Quantity selector */}
+      {!product.external_link && (
+        <div className="flex items-center gap-3 mt-6">
+          <span className="text-sm text-muted-foreground">Quantidade:</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="h-8 w-8 rounded flex items-center justify-center" style={{ background: "#0B0F12" }}>
+              <Minus className="h-4 w-4 text-foreground" />
+            </button>
+            <span className="text-foreground font-medium w-8 text-center">{quantity}</span>
+            <button onClick={() => setQuantity(quantity + 1)} className="h-8 w-8 rounded flex items-center justify-center" style={{ background: "#0B0F12" }}>
+              <Plus className="h-4 w-4 text-foreground" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <Button onClick={handleAddToCart} className="w-full h-12 mt-4 text-lg font-bold">
         {product.external_link ? (
           <><ExternalLink className="h-4 w-4 mr-2" /> Comprar no site</>
         ) : (
-          "Comprar"
+          <><ShoppingCart className="h-4 w-4 mr-2" /> Adicionar ao carrinho</>
         )}
       </Button>
 

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { CartProvider } from "@/contexts/CartContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -43,6 +44,8 @@ import MarketplaceCompany from "./pages/MarketplaceCompany";
 import MarketplaceProduct from "./pages/MarketplaceProduct";
 import MarketplaceRegister from "./pages/MarketplaceRegister";
 import MyCompany from "./pages/MyCompany";
+import Cart from "./pages/Cart";
+import MarketplaceCheckout from "./pages/MarketplaceCheckout";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +56,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <CartProvider>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
@@ -78,6 +82,8 @@ const App = () => (
               <Route path="/marketplace/my-company" element={<MyCompany />} />
               <Route path="/marketplace/company/:companyId" element={<MarketplaceCompany />} />
               <Route path="/marketplace/product/:productId" element={<MarketplaceProduct />} />
+              <Route path="/marketplace/cart" element={<Cart />} />
+              <Route path="/marketplace/checkout" element={<MarketplaceCheckout />} />
             </Route>
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />
@@ -96,6 +102,7 @@ const App = () => (
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </CartProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
