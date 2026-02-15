@@ -14,8 +14,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User } from "lucide-react";
 
 const navItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
@@ -23,6 +22,13 @@ const navItems = [
   { title: "Torneios", url: "/admin/tournaments", icon: Trophy },
   { title: "Inscrições", url: "/admin/enrollments", icon: ClipboardList },
   { title: "Financeiro", url: "/admin/finances", icon: DollarSign },
+];
+
+const userNavItems = [
+  { title: "Feed", url: "/feed", icon: Rss },
+  { title: "Torneios", url: "/tournaments", icon: Trophy },
+  { title: "Ranking", url: "/ranking", icon: Medal },
+  { title: "Perfil", url: "/profile", icon: User },
 ];
 
 const AdminLayout = () => {
@@ -71,15 +77,29 @@ const AdminLayout = () => {
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
+            <SidebarGroup>
+              <SidebarGroupLabel>Navegar como Usuário</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {userNavItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <Link to={item.url} className="hover:bg-muted/50">
+                          <item.icon className="mr-2 h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
           </SidebarContent>
         </Sidebar>
 
         <main className="flex-1 overflow-auto">
           <header className="flex h-14 items-center gap-4 border-b border-border bg-card px-6">
             <SidebarTrigger />
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/dashboard"><ArrowLeft className="mr-1 h-4 w-4" /> Voltar</Link>
-            </Button>
           </header>
           <div className="p-6">
             <Outlet />
