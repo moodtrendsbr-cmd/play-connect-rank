@@ -982,6 +982,7 @@ export type Database = {
           price: number
           status: string
           stock: number | null
+          video_url: string | null
         }
         Insert: {
           company_id: string
@@ -995,6 +996,7 @@ export type Database = {
           price: number
           status?: string
           stock?: number | null
+          video_url?: string | null
         }
         Update: {
           company_id?: string
@@ -1008,6 +1010,7 @@ export type Database = {
           price?: number
           status?: string
           stock?: number | null
+          video_url?: string | null
         }
         Relationships: [
           {

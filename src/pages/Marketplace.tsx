@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Input } from "@/components/ui/input";
-import { Search, Store, ShoppingBag } from "lucide-react";
+import { Search, Store, ShoppingBag, Star } from "lucide-react";
 
 const CATEGORIES = [
   { label: "Todos", value: "" },
@@ -15,9 +14,11 @@ const CATEGORIES = [
   { label: "Locação", value: "locacao" },
 ];
 
+const PLAN_PRIORITY: Record<string, number> = { elite: 3, pro: 2, free: 1 };
+
 const Marketplace = () => {
   const { user } = useAuth();
-  const [companies, setCompanies] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [userCity, setUserCity] = useState<string | null>(null);
@@ -32,23 +33,41 @@ const Marketplace = () => {
   }, [user]);
 
   useEffect(() => {
-    const fetchCompanies = async () => {
+    const fetchProducts = async () => {
       setLoading(true);
-      let query = supabase.from("companies").select("*").eq("status", "approved");
-      if (category) query = query.eq("category", category);
+      let query = supabase
+        .from("products")
+        .select("*, companies(*)")
+        .eq("status", "approved");
+
       if (search) query = query.ilike("name", `%${search}%`);
+
       const { data } = await query;
-      let list = data || [];
-      // Sort local first
-      if (userCity) {
-        const local = list.filter((c) => c.city?.toLowerCase() === userCity.toLowerCase());
-        const rest = list.filter((c) => c.city?.toLowerCase() !== userCity.toLowerCase());
-        list = [...local, ...rest];
+      let list = (data || []).filter((p: any) => p.companies?.status === "approved");
+
+      // Filter by company category
+      if (category) {
+        list = list.filter((p: any) => p.companies?.category === category);
       }
-      setCompanies(list);
+
+      // Sort: featured > paid plan > same city > created_at
+      list.sort((a: any, b: any) => {
+        if (a.featured !== b.featured) return a.featured ? -1 : 1;
+        const planA = PLAN_PRIORITY[a.companies?.plan] || 1;
+        const planB = PLAN_PRIORITY[b.companies?.plan] || 1;
+        if (planA !== planB) return planB - planA;
+        if (userCity) {
+          const aLocal = a.companies?.city?.toLowerCase() === userCity.toLowerCase();
+          const bLocal = b.companies?.city?.toLowerCase() === userCity.toLowerCase();
+          if (aLocal !== bLocal) return aLocal ? -1 : 1;
+        }
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+
+      setProducts(list);
       setLoading(false);
     };
-    fetchCompanies();
+    fetchProducts();
   }, [search, category, userCity]);
 
   return (
@@ -63,7 +82,7 @@ const Marketplace = () => {
           <Search className="h-4 w-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Buscar empresas..."
+            placeholder="Buscar produtos..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
@@ -87,51 +106,51 @@ const Marketplace = () => {
         </div>
 
         <div className="flex items-center justify-between mb-4">
-          <p className="text-xs text-muted-foreground">{companies.length} empresa(s)</p>
+          <p className="text-xs text-muted-foreground">{products.length} produto(s)</p>
           <Link to="/marketplace/register" className="text-xs font-medium" style={{ color: "#2BFF88" }}>
             + Cadastrar empresa
           </Link>
         </div>
 
         {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 rounded-lg animate-pulse" style={{ background: "#0B0F12" }} />
+          <div className="grid grid-cols-2 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-48 rounded-lg animate-pulse" style={{ background: "#0B0F12" }} />
             ))}
           </div>
-        ) : companies.length === 0 ? (
+        ) : products.length === 0 ? (
           <div className="text-center py-20 text-muted-foreground">
             <Store className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p>Nenhuma empresa encontrada</p>
+            <p>Nenhum produto encontrado</p>
           </div>
         ) : (
-          <div className="grid gap-3">
-            {companies.map((c) => (
+          <div className="grid grid-cols-2 gap-3">
+            {products.map((p) => (
               <Link
-                key={c.id}
-                to={`/marketplace/company/${c.id}`}
-                className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:opacity-80"
+                key={p.id}
+                to={`/marketplace/company/${p.company_id}`}
+                className="rounded-lg overflow-hidden transition-opacity hover:opacity-80 relative"
                 style={{ background: "#0B0F12" }}
               >
-                {c.logo_url ? (
-                  <img src={c.logo_url} alt={c.name} className="h-14 w-14 rounded-lg object-cover" />
+                {p.featured && (
+                  <span className="absolute top-2 left-2 z-10 flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#2BFF88", color: "#050708" }}>
+                    <Star className="h-3 w-3" /> Destaque
+                  </span>
+                )}
+                {p.image_urls?.[0] ? (
+                  <img src={p.image_urls[0]} alt={p.name} className="w-full h-36 object-cover" />
                 ) : (
-                  <div className="h-14 w-14 rounded-lg flex items-center justify-center" style={{ background: "#1a1f25" }}>
-                    <Store className="h-6 w-6 text-muted-foreground" />
+                  <div className="w-full h-36 flex items-center justify-center" style={{ background: "#1a1f25" }}>
+                    <Store className="h-8 w-8 text-muted-foreground" />
                   </div>
                 )}
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-foreground truncate">{c.name}</h3>
-                  <p className="text-xs text-muted-foreground">{c.city}{c.state ? `, ${c.state}` : ""}</p>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full mt-1 inline-block" style={{ background: "rgba(43,255,136,0.1)", color: "#2BFF88" }}>
-                    {CATEGORIES.find((cat) => cat.value === c.category)?.label || c.category}
-                  </span>
+                <div className="p-2">
+                  <h3 className="text-sm font-medium text-foreground truncate">{p.name}</h3>
+                  <p className="text-sm font-bold" style={{ color: "#2BFF88" }}>R$ {Number(p.price).toFixed(2)}</p>
+                  {p.companies?.name && (
+                    <p className="text-[10px] text-muted-foreground truncate mt-0.5">{p.companies.name}</p>
+                  )}
                 </div>
-                {c.highlight_enabled && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#2BFF88", color: "#050708" }}>
-                    Destaque
-                  </span>
-                )}
               </Link>
             ))}
           </div>
