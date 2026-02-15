@@ -1,4 +1,5 @@
-import { Search, Bell, CircleUserRound, Mail } from "lucide-react";
+import { Search, Bell, Mail } from "lucide-react";
+import ProfileSwitcher from "./ProfileSwitcher";
 import { Link } from "react-router-dom";
 
 interface FeedTopBarProps {
@@ -43,9 +44,7 @@ const FeedTopBar = ({ searchQuery, onSearchChange }: FeedTopBarProps) => {
         <button className="relative p-2">
           <Bell className="h-5 w-5" style={{ color: "#9CA3AF" }} />
         </button>
-        <Link to="/profile" className="p-2">
-          <CircleUserRound className="h-5 w-5" style={{ color: "#9CA3AF" }} />
-        </Link>
+        <ProfileSwitcher />
       </div>
     </header>
   );
