@@ -1,58 +1,46 @@
 
-# Correcao Completa: Queries com Joins Invalidos + Dashboard Admin
+# Adicionar Navegacao de Usuario no Painel Admin
 
-## Problema Raiz
-As foreign keys de `enrollments.user_id`, `match_results.player1_id`, `match_results.player2_id`, etc. apontam para `auth.users`, mas o codigo tenta fazer joins PostgREST com a tabela `profiles` (ex: `profiles:user_id(full_name)`). Isso causa erro 400 e as paginas mostram dados vazios/incorretos.
+## O que muda
 
-## Paginas Afetadas e Correcoes
+Adicionar uma segunda secao na sidebar do admin com links para as paginas de usuario (Feed, Torneios, Ranking, Perfil), permitindo que o admin navegue pela plataforma como usuario sem sair do contexto.
 
-### 1. ManageTournament.tsx (enrollments com nomes)
-**Problema**: Query `profiles:user_id(full_name, whatsapp)` falha (FK vai para auth.users, nao profiles).
-**Correcao**: Buscar enrollments sem join, depois buscar profiles separadamente e mapear por user_id.
+## Alteracoes
 
-### 2. Brackets.tsx (nomes dos jogadores nas chaves)
-**Problema**: Queries `p1:player1_id(full_name)` e `profiles:user_id(full_name)` falham.
-**Correcao**: Buscar match_results sem joins, coletar todos player IDs, buscar profiles separadamente e mapear.
+### Arquivo: `src/pages/admin/AdminLayout.tsx`
 
-### 3. Results.tsx (nomes nos resultados)
-**Problema**: Query `p1:player1_id(full_name, user_id)` falha.
-**Correcao**: Mesma abordagem - buscar matches simples, depois profiles separadamente.
-
-### 4. Dashboard.tsx (admin ve zeros)
-**Problema**: Admin nao e organizer nem athlete, entao o dashboard mostra "MEUS TORNEIOS" com tudo zerado.
-**Correcao**: Quando `userRole === "admin"`, mostrar um resumo geral (total torneios, total inscricoes) ou redirecionar para /admin. Adicionar tratamento para role admin.
-
-## Detalhes Tecnicos
-
-O padrao de correcao e o mesmo para todas as paginas:
+1. Importar icones adicionais: `Rss`, `Medal`, `User` do lucide-react
+2. Criar um segundo array de navegacao para paginas de usuario:
 
 ```text
-// ANTES (falha com 400):
-const { data } = await supabase
-  .from("enrollments")
-  .select("*, profiles:user_id(full_name)")
-  .eq("tournament_id", id);
-
-// DEPOIS (funciona):
-const { data: enrollments } = await supabase
-  .from("enrollments")
-  .select("*")
-  .eq("tournament_id", id);
-
-const userIds = (enrollments || []).map(e => e.user_id).filter(Boolean);
-const { data: profiles } = await supabase
-  .from("profiles")
-  .select("user_id, full_name, whatsapp")
-  .in("user_id", userIds.length ? userIds : ["none"]);
-
-const profileMap = {};
-(profiles || []).forEach(p => { profileMap[p.user_id] = p; });
-
-// Usar profileMap[enrollment.user_id]?.full_name nas renderizacoes
+const userNavItems = [
+  { title: "Feed", url: "/feed", icon: Rss },
+  { title: "Torneios", url: "/tournaments", icon: Trophy },
+  { title: "Ranking", url: "/ranking", icon: Medal },
+  { title: "Perfil", url: "/profile", icon: User },
+];
 ```
 
-### Arquivos a editar:
-1. `src/pages/ManageTournament.tsx` - Remover join, mapear profiles manualmente
-2. `src/pages/Brackets.tsx` - Remover joins em match_results e enrollments, mapear profiles
-3. `src/pages/Results.tsx` - Remover joins em match_results, mapear profiles
-4. `src/pages/Dashboard.tsx` - Adicionar tratamento para userRole "admin" (redirecionar para /admin ou mostrar dados gerais)
+3. Adicionar um segundo `SidebarGroup` na sidebar, abaixo do grupo "Navegacao", com o label "Navegar como Usuario"
+4. Os links deste grupo abrirao as paginas normais da plataforma (saindo do layout admin)
+5. Remover o botao "Voltar" do header, ja que a navegacao de usuario agora esta na sidebar
+
+### Resultado visual na sidebar:
+
+```text
+MOOD PLAY
+Painel Admin
+
+-- Navegacao --
+  Dashboard
+  Usuarios
+  Torneios
+  Inscricoes
+  Financeiro
+
+-- Navegar como Usuario --
+  Feed
+  Torneios
+  Ranking
+  Perfil
+```
