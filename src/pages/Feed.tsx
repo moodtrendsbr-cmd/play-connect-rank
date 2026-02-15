@@ -250,17 +250,19 @@ const Feed = () => {
       <FeedTopBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
       <main ref={mainRef} className="pt-16 pb-20 px-4 max-w-xl mx-auto space-y-4">
         <ClipsBar />
-        <FriendSuggestions />
         {loading ? (
           <><PostSkeleton /><PostSkeleton /><PostSkeleton /></>
         ) : posts.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-lg font-display" style={{ color: "#9CA3AF" }}>Nenhum post encontrado</p>
-            <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>Seja o primeiro a publicar!</p>
+            <p className="text-lg font-display text-muted-foreground">Nenhum post encontrado</p>
+            <p className="text-sm mt-1 text-muted-foreground">Seja o primeiro a publicar!</p>
           </div>
         ) : (
-          posts.map((post) => (
-            <PostCard key={post.id} post={post} userId={user?.id} onLike={handleLike} onSave={handleSave} onRefresh={handleRefresh} />
+          posts.map((post, index) => (
+            <div key={post.id}>
+              {index === 3 && <FriendSuggestions />}
+              <PostCard post={post} userId={user?.id} onLike={handleLike} onSave={handleSave} onRefresh={handleRefresh} />
+            </div>
           ))
         )}
         {loadingMore && <PostSkeleton />}
