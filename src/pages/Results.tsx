@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, Navigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,9 +10,11 @@ import { toast } from "@/hooks/use-toast";
 
 const Results = () => {
   const { id } = useParams();
+  const { user, loading: authLoading } = useAuth();
   const [tournament, setTournament] = useState<any>(null);
   const [matches, setMatches] = useState<any[]>([]);
   const [profileMap, setProfileMap] = useState<Record<string, any>>({});
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   const fetchProfiles = async (ids: string[]) => {
     const uniqueIds = [...new Set(ids.filter(Boolean))];
@@ -28,6 +31,8 @@ const Results = () => {
   const fetchData = async () => {
     const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).single();
     setTournament(t);
+    setDataLoaded(true);
+    if (!t) return;
 
     const { data: m } = await supabase
       .from("match_results")
@@ -43,7 +48,7 @@ const Results = () => {
     setProfileMap(map);
   };
 
-  useEffect(() => { if (id) fetchData(); }, [id]);
+  useEffect(() => { if (id && user) fetchData(); }, [id, user]);
 
   const updateResult = async (matchId: string, score1: number, score2: number, winnerId: string | null) => {
     const { error } = await supabase
@@ -59,6 +64,14 @@ const Results = () => {
     }
   };
 
+  if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (dataLoaded && !tournament) return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground gap-4">
+      <p className="text-lg text-muted-foreground">Torneio não encontrado ou sem permissão.</p>
+      <Button asChild><Link to="/dashboard">Voltar</Link></Button>
+    </div>
+  );
   if (!tournament) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
 
   return (

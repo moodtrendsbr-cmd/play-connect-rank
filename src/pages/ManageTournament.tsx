@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -12,16 +12,20 @@ const MOOD_COMMISSION_PERCENT = 10;
 
 const ManageTournament = () => {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [tournament, setTournament] = useState<any>(null);
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [hasMpAccount, setHasMpAccount] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).single();
       setTournament(t);
+      setDataLoaded(true);
+
+      if (!t) return;
 
       const { data: e } = await supabase
         .from("enrollments")
@@ -30,7 +34,6 @@ const ManageTournament = () => {
       const enrollData = e || [];
       setEnrollments(enrollData);
 
-      // Fetch profiles separately
       const userIds = enrollData.map((en) => en.user_id).filter(Boolean);
       if (userIds.length > 0) {
         const { data: profiles } = await supabase
@@ -42,7 +45,6 @@ const ManageTournament = () => {
         setProfileMap(map);
       }
 
-      // Check if organizer has MP account
       if (t) {
         const { data: profile } = await supabase
           .from("profiles")
@@ -52,19 +54,25 @@ const ManageTournament = () => {
         setHasMpAccount(!!(profile as any)?.mp_collector_id);
       }
     };
-    if (id) fetchData();
-  }, [id]);
+    if (id && user) fetchData();
+  }, [id, user]);
 
   const paid = enrollments.filter((e) => e.status === "paid");
   const pending = enrollments.filter((e) => e.status === "pending");
   const expired = enrollments.filter((e) => e.status === "expired");
-
   const getName = (enrollment: any) => profileMap[enrollment.user_id]?.full_name || enrollment.athlete_name || "Atleta";
-
   const sendReminder = (enrollment: any) => {
     toast({ title: "Lembrete enviado", description: `Lembrete enviado para ${getName(enrollment)}.` });
   };
 
+  if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (dataLoaded && !tournament) return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground gap-4">
+      <p className="text-lg text-muted-foreground">Torneio não encontrado ou sem permissão.</p>
+      <Button asChild><Link to="/dashboard">Voltar</Link></Button>
+    </div>
+  );
   if (!tournament) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
 
   const available = tournament.max_slots - paid.length - pending.length;
