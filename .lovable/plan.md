@@ -1,67 +1,126 @@
 
-# Filtro no Ranking, Medalhas no Perfil, Fixes de Layout e Barra Menor
 
-## 1. Filtro na pagina de Ranking
+# Mencoes, Mensagens Diretas e Melhorias nos Clips
 
-Adicionar tabs ou botoes de filtro no topo do Ranking para que o usuario escolha qual secao visualizar. Opcoes:
+## Resumo
 
-- **Todos** (padrao): mostra tudo como esta hoje
-- **Vitorias**: apenas a secao de ranking de vitorias
-- **Perfis**: apenas top perfis por seguidores
-- **Hashtags**: apenas trending hashtags
-
-Implementacao: estado `filter` com valor `"all" | "victories" | "profiles" | "hashtags"`, e renderizacao condicional das secoes. Chips horizontais estilizados em neon verde.
-
-## 2. Medalha no perfil para top 3 do ranking
-
-Para atletas que estao nas posicoes 1, 2 ou 3 do ranking de vitorias, exibir uma medalha ao lado do nome no `ProfileHeader.tsx` e `UserProfile.tsx`.
-
-### Logica:
-- No `ProfileHeader`, ao montar, buscar `match_results` e calcular o ranking de vitorias (mesma logica do `Ranking.tsx`)
-- Verificar se o `profileUserId` esta entre os top 3
-- Se sim, exibir o emoji da medalha (ouro, prata, bronze) e um tooltip/descricao curta: "1o lugar no Ranking de Vitorias" etc.
-- A medalha aparece ao lado do nome do atleta, visivel para todos
-
-### Detalhes tecnicos:
-- Reutilizar a query de `match_results` agrupando vitorias
-- Calcular posicao do usuario atual no ranking
-- Mostrar badge colorido ao lado do `<h1>` do nome
-
-## 3. TournamentDetail: conteudo escondido atras da barra fixa
-
-O `TournamentDetail` esta dentro do `AppLayout` (que tem a bottom nav fixa), mas nao tem `pb-20` suficiente. O conteudo inferior fica atras da barra.
-
-### Fix:
-- Na `<main>` do `TournamentDetail.tsx`, adicionar `pb-24` para garantir espaco suficiente abaixo do ultimo elemento
-
-## 4. Payment: sem barra de navegacao e sem botao de voltar
-
-A rota `/payment/:id` esta FORA do `AppLayout` (linha 57 do App.tsx), entao nao tem a bottom nav. Solucoes:
-
-### Opcao escolhida:
-- Mover a rota `/payment/:id` para dentro do `AppLayout` para que tenha a barra de navegacao fixa
-- Adicionar um botao "Voltar" no topo da pagina de Payment apontando para `/tournaments/:id`
-- Adicionar `pb-24` ao conteudo do Payment
-
-## 5. Diminuir tamanho da barra fixa e do botao "+"
-
-Atualmente a barra tem `h-16` e o botao `+` tem `h-14 w-14` com `-mt-5`.
-
-### Ajustes:
-- Barra: reduzir para `h-14`
-- Botao `+`: reduzir para `h-11 w-11` com `-mt-4`
-- Icone do `+`: reduzir de `h-7 w-7` para `h-5 w-5`
-- Icones dos outros itens: manter `h-5 w-5` (ja estao proporcionais)
-- Atualizar `pb-20` para `pb-18` nas paginas que usam padding bottom (ou manter `pb-20` que ainda e seguro)
+Adicionar sistema de mencoes (@usuario) em posts e comentarios, sistema de mensagens diretas acessivel pelo perfil, e opcao de gravar ao vivo nos clips. A funcionalidade de "collab/parceria com empresas" sera preparada com um placeholder, ja que o cadastro de empresas sera implementado futuramente.
 
 ---
 
-## Resumo de arquivos
+## 1. Banco de Dados (Migracao SQL)
+
+### Nova tabela `messages`
+- id (uuid PK default gen_random_uuid())
+- sender_id (uuid NOT NULL)
+- receiver_id (uuid NOT NULL)
+- content (text NOT NULL)
+- read (boolean default false)
+- created_at (timestamptz default now())
+- RLS: SELECT onde auth.uid() = sender_id OR auth.uid() = receiver_id
+- INSERT onde auth.uid() = sender_id
+- UPDATE onde auth.uid() = receiver_id (para marcar como lido)
+- Habilitar realtime para atualizacoes em tempo real
+
+### Nova tabela `mentions`
+- id (uuid PK default gen_random_uuid())
+- mentioned_user_id (uuid NOT NULL)
+- mentioner_id (uuid NOT NULL)
+- post_id (uuid nullable)
+- comment_id (uuid nullable)
+- created_at (timestamptz default now())
+- RLS: SELECT onde auth.uid() = mentioned_user_id OR auth.uid() = mentioner_id, INSERT autenticado
+
+---
+
+## 2. Mencoes (@usuario) em Posts e Comentarios
+
+### Autocomplete de mencoes
+- Criar componente `MentionInput.tsx`:
+  - Ao digitar `@`, abrir um dropdown com busca de perfis (query `profiles` com `ilike full_name`)
+  - Ao selecionar, inserir `@NomeCompleto` no texto
+  - Debounce de 300ms na busca
+
+### No CreatePostDialog
+- Substituir o Textarea por MentionInput (ou adicionar logica de deteccao de @)
+- Ao publicar, extrair mencoes do texto via regex `/@(\w+[\w\s]*)/` e salvar na tabela `mentions`
+
+### No PostComments
+- Aplicar a mesma logica de autocomplete no campo de comentario
+- Ao enviar comentario, extrair e salvar mencoes
+
+### Renderizacao
+- No PostCard e PostComments, renderizar `@NomeUsuario` em cor `#2BFF88` (mesmo estilo das hashtags)
+
+---
+
+## 3. Collab/Parceria (Placeholder)
+
+- No CreatePostDialog, adicionar um botao "Marcar parceiro" com icone de handshake
+- Ao clicar, mostrar um toast: "Em breve! Cadastro de empresas em desenvolvimento."
+- Nao implementar tabela ainda, apenas o botao visual com placeholder
+
+---
+
+## 4. Opcao de Gravar ao Vivo nos Clips
+
+### CreateClipDialog
+- Adicionar duas abas/botoes: "Enviar video" e "Gravar ao vivo"
+- Aba "Enviar video": comportamento atual (upload de arquivo)
+- Aba "Gravar ao vivo":
+  - Usar `navigator.mediaDevices.getUserMedia({ video: true, audio: true })` para acessar a camera
+  - Exibir preview ao vivo em um `<video>` element
+  - Usar `MediaRecorder` API para gravar
+  - Botoes: Iniciar gravacao, Parar, Descartar
+  - Limite de 60 segundos (timer visual)
+  - Ao parar, converter o Blob gravado em File e seguir o fluxo de upload normal
+
+---
+
+## 5. Mensagens Diretas
+
+### Nova pagina `Messages.tsx` (rota `/messages`)
+- Lista de conversas: agrupa mensagens por outro usuario
+- Para cada conversa: avatar, nome, ultima mensagem, indicador de nao lida
+- Ordenar por ultima mensagem mais recente
+
+### Nova pagina/componente `ChatView.tsx` (rota `/messages/:userId`)
+- Header: avatar + nome do outro usuario + botao voltar
+- Lista de mensagens scrollavel (bolhas estilo WhatsApp)
+- Mensagens do usuario atual a direita (fundo verde neon), do outro a esquerda (fundo cinza escuro)
+- Campo de input fixo na parte inferior com botao enviar
+- Realtime: subscribe no canal `messages` para receber novas mensagens instantaneamente
+- Marcar mensagens como lidas ao abrir a conversa
+
+### Botao "Enviar mensagem" no perfil
+- Em `ProfileHeader.tsx` e `UserProfile.tsx`, ao visualizar perfil de outro usuario:
+  - Botao "Mensagem" ao lado do botao "Seguir"
+  - Ao clicar, navegar para `/messages/${profileUserId}`
+
+### Indicador na navegacao
+- No `FeedBottomNav.tsx`, adicionar icone de mensagem (Mail) com badge de contagem de nao lidas
+- Substituir um dos icones existentes ou adicionar como novo item
+
+---
+
+## Resumo de Arquivos
+
+### Criar
+- `src/components/feed/MentionInput.tsx` -- componente de input com autocomplete de @mencoes
+- `src/pages/Messages.tsx` -- lista de conversas
+- `src/pages/ChatView.tsx` -- conversa individual com realtime
 
 ### Editar
-- `src/pages/Ranking.tsx` -- adicionar filtro por secao (tabs/chips)
-- `src/components/profile/ProfileHeader.tsx` -- buscar e exibir medalha do ranking ao lado do nome
-- `src/pages/TournamentDetail.tsx` -- adicionar `pb-24` no main, remover header proprio (ja vem do AppLayout)
-- `src/pages/Payment.tsx` -- adicionar botao voltar, `pb-24` no conteudo
-- `src/App.tsx` -- mover rota `/payment/:id` para dentro do `AppLayout`
-- `src/components/feed/FeedBottomNav.tsx` -- reduzir altura da barra e tamanho do botao `+`
+- `src/components/feed/CreateClipDialog.tsx` -- adicionar aba de gravacao ao vivo com MediaRecorder
+- `src/components/feed/CreatePostDialog.tsx` -- integrar mencoes (@) e botao placeholder de collab
+- `src/components/feed/PostComments.tsx` -- autocomplete de mencoes no campo de comentario
+- `src/components/feed/PostCard.tsx` -- renderizar @mencoes em cor neon
+- `src/components/profile/ProfileHeader.tsx` -- botao "Mensagem" para outros perfis
+- `src/pages/UserProfile.tsx` -- botao "Mensagem"
+- `src/components/feed/FeedBottomNav.tsx` -- icone de mensagens com badge
+- `src/App.tsx` -- novas rotas /messages e /messages/:userId
+
+### Migracao SQL
+- Criar tabela `messages` com RLS e realtime
+- Criar tabela `mentions` com RLS
+
