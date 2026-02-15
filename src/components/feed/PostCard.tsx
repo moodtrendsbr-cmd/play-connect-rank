@@ -1,8 +1,17 @@
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal } from "lucide-react";
+import { useState } from "react";
+import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Trash2, Link2, Flag, Star } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import PostTypeBadge from "./PostTypeBadge";
 import PostImageCarousel from "./PostImageCarousel";
 import PostComments from "./PostComments";
@@ -33,7 +42,6 @@ interface PostCardProps {
 
 const getInitials = (name: string) => name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 
-// Render content with clickable hashtags
 const renderContent = (content: string) => {
   const parts = content.split(/(#\w+)/g);
   return parts.map((part, i) => {
@@ -50,9 +58,39 @@ const renderContent = (content: string) => {
 
 const PostCard = ({ post, userId, onLike, onSave, onRefresh }: PostCardProps) => {
   const isHighlight = post.type === "highlight";
+  const isAuthor = userId === post.author_id;
+  const [deleting, setDeleting] = useState(false);
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(`${window.location.origin}/feed#${post.id}`);
+  const handleShare = async () => {
+    const url = `${window.location.origin}/feed#${post.id}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: post.author_name, text: post.content?.slice(0, 100), url }); } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast({ title: "Link copiado!" });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!userId || deleting) return;
+    setDeleting(true);
+    const { error } = await supabase.from("posts").delete().eq("id", post.id).eq("author_id", userId);
+    if (error) { toast({ title: "Erro ao excluir", variant: "destructive" }); setDeleting(false); return; }
+    toast({ title: "Post excluído" });
+    onRefresh();
+  };
+
+  const handleCopyLink = async () => {
+    await navigator.clipboard.writeText(`${window.location.origin}/feed#${post.id}`);
+    toast({ title: "Link copiado!" });
+  };
+
+  const handleHighlight = async () => {
+    if (!userId) return;
+    const { error } = await supabase.from("profile_highlights").insert({ user_id: userId, post_id: post.id } as any);
+    if (error?.code === "23505") { toast({ title: "Já está nos destaques" }); return; }
+    if (error) { toast({ title: "Erro", variant: "destructive" }); return; }
+    toast({ title: "Adicionado aos destaques!" });
   };
 
   return (
@@ -70,10 +108,7 @@ const PostCard = ({ post, userId, onLike, onSave, onRefresh }: PostCardProps) =>
           {post.author_avatar ? (
             <img src={post.author_avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
           ) : (
-            <div
-              className="h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold"
-              style={{ background: "rgba(43, 255, 136, 0.15)", color: "#2BFF88" }}
-            >
+            <div className="h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: "rgba(43, 255, 136, 0.15)", color: "#2BFF88" }}>
               {getInitials(post.author_name)}
             </div>
           )}
@@ -87,9 +122,33 @@ const PostCard = ({ post, userId, onLike, onSave, onRefresh }: PostCardProps) =>
             </span>
           </div>
         </Link>
-        <button className="p-1">
-          <MoreHorizontal className="h-5 w-5" style={{ color: "#9CA3AF" }} />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="p-1">
+              <MoreHorizontal className="h-5 w-5" style={{ color: "#9CA3AF" }} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" style={{ background: "#0B0F12", border: "1px solid rgba(43,255,136,0.15)" }}>
+            <DropdownMenuItem onClick={handleCopyLink} className="text-white hover:text-white cursor-pointer">
+              <Link2 className="h-4 w-4 mr-2" /> Copiar link
+            </DropdownMenuItem>
+            {isAuthor && (
+              <DropdownMenuItem onClick={handleHighlight} className="text-white hover:text-white cursor-pointer">
+                <Star className="h-4 w-4 mr-2" /> Adicionar aos Destaques
+              </DropdownMenuItem>
+            )}
+            {isAuthor && (
+              <DropdownMenuItem onClick={handleDelete} disabled={deleting} className="text-red-400 hover:text-red-400 cursor-pointer">
+                <Trash2 className="h-4 w-4 mr-2" /> Excluir post
+              </DropdownMenuItem>
+            )}
+            {!isAuthor && (
+              <DropdownMenuItem className="text-white hover:text-white cursor-pointer">
+                <Flag className="h-4 w-4 mr-2" /> Denunciar
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Media */}

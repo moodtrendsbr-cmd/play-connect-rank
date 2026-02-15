@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      clips: {
+        Row: {
+          author_id: string
+          caption: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          media_url: string
+          thumbnail_url: string | null
+        }
+        Insert: {
+          author_id: string
+          caption?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          media_url: string
+          thumbnail_url?: string | null
+        }
+        Update: {
+          author_id?: string
+          caption?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          media_url?: string
+          thumbnail_url?: string | null
+        }
+        Relationships: []
+      }
       comments: {
         Row: {
           author_id: string
@@ -432,6 +462,35 @@ export type Database = {
           },
         ]
       }
+      profile_highlights: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_highlights_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -440,6 +499,7 @@ export type Database = {
           created_at: string
           full_name: string
           id: string
+          link: string | null
           mp_collector_id: string | null
           show_contact: boolean | null
           state: string | null
@@ -456,6 +516,7 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          link?: string | null
           mp_collector_id?: string | null
           show_contact?: boolean | null
           state?: string | null
@@ -472,6 +533,7 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          link?: string | null
           mp_collector_id?: string | null
           show_contact?: boolean | null
           state?: string | null

@@ -19,7 +19,7 @@ const Profile = () => {
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ full_name: "", city: "", state: "", whatsapp: "", bio: "", team: "", titles: "", show_contact: false });
+  const [form, setForm] = useState({ full_name: "", city: "", state: "", whatsapp: "", bio: "", team: "", titles: "", show_contact: false, link: "" });
   const [activeTab, setActiveTab] = useState<"posts" | "salvos">("posts");
   const [posts, setPosts] = useState<PostData[]>([]);
   const [savedPosts, setSavedPosts] = useState<PostData[]>([]);
@@ -84,6 +84,7 @@ const Profile = () => {
         setForm({
           full_name: p.full_name || "", city: p.city || "", state: p.state || "", whatsapp: p.whatsapp || "",
           bio: (p as any).bio || "", team: (p as any).team || "", titles: (p as any).titles || "", show_contact: (p as any).show_contact || false,
+          link: (p as any).link || "",
         });
         setMpCollectorId((p as any).mp_collector_id || "");
       }
@@ -230,6 +231,7 @@ const Profile = () => {
         team={profile.team}
         titles={profile.titles}
         whatsapp={profile.whatsapp}
+        link={profile.link}
         showContact={profile.show_contact || false}
         postsCount={postsCount}
         followersCount={followersCount}
@@ -238,6 +240,7 @@ const Profile = () => {
         isOwnProfile={true}
         onFollowToggle={() => {}}
         onEditClick={() => setEditing(true)}
+        onAvatarUpdate={(url) => setProfile({ ...profile, avatar_url: url })}
       />
 
       {/* Edit form */}
@@ -252,6 +255,7 @@ const Profile = () => {
           <div><Label style={{ color: "#9CA3AF" }}>Bio / Mensagem</Label><Textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} className="mt-1 bg-transparent border-[#9CA3AF]/20 text-white" placeholder="Fale sobre você..." /></div>
           <div><Label style={{ color: "#9CA3AF" }}>Time</Label><Input value={form.team} onChange={(e) => setForm({ ...form, team: e.target.value })} className="mt-1" placeholder="Ex: Estrelas FC" /></div>
           <div><Label style={{ color: "#9CA3AF" }}>Títulos conquistados</Label><Input value={form.titles} onChange={(e) => setForm({ ...form, titles: e.target.value })} className="mt-1" placeholder="Ex: Campeão Municipal 2025" /></div>
+          <div><Label style={{ color: "#9CA3AF" }}>Link</Label><Input value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} className="mt-1" placeholder="https://seusite.com" /></div>
           <div className="flex items-center justify-between">
             <Label style={{ color: "#9CA3AF" }}>Mostrar contato no perfil</Label>
             <Switch checked={form.show_contact} onCheckedChange={(v) => setForm({ ...form, show_contact: v })} />

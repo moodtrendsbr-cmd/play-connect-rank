@@ -129,6 +129,7 @@ const UserProfile = () => {
         team={profile.team}
         titles={profile.titles}
         whatsapp={profile.whatsapp}
+        link={(profile as any).link}
         showContact={profile.show_contact || false}
         postsCount={postsCount}
         followersCount={followersCount}
