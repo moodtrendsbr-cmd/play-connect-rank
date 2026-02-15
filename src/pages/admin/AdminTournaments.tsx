@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Trash2, Eye, Settings } from "lucide-react";
+import { Trash2, Eye, Settings, GitBranch, Trophy } from "lucide-react";
 
 const AdminTournaments = () => {
   const [tournaments, setTournaments] = useState<any[]>([]);
@@ -95,6 +95,12 @@ const AdminTournaments = () => {
                       </Button>
                       <Button variant="ghost" size="icon" asChild>
                         <Link to={`/tournaments/${t.id}/manage`}><Settings className="h-4 w-4" /></Link>
+                      </Button>
+                      <Button variant="ghost" size="icon" asChild title="Chaveamento">
+                        <Link to={`/tournaments/${t.id}/brackets`}><GitBranch className="h-4 w-4" /></Link>
+                      </Button>
+                      <Button variant="ghost" size="icon" asChild title="Resultados">
+                        <Link to={`/tournaments/${t.id}/results`}><Trophy className="h-4 w-4" /></Link>
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => deleteTournament(t.id)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
