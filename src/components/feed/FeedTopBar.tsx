@@ -1,4 +1,4 @@
-import { Search, Bell } from "lucide-react";
+import { Search, Bell, CircleUserRound } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface FeedTopBarProps {
@@ -36,9 +36,14 @@ const FeedTopBar = ({ searchQuery, onSearchChange }: FeedTopBarProps) => {
         </div>
       </div>
 
-      <button className="relative p-2">
-        <Bell className="h-5 w-5" style={{ color: "#9CA3AF" }} />
-      </button>
+      <div className="flex items-center gap-1">
+        <button className="relative p-2">
+          <Bell className="h-5 w-5" style={{ color: "#9CA3AF" }} />
+        </button>
+        <Link to="/profile" className="p-2">
+          <CircleUserRound className="h-5 w-5" style={{ color: "#9CA3AF" }} />
+        </Link>
+      </div>
     </header>
   );
 };
