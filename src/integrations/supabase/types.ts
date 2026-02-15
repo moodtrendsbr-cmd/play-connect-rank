@@ -820,6 +820,272 @@ export type Database = {
         }
         Relationships: []
       }
+      modality_entries: {
+        Row: {
+          created_at: string
+          id: string
+          modality_id: string
+          name: string
+          seed: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          modality_id: string
+          name?: string
+          seed?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          modality_id?: string
+          name?: string
+          seed?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modality_entries_modality_id_fkey"
+            columns: ["modality_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_modalities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modality_entry_members: {
+        Row: {
+          entry_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          entry_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          entry_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modality_entry_members_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "modality_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modality_group_members: {
+        Row: {
+          entry_id: string
+          group_id: string
+          id: string
+        }
+        Insert: {
+          entry_id: string
+          group_id: string
+          id?: string
+        }
+        Update: {
+          entry_id?: string
+          group_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modality_group_members_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "modality_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modality_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "modality_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modality_groups: {
+        Row: {
+          group_name: string
+          id: string
+          modality_id: string
+        }
+        Insert: {
+          group_name?: string
+          id?: string
+          modality_id: string
+        }
+        Update: {
+          group_name?: string
+          id?: string
+          modality_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modality_groups_modality_id_fkey"
+            columns: ["modality_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_modalities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modality_matches: {
+        Row: {
+          created_at: string
+          entry_a_id: string | null
+          entry_b_id: string | null
+          group_id: string | null
+          id: string
+          match_number: number
+          modality_id: string
+          round_number: number
+          score_a: number | null
+          score_b: number | null
+          status: string
+          winner_entry_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          entry_a_id?: string | null
+          entry_b_id?: string | null
+          group_id?: string | null
+          id?: string
+          match_number?: number
+          modality_id: string
+          round_number?: number
+          score_a?: number | null
+          score_b?: number | null
+          status?: string
+          winner_entry_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          entry_a_id?: string | null
+          entry_b_id?: string | null
+          group_id?: string | null
+          id?: string
+          match_number?: number
+          modality_id?: string
+          round_number?: number
+          score_a?: number | null
+          score_b?: number | null
+          status?: string
+          winner_entry_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modality_matches_entry_a_id_fkey"
+            columns: ["entry_a_id"]
+            isOneToOne: false
+            referencedRelation: "modality_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modality_matches_entry_b_id_fkey"
+            columns: ["entry_b_id"]
+            isOneToOne: false
+            referencedRelation: "modality_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modality_matches_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "modality_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modality_matches_modality_id_fkey"
+            columns: ["modality_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_modalities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modality_matches_winner_entry_id_fkey"
+            columns: ["winner_entry_id"]
+            isOneToOne: false
+            referencedRelation: "modality_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modality_placements: {
+        Row: {
+          entry_id: string
+          id: string
+          modality_id: string
+          position: number
+        }
+        Insert: {
+          entry_id: string
+          id?: string
+          modality_id: string
+          position: number
+        }
+        Update: {
+          entry_id?: string
+          id?: string
+          modality_id?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modality_placements_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "modality_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modality_placements_modality_id_fkey"
+            columns: ["modality_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_modalities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modality_prizes: {
+        Row: {
+          amount: number
+          description: string | null
+          id: string
+          modality_id: string
+          position: number
+        }
+        Insert: {
+          amount?: number
+          description?: string | null
+          id?: string
+          modality_id: string
+          position: number
+        }
+        Update: {
+          amount?: number
+          description?: string | null
+          id?: string
+          modality_id?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modality_prizes_modality_id_fkey"
+            columns: ["modality_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_modalities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizer_balances: {
         Row: {
           amount: number
@@ -1314,6 +1580,47 @@ export type Database = {
           },
         ]
       }
+      tournament_modalities: {
+        Row: {
+          bracket_format: string
+          created_at: string
+          id: string
+          name: string
+          num_groups: number | null
+          status: string
+          tournament_id: string
+          type: string
+        }
+        Insert: {
+          bracket_format?: string
+          created_at?: string
+          id?: string
+          name: string
+          num_groups?: number | null
+          status?: string
+          tournament_id: string
+          type?: string
+        }
+        Update: {
+          bracket_format?: string
+          created_at?: string
+          id?: string
+          name?: string
+          num_groups?: number | null
+          status?: string
+          tournament_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_modalities_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournament_partners: {
         Row: {
           company_id: string
@@ -1486,6 +1793,10 @@ export type Database = {
       }
       is_match_conversation_member: {
         Args: { _conversation_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_modality_tournament_owner: {
+        Args: { _modality_id: string; _user_id: string }
         Returns: boolean
       }
       is_pair_member: {
