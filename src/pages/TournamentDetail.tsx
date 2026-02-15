@@ -7,6 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import { Store, Settings } from "lucide-react";
 
+const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+
 const TournamentDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -19,7 +21,11 @@ const TournamentDetail = () => {
 
   useEffect(() => {
     const fetch = async () => {
-      const { data } = await supabase.from("tournaments").select("*").eq("id", id).single();
+      if (!id || !isValidUUID(id)) {
+        setTournament(null);
+        return;
+      }
+      const { data } = await supabase.from("tournaments").select("*").eq("id", id).maybeSingle();
       setTournament(data);
 
       const { count } = await supabase.from("enrollments").select("*", { count: "exact", head: true }).eq("tournament_id", id!);

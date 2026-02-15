@@ -10,6 +10,8 @@ import { AlertCircle } from "lucide-react";
 
 const MOOD_COMMISSION_PERCENT = 10;
 
+const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+
 const ManageTournament = () => {
   const { id } = useParams();
   const { user, loading: authLoading } = useAuth();
@@ -21,7 +23,12 @@ const ManageTournament = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).single();
+      if (!id || !isValidUUID(id)) {
+        setDataLoaded(true);
+        setTournament(null);
+        return;
+      }
+      const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).maybeSingle();
       setTournament(t);
       setDataLoaded(true);
 
