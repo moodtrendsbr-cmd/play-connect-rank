@@ -30,6 +30,7 @@ export interface PostData {
   top_comments: { id: string; content: string; author_name: string; created_at: string }[];
   liked_by_me: boolean;
   saved_by_me: boolean;
+  followed_by_me?: boolean;
 }
 
 interface PostCardProps {
@@ -60,6 +61,21 @@ const PostCard = ({ post, userId, onLike, onSave, onRefresh }: PostCardProps) =>
   const isHighlight = post.type === "highlight";
   const isAuthor = userId === post.author_id;
   const [deleting, setDeleting] = useState(false);
+  const [following, setFollowing] = useState(post.followed_by_me ?? false);
+  const [followLoading, setFollowLoading] = useState(false);
+
+  const handleFollow = async () => {
+    if (!userId || followLoading) return;
+    setFollowLoading(true);
+    if (following) {
+      await supabase.from("follows").delete().eq("follower_id", userId).eq("following_id", post.author_id);
+      setFollowing(false);
+    } else {
+      await supabase.from("follows").insert({ follower_id: userId, following_id: post.author_id });
+      setFollowing(true);
+    }
+    setFollowLoading(false);
+  };
 
   const handleShare = async () => {
     const url = `${window.location.origin}/feed#${post.id}`;
@@ -116,6 +132,19 @@ const PostCard = ({ post, userId, onLike, onSave, onRefresh }: PostCardProps) =>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-white">{post.author_name}</span>
               <PostTypeBadge type={post.type} />
+              {!isAuthor && userId && (
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleFollow(); }}
+                  disabled={followLoading}
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded-full transition-colors"
+                  style={following
+                    ? { background: "transparent", border: "1px solid rgba(43,255,136,0.3)", color: "#9CA3AF" }
+                    : { background: "#2BFF88", color: "#050708" }
+                  }
+                >
+                  {following ? "Seguindo" : "Seguir"}
+                </button>
+              )}
             </div>
             <span className="text-[11px]" style={{ color: "#9CA3AF" }}>
               {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: ptBR })}

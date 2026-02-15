@@ -40,7 +40,7 @@ const Feed = () => {
       const postIds = rawPosts.map((p) => p.id);
       const authorIds = [...new Set(rawPosts.map((p) => p.author_id))];
 
-      const [profilesRes, mediaRes, commentsRes, likesCountRes, commentsCountRes, myLikesRes, mySavesRes] =
+      const [profilesRes, mediaRes, commentsRes, likesCountRes, commentsCountRes, myLikesRes, mySavesRes, myFollowsRes] =
         await Promise.all([
           supabase.from("profiles").select("user_id, full_name, avatar_url").in("user_id", authorIds),
           supabase.from("post_media").select("*").in("post_id", postIds).order("order_index"),
@@ -49,6 +49,7 @@ const Feed = () => {
           supabase.from("comments").select("post_id").in("post_id", postIds),
           user ? supabase.from("likes").select("post_id").in("post_id", postIds).eq("user_id", user.id) : Promise.resolve({ data: [] }),
           user ? supabase.from("post_saves").select("post_id").in("post_id", postIds).eq("user_id", user.id) : Promise.resolve({ data: [] }),
+          user ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds) : Promise.resolve({ data: [] }),
         ]);
 
       const profileMap: Record<string, { name: string; avatar: string | null }> = {};
@@ -83,6 +84,7 @@ const Feed = () => {
 
       const myLikedSet = new Set((myLikesRes.data || []).map((l: any) => l.post_id));
       const mySavedSet = new Set((mySavesRes.data || []).map((s: any) => s.post_id));
+      const myFollowedSet = new Set((myFollowsRes.data || []).map((f: any) => f.following_id));
 
       return rawPosts.map((p) => {
         const profile = profileMap[p.author_id] || { name: "Atleta", avatar: null };
@@ -95,6 +97,7 @@ const Feed = () => {
           content: p.content, type: p.type, created_at: p.created_at, media: mediaMap[p.id] || [],
           likes_count: likesCount[p.id] || 0, comments_count: commentsCount[p.id] || 0, top_comments: top2,
           liked_by_me: myLikedSet.has(p.id), saved_by_me: mySavedSet.has(p.id),
+          followed_by_me: myFollowedSet.has(p.author_id),
         };
       });
     },
