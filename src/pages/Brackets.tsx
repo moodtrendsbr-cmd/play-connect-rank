@@ -9,6 +9,8 @@ import { toast } from "@/hooks/use-toast";
 
 type BracketType = "single_elimination" | "double_elimination" | "round_robin" | "custom";
 
+const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+
 const Brackets = () => {
   const { id } = useParams();
   const { user, loading: authLoading } = useAuth();
@@ -53,7 +55,12 @@ const Brackets = () => {
 
   useEffect(() => {
     const fetch = async () => {
-      const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).single();
+      if (!id || !isValidUUID(id)) {
+        setDataLoaded(true);
+        setTournament(null);
+        return;
+      }
+      const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).maybeSingle();
       setTournament(t);
       setDataLoaded(true);
       if (!t) return;
