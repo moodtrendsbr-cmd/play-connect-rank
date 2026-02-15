@@ -1,126 +1,62 @@
 
+# Grid de Posts no Perfil, Editar Perfil com Icone, Destaques com Clips e Fixar Posts
 
-# Mencoes, Mensagens Diretas e Melhorias nos Clips
+## 1. Posts em grid 3 colunas no perfil
 
-## Resumo
+Atualmente os posts no perfil (`Profile.tsx` e `UserProfile.tsx`) sao exibidos como cards grandes em lista vertical. A mudanca e exibi-los como miniaturas em grid de 3 colunas (estilo Instagram).
 
-Adicionar sistema de mencoes (@usuario) em posts e comentarios, sistema de mensagens diretas acessivel pelo perfil, e opcao de gravar ao vivo nos clips. A funcionalidade de "collab/parceria com empresas" sera preparada com um placeholder, ja que o cadastro de empresas sera implementado futuramente.
+- Cada miniatura mostra a primeira imagem do post (ou um icone de texto se nao tiver imagem)
+- Ao clicar na miniatura, abre um Dialog/modal com o PostCard completo
+- Aplicar o mesmo layout tanto no perfil proprio (`Profile.tsx`) quanto no perfil de outro usuario (`UserProfile.tsx`)
 
----
+## 2. Icone de editar perfil
 
-## 1. Banco de Dados (Migracao SQL)
+Substituir o botao "Editar perfil" (texto) por um icone de lapis/editar (`Settings` ou `Pencil` do lucide) posicionado no canto do header do perfil, mais discreto e moderno.
 
-### Nova tabela `messages`
-- id (uuid PK default gen_random_uuid())
-- sender_id (uuid NOT NULL)
-- receiver_id (uuid NOT NULL)
-- content (text NOT NULL)
-- read (boolean default false)
-- created_at (timestamptz default now())
-- RLS: SELECT onde auth.uid() = sender_id OR auth.uid() = receiver_id
-- INSERT onde auth.uid() = sender_id
-- UPDATE onde auth.uid() = receiver_id (para marcar como lido)
-- Habilitar realtime para atualizacoes em tempo real
+## 3. Destaques: salvar posts e clips
 
-### Nova tabela `mentions`
-- id (uuid PK default gen_random_uuid())
-- mentioned_user_id (uuid NOT NULL)
-- mentioner_id (uuid NOT NULL)
-- post_id (uuid nullable)
-- comment_id (uuid nullable)
-- created_at (timestamptz default now())
-- RLS: SELECT onde auth.uid() = mentioned_user_id OR auth.uid() = mentioner_id, INSERT autenticado
+Atualmente os destaques so mostram posts fixados via `profile_highlights`. A mudanca:
+
+- Incluir tambem os **clips do usuario** (da tabela `clips`) nos destaques, exibindo thumbnail ou icone de video
+- Os clips aparecem ao lado dos posts destacados na fila horizontal de destaques
+
+## 4. Fixar posts no perfil
+
+Adicionar coluna `pinned_at` (timestamptz, nullable) na tabela `posts`. Posts fixados aparecem primeiro na listagem do perfil.
+
+- No menu de 3 pontinhos do PostCard, adicionar opcao "Fixar no perfil" (apenas para o autor)
+- Ao fixar, seta `pinned_at = now()` no post
+- Na query de posts do perfil, ordenar por `pinned_at DESC NULLS LAST, created_at DESC`
+- Posts fixados exibem um icone de pin na miniatura do grid
 
 ---
 
-## 2. Mencoes (@usuario) em Posts e Comentarios
-
-### Autocomplete de mencoes
-- Criar componente `MentionInput.tsx`:
-  - Ao digitar `@`, abrir um dropdown com busca de perfis (query `profiles` com `ilike full_name`)
-  - Ao selecionar, inserir `@NomeCompleto` no texto
-  - Debounce de 300ms na busca
-
-### No CreatePostDialog
-- Substituir o Textarea por MentionInput (ou adicionar logica de deteccao de @)
-- Ao publicar, extrair mencoes do texto via regex `/@(\w+[\w\s]*)/` e salvar na tabela `mentions`
-
-### No PostComments
-- Aplicar a mesma logica de autocomplete no campo de comentario
-- Ao enviar comentario, extrair e salvar mencoes
-
-### Renderizacao
-- No PostCard e PostComments, renderizar `@NomeUsuario` em cor `#2BFF88` (mesmo estilo das hashtags)
-
----
-
-## 3. Collab/Parceria (Placeholder)
-
-- No CreatePostDialog, adicionar um botao "Marcar parceiro" com icone de handshake
-- Ao clicar, mostrar um toast: "Em breve! Cadastro de empresas em desenvolvimento."
-- Nao implementar tabela ainda, apenas o botao visual com placeholder
-
----
-
-## 4. Opcao de Gravar ao Vivo nos Clips
-
-### CreateClipDialog
-- Adicionar duas abas/botoes: "Enviar video" e "Gravar ao vivo"
-- Aba "Enviar video": comportamento atual (upload de arquivo)
-- Aba "Gravar ao vivo":
-  - Usar `navigator.mediaDevices.getUserMedia({ video: true, audio: true })` para acessar a camera
-  - Exibir preview ao vivo em um `<video>` element
-  - Usar `MediaRecorder` API para gravar
-  - Botoes: Iniciar gravacao, Parar, Descartar
-  - Limite de 60 segundos (timer visual)
-  - Ao parar, converter o Blob gravado em File e seguir o fluxo de upload normal
-
----
-
-## 5. Mensagens Diretas
-
-### Nova pagina `Messages.tsx` (rota `/messages`)
-- Lista de conversas: agrupa mensagens por outro usuario
-- Para cada conversa: avatar, nome, ultima mensagem, indicador de nao lida
-- Ordenar por ultima mensagem mais recente
-
-### Nova pagina/componente `ChatView.tsx` (rota `/messages/:userId`)
-- Header: avatar + nome do outro usuario + botao voltar
-- Lista de mensagens scrollavel (bolhas estilo WhatsApp)
-- Mensagens do usuario atual a direita (fundo verde neon), do outro a esquerda (fundo cinza escuro)
-- Campo de input fixo na parte inferior com botao enviar
-- Realtime: subscribe no canal `messages` para receber novas mensagens instantaneamente
-- Marcar mensagens como lidas ao abrir a conversa
-
-### Botao "Enviar mensagem" no perfil
-- Em `ProfileHeader.tsx` e `UserProfile.tsx`, ao visualizar perfil de outro usuario:
-  - Botao "Mensagem" ao lado do botao "Seguir"
-  - Ao clicar, navegar para `/messages/${profileUserId}`
-
-### Indicador na navegacao
-- No `FeedBottomNav.tsx`, adicionar icone de mensagem (Mail) com badge de contagem de nao lidas
-- Substituir um dos icones existentes ou adicionar como novo item
-
----
-
-## Resumo de Arquivos
-
-### Criar
-- `src/components/feed/MentionInput.tsx` -- componente de input com autocomplete de @mencoes
-- `src/pages/Messages.tsx` -- lista de conversas
-- `src/pages/ChatView.tsx` -- conversa individual com realtime
-
-### Editar
-- `src/components/feed/CreateClipDialog.tsx` -- adicionar aba de gravacao ao vivo com MediaRecorder
-- `src/components/feed/CreatePostDialog.tsx` -- integrar mencoes (@) e botao placeholder de collab
-- `src/components/feed/PostComments.tsx` -- autocomplete de mencoes no campo de comentario
-- `src/components/feed/PostCard.tsx` -- renderizar @mencoes em cor neon
-- `src/components/profile/ProfileHeader.tsx` -- botao "Mensagem" para outros perfis
-- `src/pages/UserProfile.tsx` -- botao "Mensagem"
-- `src/components/feed/FeedBottomNav.tsx` -- icone de mensagens com badge
-- `src/App.tsx` -- novas rotas /messages e /messages/:userId
+## Detalhes Tecnicos
 
 ### Migracao SQL
-- Criar tabela `messages` com RLS e realtime
-- Criar tabela `mentions` com RLS
+```sql
+ALTER TABLE public.posts ADD COLUMN pinned_at timestamptz DEFAULT NULL;
+```
 
+### Arquivos a editar
+
+**`src/pages/Profile.tsx`**
+- Substituir a renderizacao de `PostCard` em lista por um grid de 3 colunas
+- Cada celula: imagem de capa ou icone de texto, com overlay de pin se fixado
+- Ao clicar, abrir Dialog com o PostCard completo
+- Ordenar posts com `pinned_at` primeiro
+- Na query de posts, adicionar `.order("pinned_at", { ascending: false, nullsFirst: false })`
+
+**`src/pages/UserProfile.tsx`**
+- Mesma logica de grid de 3 colunas e dialog ao clicar
+- Ordenar posts com pinned primeiro
+
+**`src/components/profile/ProfileHeader.tsx`**
+- Trocar botao "Editar perfil" por icone (`Pencil` ou `Settings`) no canto superior direito do header
+- Nos destaques, buscar tambem clips do usuario (tabela `clips`) e exibir na mesma fila horizontal junto com os highlights
+
+**`src/components/feed/PostCard.tsx`**
+- Adicionar opcao "Fixar no perfil" / "Desafixar" no menu de 3 pontinhos (apenas para o autor)
+- Ao fixar: `supabase.from("posts").update({ pinned_at: new Date().toISOString() }).eq("id", post.id)`
+- Ao desafixar: `supabase.from("posts").update({ pinned_at: null }).eq("id", post.id)`
+- Adicionar `pinned_at` na interface `PostData`
