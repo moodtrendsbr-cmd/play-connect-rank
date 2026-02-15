@@ -14,7 +14,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard } from "lucide-react";
+import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag } from "lucide-react";
 
 const navItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
@@ -35,6 +35,7 @@ const marketplaceNavItems = [
 const userNavItems = [
   { title: "Feed", url: "/feed", icon: Rss },
   { title: "Torneios", url: "/tournaments", icon: Trophy },
+  { title: "Marketplace", url: "/marketplace", icon: ShoppingBag },
   { title: "Ranking", url: "/ranking", icon: Medal },
   { title: "Perfil", url: "/profile", icon: User },
 ];
