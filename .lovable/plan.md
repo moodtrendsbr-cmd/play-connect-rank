@@ -1,78 +1,56 @@
 
-# Perfil: Time/Arena Badge + Genero + Campos Obrigatorios no Cadastro
+# Corrigir Paginas de Torneio (Manage, Brackets, Results)
 
-## Resumo
+## Problemas identificados
 
-Tres alteracoes principais:
-1. No badge de time no perfil, exibir no formato "Time / Arena" (dois campos separados)
-2. Adicionar campo "genero" ao perfil (usado internamente para ads/relatorios, nao aparece no perfil publico)
-3. Tornar campos basicos obrigatorios no cadastro: Nome, Cidade, Estado, Genero, Email, WhatsApp
+1. **Falta de tratamento de autenticacao**: As paginas de gerenciamento, chaves e resultados ficam presas em "Carregando..." se o usuario nao estiver logado ou nao for o organizador do torneio, porque as queries retornam vazio (bloqueadas por RLS) e nao ha fallback.
 
----
+2. **Admin nao consegue acessar gerenciamento**: No painel admin, o botao de "olho" leva para `/tournaments/:id` (pagina de detalhes publica), mas nao ha link para a pagina de gerenciamento. Admin precisa de acesso ao manage/brackets/results.
 
-## 1. Migracao SQL
-
-Adicionar duas colunas na tabela `profiles`:
-- `arena` (text, nullable) -- nome da arena/quadra do usuario
-- `gender` (text, nullable) -- masculino, feminino, outro, prefiro_nao_informar
+3. **Sem redirecionamento para login**: Usuarios nao autenticados ficam presos no "Carregando..." sem saber o que fazer.
 
 ---
 
-## 2. Tela de Cadastro (Register.tsx)
+## Plano de correcao
 
-Adicionar campos obrigatorios ao formulario de registro (tanto atleta quanto organizador):
-- Nome completo (ja existe)
-- Email (ja existe)
-- Senha (ja existe)
-- **Cidade** (novo, obrigatorio)
-- **Estado** (novo, obrigatorio -- select com UFs)
-- **Genero** (novo, obrigatorio -- select: Masculino, Feminino, Outro, Prefiro nao informar)
-- **WhatsApp** (novo, obrigatorio)
+### 1. ManageTournament.tsx
+- Adicionar verificacao de autenticacao: se nao logado, redirecionar para login
+- Se a query do torneio retornar null (RLS bloqueou), mostrar mensagem de "Torneio nao encontrado ou sem permissao" em vez de "Carregando..." infinito
+- Adicionar timeout ou check de loading state
 
-Esses dados serao salvos no `auth.signUp` via `options.data` e depois sincronizados com a tabela `profiles` (o trigger de criacao de perfil ja existe e salva `full_name`; precisaremos atualizar o perfil apos signup ou ajustar o trigger para incluir os novos campos).
+### 2. Brackets.tsx
+- Mesma protecao de autenticacao
+- Mesmo fallback para torneio nao encontrado
+- Corrigir estado de loading para nao ficar infinito
 
-Abordagem: apos o `signUp`, fazer um `profiles.update` com city, state, gender e whatsapp usando o user.id retornado.
+### 3. Results.tsx
+- Mesma protecao de autenticacao
+- Mesmo fallback para torneio nao encontrado
 
----
+### 4. AdminTournaments.tsx
+- Adicionar botao/link para "Gerenciar" ao lado do botao de visualizar, levando o admin para `/tournaments/:id/manage`
+- Isso permite ao admin acessar chaves e resultados pela pagina de gerenciamento
 
-## 3. Editar Perfil (Profile.tsx)
-
-- Adicionar campo "Arena" ao formulario de edicao, ao lado do campo "Time"
-- Adicionar campo "Genero" (select) ao formulario -- com label discreta tipo "Usado para relatorios"
-- Incluir `arena` e `gender` no state do form e no handleSave
-
----
-
-## 4. Badge no Perfil (ProfileHeader.tsx)
-
-Alterar o badge de time para exibir "Time / Arena" quando ambos estiverem preenchidos:
-- Se so time: "Estrelas FC"
-- Se so arena: "Arena X"
-- Se ambos: "Estrelas FC / Arena X"
-
-Adicionar prop `arena` ao ProfileHeader.
-
----
-
-## 5. UserProfile.tsx
-
-Passar o campo `arena` para o ProfileHeader.
+### 5. TournamentDetail.tsx
+- Adicionar botao "Gerenciar" visivel apenas para o organizador do torneio (quando `user.id === tournament.organizer_id`)
+- Isso facilita a navegacao para o organizador que acessa o detalhe pelo feed/lista publica
 
 ---
 
 ## Detalhes tecnicos
 
-### Arquivos a criar
-- Nenhum
+### Padrao de protecao a ser aplicado nas 3 paginas (Manage, Brackets, Results):
 
-### Arquivos a editar
-- Migracao SQL (2 colunas novas em profiles)
-- `src/pages/Register.tsx` (adicionar campos cidade, estado, genero, whatsapp)
-- `src/pages/Profile.tsx` (campos arena e gender no form)
-- `src/components/profile/ProfileHeader.tsx` (prop arena, badge atualizado)
-- `src/pages/UserProfile.tsx` (passar arena)
+```text
+1. Verificar se user existe (via useAuth)
+2. Se loading do auth, mostrar spinner
+3. Se nao logado, redirecionar para /login
+4. Ao buscar torneio, tratar data === null como "sem permissao"
+5. Exibir mensagem com botao de voltar em vez de "Carregando..." infinito
+```
 
-### Regras
-- Genero NAO aparece no perfil publico
-- Arena aparece junto ao time no badge
-- Campos basicos obrigatorios no cadastro
+### AdminTournaments - novo botao:
+- Adicionar icone Settings/Cog ao lado do Eye para linkar para `/tournaments/:id/manage`
+
+### TournamentDetail - botao condicional:
+- Se `user?.id === tournament.organizer_id`, exibir botao "Gerenciar torneio" linkando para manage
