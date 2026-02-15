@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Search, Store, ShoppingBag, Star } from "lucide-react";
@@ -17,12 +17,30 @@ const CATEGORIES = [
 const PLAN_PRIORITY: Record<string, number> = { elite: 3, pro: 2, free: 1 };
 
 const Marketplace = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [products, setProducts] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [userCity, setUserCity] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasCompany, setHasCompany] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      supabase.from("companies").select("id").eq("owner_user_id", user.id).maybeSingle().then(({ data }) => {
+        setHasCompany(!!data);
+      });
+    }
+  }, [user]);
+
+  const handleSellCTA = () => {
+    if (user && hasCompany) {
+      navigate("/marketplace/my-company");
+    } else {
+      navigate("/marketplace/register");
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -107,9 +125,6 @@ const Marketplace = () => {
 
         <div className="flex items-center justify-between mb-4">
           <p className="text-xs text-muted-foreground">{products.length} produto(s)</p>
-          <Link to="/marketplace/register" className="text-xs font-medium" style={{ color: "#2BFF88" }}>
-            + Cadastrar empresa
-          </Link>
         </div>
 
         {loading ? (
@@ -156,18 +171,17 @@ const Marketplace = () => {
           </div>
         )}
 
-        {user && (
-          <div className="mt-6">
-            <Link
-              to="/marketplace/my-company"
-              className="block text-center text-sm py-3 rounded-lg border transition-colors"
-              style={{ borderColor: "rgba(43,255,136,0.2)", color: "#2BFF88" }}
-            >
-              Gerenciar minha empresa →
-            </Link>
-          </div>
-        )}
       </main>
+
+      <div className="fixed bottom-16 left-0 right-0 z-40 px-4 pb-2">
+        <button
+          onClick={handleSellCTA}
+          className="w-full max-w-xl mx-auto block text-center text-sm font-semibold py-3 rounded-full transition-opacity hover:opacity-90"
+          style={{ background: "#2BFF88", color: "#050708" }}
+        >
+          Quero vender meus produtos
+        </button>
+      </div>
     </>
   );
 };
