@@ -1,313 +1,197 @@
 
 
-# Modulo MARKETPLACE -- Shopping Esportivo com Gestao Admin
+# Sistema de Monetizacao SaaS -- Mood Play
 
 ## Resumo
 
-Criar um marketplace esportivo integrado a plataforma Mood Play, onde empresas cadastram produtos sujeitos a aprovacao admin. Todo controle de planos, comissoes, destaques e publicidade e centralizado no painel administrativo. Inclui posts patrocinados no feed, parceiros de torneio e patrocinio de atletas.
+Evoluir o marketplace existente para um modelo SaaS automatizado com planos configuraveis, cobranca recorrente, geracao automatica de ads e controle total via admin. Empresas escolhem apenas plano e cidade -- todo o resto e governado pela Mood Play.
 
 ---
 
 ## 1. Migracao SQL
 
-### Novas tabelas
+### Nova tabela: company_plans
 
-**companies**
+Tabela de planos editaveis pelo admin em tempo real.
+
 - id (uuid PK)
-- owner_user_id (uuid, NOT NULL) -- usuario que cadastrou a empresa
-- name (text, NOT NULL)
-- city (text)
-- state (text)
-- email (text)
-- phone (text)
-- category (text) -- vestuario, acessorios, suplementos, fotografia, servicos, locacao
-- description (text)
-- logo_url (text, nullable)
-- status (text, default 'pending_approval') -- pending_approval, approved, blocked
-- plan (text, default 'free') -- free, pro, elite
-- commission_rate (numeric, default 10)
-- highlight_enabled (boolean, default false)
-- feed_ads_enabled (boolean, default false)
+- name (text, NOT NULL) -- free, pro, elite
+- display_name (text, NOT NULL) -- "Free", "Pro", "Elite"
+- monthly_price (numeric, default 0)
+- sponsored_posts_per_month (integer, default 0)
+- banner_feed_enabled (boolean, default false)
 - tournament_visibility (boolean, default false)
+- marketplace_highlight (boolean, default false)
+- commission_rate (numeric, default 15)
+- max_products (integer, nullable) -- null = ilimitado
+- description (text)
 - created_at (timestamptz, default now())
 - updated_at (timestamptz, default now())
 
-**products**
+Seed inicial com 3 planos: Free (0, 15%, 5 produtos), Pro (199, 10%, ilimitado), Elite (499, 8%, ilimitado).
+
+RLS: SELECT publico, INSERT/UPDATE/DELETE somente admin.
+
+### Nova tabela: subscriptions
+
 - id (uuid PK)
-- company_id (uuid FK companies)
-- name (text, NOT NULL)
+- company_id (uuid FK companies, UNIQUE)
+- plan_id (uuid FK company_plans)
+- status (text, default 'active') -- active, overdue, canceled
+- started_at (timestamptz, default now())
+- next_billing_at (timestamptz)
+- canceled_at (timestamptz, nullable)
+- created_at (timestamptz, default now())
+
+RLS: SELECT owner da empresa + admin, INSERT/UPDATE admin.
+
+### Nova tabela: financial_ledger
+
+- id (uuid PK)
+- source (text, NOT NULL) -- 'subscription', 'marketplace_order', 'sponsorship'
+- source_id (uuid, nullable)
+- company_id (uuid FK companies, nullable)
+- amount (numeric, NOT NULL)
+- mood_share (numeric, default 0)
 - description (text)
-- price (numeric, NOT NULL)
-- image_urls (text[], default '{}')
-- external_link (text, nullable)
-- stock (integer, nullable)
-- status (text, default 'pending') -- pending, approved, rejected
-- featured (boolean, default false)
 - created_at (timestamptz, default now())
 
-**sponsored_posts**
-- id (uuid PK)
-- company_id (uuid FK companies)
-- post_id (uuid FK posts, nullable) -- pode ter post vinculado ou nao
-- title (text)
-- content (text)
-- image_url (text, nullable)
-- city (text, nullable)
-- active_from (timestamptz)
-- active_to (timestamptz)
-- active (boolean, default true)
-- created_at (timestamptz, default now())
+RLS: SELECT admin only.
 
-**tournament_partners**
-- id (uuid PK)
-- tournament_id (uuid FK tournaments)
-- company_id (uuid FK companies)
-- position_order (integer, default 0)
-- created_at (timestamptz, default now())
+### Alteracao na tabela companies
 
-**athlete_sponsors**
-- id (uuid PK)
-- athlete_user_id (uuid, NOT NULL)
-- company_id (uuid FK companies)
-- amount (numeric, default 0)
-- start_date (date)
-- end_date (date, nullable)
-- created_at (timestamptz, default now())
+- Adicionar coluna plan_id (uuid FK company_plans, nullable)
+- Adicionar coluna billing_status (text, default 'none') -- none, active, overdue, canceled
 
-**marketplace_orders**
-- id (uuid PK)
-- product_id (uuid FK products)
-- buyer_user_id (uuid, NOT NULL)
-- quantity (integer, default 1)
-- total_amount (numeric, NOT NULL)
-- mood_commission (numeric, default 0)
-- company_amount (numeric, default 0)
-- status (text, default 'pending') -- pending, confirmed, delivered, cancelled
-- created_at (timestamptz, default now())
+### Trigger
 
-### Storage bucket
-- Criar bucket publico `company-images` para logos e imagens de produtos
-
-### RLS Policies
-
-**companies**:
-- SELECT: publico (status = 'approved') + admin ve todos + owner ve propria
-- INSERT: usuarios autenticados (owner_user_id = auth.uid())
-- UPDATE: admin ou owner (campos limitados)
-
-**products**:
-- SELECT: publico (status = 'approved' e company aprovada) + admin + owner da empresa
-- INSERT: owner da empresa
-- UPDATE/DELETE: admin ou owner da empresa
-
-**sponsored_posts**:
-- SELECT: publico (active = true e dentro das datas) + admin
-- INSERT/UPDATE/DELETE: somente admin
-
-**tournament_partners**:
-- SELECT: publico
-- INSERT/UPDATE/DELETE: somente admin
-
-**athlete_sponsors**:
-- SELECT: publico + atleta ve proprios
-- INSERT/UPDATE/DELETE: somente admin
-
-**marketplace_orders**:
-- SELECT: comprador ve proprios + admin + owner da empresa do produto
-- INSERT: usuarios autenticados (buyer_user_id = auth.uid())
-- UPDATE: admin
+- Trigger em companies para updated_at (ja existe a funcao update_updated_at_column)
 
 ---
 
-## 2. Paginas do Marketplace (Usuario)
+## 2. Edge Function: generate-sponsored-posts
 
-### 2a. Pagina principal do Marketplace
+**Arquivo**: `supabase/functions/generate-sponsored-posts/index.ts`
 
-**Rota**: `/marketplace`
+Logica:
+1. Buscar empresas com subscription ativa e plano com sponsored_posts_per_month > 0
+2. Contar posts ja gerados no mes atual para cada empresa
+3. Se abaixo do limite, gerar sponsored_post com template:
+   - Titulo: "{Empresa} -- Parceiro Mood Play em {cidade}"
+   - Conteudo: "Confira as ofertas de {empresa} para atletas de {cidade}!"
+   - city = empresa.city
+   - active_from = now, active_to = fim do mes
+   - active = false (aguardando aprovacao admin)
+4. Registrar no financial_ledger
 
-**Arquivo**: `src/pages/Marketplace.tsx`
-
-- Barra de busca no topo
-- Filtros por categoria (chips horizontais scrollaveis)
-- Grid de cards de empresas aprovadas (logo, nome, cidade, categoria)
-- Empresas locais primeiro (baseado na cidade do perfil do usuario)
-- Ao clicar em empresa, abre pagina da empresa
-
-### 2b. Pagina da Empresa
-
-**Rota**: `/marketplace/company/:companyId`
-
-**Arquivo**: `src/pages/MarketplaceCompany.tsx`
-
-- Header com logo, nome, cidade, descricao
-- Grid de produtos aprovados
-- Card de produto: imagem, nome, preco, botao "Ver" ou "Comprar"
-
-### 2c. Pagina do Produto
-
-**Rota**: `/marketplace/product/:productId`
-
-**Arquivo**: `src/pages/MarketplaceProduct.tsx`
-
-- Imagens do produto (carousel)
-- Nome, descricao, preco
-- Botao "Comprar" (link externo ou criar pedido interno)
-- Info da empresa
-
-### 2d. Cadastro de Empresa
-
-**Rota**: `/marketplace/register`
-
-**Arquivo**: `src/pages/MarketplaceRegister.tsx`
-
-- Formulario: nome, cidade, estado, email, telefone, categoria, descricao, logo
-- Ao enviar: status = pending_approval
-- Mensagem: "Sua empresa foi enviada para analise"
-
-### 2e. Painel da Empresa (owner)
-
-**Rota**: `/marketplace/my-company`
-
-**Arquivo**: `src/pages/MyCompany.tsx`
-
-- Ver status da empresa (pendente/aprovada/bloqueada)
-- Listar produtos proprios
-- Adicionar/editar produto (nome, descricao, preco, imagens, link externo, estoque)
-- Produtos ficam em "pending" ate admin aprovar
-- Ver pedidos recebidos
+Config no config.toml: verify_jwt = false (sera chamado via cron ou manualmente pelo admin)
 
 ---
 
-## 3. Navegacao
+## 3. Pagina Admin: Monetizacao
 
-### Bottom Nav
-- Substituir o icone "Ranking" (Medal) por "Marketplace" (ShoppingBag) no menu inferior
-- Ranking ficara acessivel via outras rotas (perfil ou feed)
+**Rota**: `/admin/monetization`
 
-Alternativa (melhor UX): manter os 5 itens atuais e adicionar icone de marketplace no FeedTopBar ao lado do sino
+**Arquivo**: `src/pages/admin/AdminMonetization.tsx`
 
-**Decisao**: Adicionar icone de ShoppingBag no FeedTopBar (ao lado do sino e perfil), linkando para `/marketplace`
+### Secao Planos
+- Cards editaveis para cada plano (Free, Pro, Elite)
+- Campos inline: preco, posts/mes, comissao, max produtos, toggles (banner, torneio, destaque)
+- Salvar em tempo real na tabela company_plans
 
-### Rotas (App.tsx)
-Dentro do bloco `<Route element={<AppLayout />}>`:
+### Secao Assinaturas
+- Lista de empresas com plano ativo
+- Status (active/overdue/canceled)
+- Acoes: ativar plano, suspender, cancelar
+- Botao "Gerar ads do mes" (chama edge function manualmente)
 
-```text
-/marketplace                        -> Marketplace
-/marketplace/register               -> MarketplaceRegister
-/marketplace/my-company             -> MyCompany
-/marketplace/company/:companyId     -> MarketplaceCompany
-/marketplace/product/:productId     -> MarketplaceProduct
-```
-
----
-
-## 4. Admin Panel -- Marketplace
-
-### 4a. Sidebar do Admin
-Adicionar novo grupo "Marketplace" na sidebar com itens:
-- Empresas (`/admin/companies`)
-- Produtos (`/admin/products`)
-- Publicidade (`/admin/ads`)
-- Patrocinios (`/admin/sponsors`)
-
-### 4b. Admin Empresas
-
-**Rota**: `/admin/companies`
-
-**Arquivo**: `src/pages/admin/AdminCompanies.tsx`
-
-- Tabela com todas as empresas
-- Filtros: status (pending/approved/blocked), categoria
-- Acoes por empresa:
-  - Aprovar / Rejeitar / Bloquear
-  - Alterar plano (free/pro/elite)
-  - Definir commission_rate
-  - Toggle highlight_enabled
-  - Toggle feed_ads_enabled
-  - Toggle tournament_visibility
-
-### 4c. Admin Produtos
-
-**Rota**: `/admin/products`
-
-**Arquivo**: `src/pages/admin/AdminProducts.tsx`
-
-- Tabela com todos os produtos pendentes e aprovados
-- Filtros: status, empresa
-- Acoes: Aprovar / Rejeitar / Remover / Marcar destaque
-
-### 4d. Admin Publicidade
-
-**Rota**: `/admin/ads`
-
-**Arquivo**: `src/pages/admin/AdminAds.tsx`
-
-- Criar/editar sponsored posts (titulo, conteudo, imagem, cidade, datas, empresa vinculada)
-- Associar empresa a torneio (tournament_partners)
-- Ver lista de banners/posts ativos
-
-### 4e. Admin Patrocinios
-
-**Rota**: `/admin/sponsors`
-
-**Arquivo**: `src/pages/admin/AdminSponsors.tsx`
-
-- Associar empresa a atleta (athlete_sponsors)
-- Associar empresa a torneio
-- Definir valor patrocinado
-- Ver historico
+### Secao Extrato Financeiro
+- Tabela financial_ledger com filtros por source e periodo
+- Totais: receita assinaturas, receita marketplace, total Mood Play
 
 ---
 
-## 5. Publicidade Contextual
+## 4. Atualizacao: MyCompany (Painel da Empresa)
 
-### 5a. Sponsored Posts no Feed
-- No componente Feed.tsx, buscar `sponsored_posts` ativos (dentro das datas, city match ou sem city)
-- Inserir entre posts regulares (a cada ~5 posts) como um card especial com badge "Patrocinado"
-- Criar componente `SponsoredPostCard.tsx`
-
-### 5b. Parceiros do Torneio
-- Na pagina TournamentDetail.tsx, buscar `tournament_partners` do torneio
-- Exibir bloco "Parceiros" com logos e nomes das empresas
+Adicionar secao "Meu Plano" no topo:
+- Mostrar plano atual (Free/Pro/Elite) com descricao comercial
+- Status billing (ativo/atrasado/cancelado)
+- Se Free: botao "Upgrade" com descricao dos planos Pro e Elite
+- Empresa NAO gerencia campanha -- apenas ve plano e status
 
 ---
 
-## 6. Dashboard Admin atualizado
+## 5. Atualizacao: AdminCompanies
 
-No AdminDashboard.tsx, adicionar cards:
-- Total Empresas (aprovadas/pendentes)
-- Total Produtos
-- Pedidos do Marketplace
-- Receita Marketplace (comissoes)
+- Adicionar coluna "Plano" na listagem
+- Select para alterar plan_id da empresa
+- Campo billing_status visivel
+- Ao alterar plano: criar/atualizar subscription, atualizar commission_rate da empresa conforme plano
 
 ---
 
-## Arquivos a criar
-- `src/pages/Marketplace.tsx`
-- `src/pages/MarketplaceCompany.tsx`
-- `src/pages/MarketplaceProduct.tsx`
-- `src/pages/MarketplaceRegister.tsx`
-- `src/pages/MyCompany.tsx`
-- `src/pages/admin/AdminCompanies.tsx`
-- `src/pages/admin/AdminProducts.tsx`
-- `src/pages/admin/AdminAds.tsx`
-- `src/pages/admin/AdminSponsors.tsx`
-- `src/components/feed/SponsoredPostCard.tsx`
+## 6. Atualizacao: AdminAds
 
-## Arquivos a editar
-- `src/App.tsx` (novas rotas)
-- `src/components/feed/FeedTopBar.tsx` (icone marketplace)
-- `src/pages/admin/AdminLayout.tsx` (novos itens sidebar)
-- `src/pages/admin/AdminDashboard.tsx` (cards marketplace)
-- `src/pages/Feed.tsx` (inserir sponsored posts)
-- `src/pages/TournamentDetail.tsx` (bloco parceiros)
-- Migracao SQL (1 migracao com todas as tabelas)
+- Adicionar secao "Ads Automaticos" que lista sponsored_posts gerados automaticamente (active = false)
+- Botao para aprovar (active = true) ou rejeitar (deletar)
+- Badge visual para diferenciar ads manuais vs automaticos
 
-## Regras de negocio
-- Empresa so aparece no marketplace apos aprovacao admin
-- Produto so aparece apos aprovacao admin
-- Planos, comissoes e destaques sao controlados exclusivamente pelo admin
-- Empresa bloqueada nao aparece em lugar nenhum
-- Sponsored posts so podem ser criados pelo admin
-- Patrocinios de atletas e torneios so via admin
+---
+
+## 7. Atualizacao: AdminFinances
+
+- Adicionar secao "Receita Marketplace" com dados do financial_ledger
+- Cards: Receita Assinaturas, Receita Marketplace, Total Mood
+
+---
+
+## 8. Atualizacao: AdminDashboard
+
+- Card: "Assinaturas Ativas"
+- Card: "Receita Assinaturas"
+- Card: "Empresas Overdue"
+
+---
+
+## 9. Atualizacao: AdminLayout
+
+- Adicionar item "Monetizacao" no grupo Marketplace da sidebar (icone CreditCard, rota /admin/monetization)
+
+---
+
+## 10. Navegacao (App.tsx)
+
+- Adicionar rota `/admin/monetization` -> AdminMonetization
+
+---
+
+## Detalhes tecnicos
+
+### Arquivos a criar
+- `supabase/functions/generate-sponsored-posts/index.ts`
+- `src/pages/admin/AdminMonetization.tsx`
+
+### Arquivos a editar
+- `src/App.tsx` (nova rota admin)
+- `src/pages/admin/AdminLayout.tsx` (item sidebar)
+- `src/pages/admin/AdminDashboard.tsx` (cards novos)
+- `src/pages/admin/AdminCompanies.tsx` (coluna plano)
+- `src/pages/admin/AdminAds.tsx` (secao ads automaticos)
+- `src/pages/admin/AdminFinances.tsx` (secao receita marketplace)
+- `src/pages/MyCompany.tsx` (secao plano)
+- `supabase/config.toml` (nova function)
+- Migracao SQL (tabelas + seed + alteracoes)
+
+### Logica de billing
+- Billing e controlado pelo admin manualmente nesta fase
+- Admin ativa plano -> cria subscription com next_billing_at = now + 30 dias
+- Edge function pode ser chamada pelo admin para gerar ads
+- Cron pode ser configurado futuramente via pg_cron
+
+### Regras de negocio
+- Empresa ve apenas plano e status, zero autonomia em campanhas
+- Ads sao gerados automaticamente conforme plano e aprovados pelo admin
+- Se billing_status = overdue: ads pausados, marketplace mantido
+- Admin pode alterar qualquer parametro de plano em tempo real
+- financial_ledger registra todas as movimentacoes
 
