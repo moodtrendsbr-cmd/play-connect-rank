@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { Store } from "lucide-react";
+import { Store, Settings } from "lucide-react";
 
 const TournamentDetail = () => {
   const { id } = useParams();
@@ -109,6 +109,14 @@ const TournamentDetail = () => {
           ) : (
             <Button onClick={handleEnroll} className="w-full h-14 text-lg font-bold box-glow">
               🟢 Inscrever-se
+            </Button>
+          )}
+
+          {user?.id === tournament.organizer_id && (
+            <Button variant="outline" className="w-full h-14 text-lg font-bold mt-3" asChild>
+              <Link to={`/tournaments/${id}/manage`}>
+                <Settings className="mr-2 h-5 w-5" /> Gerenciar torneio
+              </Link>
             </Button>
           )}
         </div>
