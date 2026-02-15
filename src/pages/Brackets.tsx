@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { ArrowLeft } from "lucide-react";
 
 type BracketType = "single_elimination" | "double_elimination" | "round_robin" | "custom";
 
@@ -67,7 +68,6 @@ const Brackets = () => {
 
       await fetchMatches();
 
-      // Get paid enrollments for bracket generation
       const { data: enrollments } = await supabase
         .from("enrollments")
         .select("user_id")
@@ -75,7 +75,6 @@ const Brackets = () => {
         .eq("status", "paid");
       const enrollData = enrollments || [];
 
-      // Fetch profile names for enrolled players
       const userIds = enrollData.map((e) => e.user_id).filter(Boolean);
       const map = await fetchProfiles(userIds);
       setProfileMap((prev) => ({ ...prev, ...map }));
@@ -90,74 +89,39 @@ const Brackets = () => {
       return;
     }
 
-    // Shuffle players
     const shuffled = [...players].sort(() => Math.random() - 0.5);
-
     let newMatches: any[] = [];
 
     if (bracketType === "single_elimination") {
       const totalRounds = Math.ceil(Math.log2(shuffled.length));
       const firstRoundMatches = Math.ceil(shuffled.length / 2);
-
       for (let i = 0; i < firstRoundMatches; i++) {
-        newMatches.push({
-          tournament_id: id!,
-          round: 1,
-          match_number: i + 1,
-          player1_id: shuffled[i * 2]?.user_id || null,
-          player2_id: shuffled[i * 2 + 1]?.user_id || null,
-        });
+        newMatches.push({ tournament_id: id!, round: 1, match_number: i + 1, player1_id: shuffled[i * 2]?.user_id || null, player2_id: shuffled[i * 2 + 1]?.user_id || null });
       }
-
       for (let round = 2; round <= totalRounds; round++) {
         const matchesInRound = Math.ceil(firstRoundMatches / Math.pow(2, round - 1));
         for (let i = 0; i < matchesInRound; i++) {
-          newMatches.push({
-            tournament_id: id!,
-            round,
-            match_number: i + 1,
-            player1_id: null,
-            player2_id: null,
-          });
+          newMatches.push({ tournament_id: id!, round, match_number: i + 1, player1_id: null, player2_id: null });
         }
       }
     } else if (bracketType === "round_robin") {
       let matchNum = 1;
       for (let i = 0; i < shuffled.length; i++) {
         for (let j = i + 1; j < shuffled.length; j++) {
-          newMatches.push({
-            tournament_id: id!,
-            round: 1,
-            match_number: matchNum++,
-            player1_id: shuffled[i].user_id,
-            player2_id: shuffled[j].user_id,
-          });
+          newMatches.push({ tournament_id: id!, round: 1, match_number: matchNum++, player1_id: shuffled[i].user_id, player2_id: shuffled[j].user_id });
         }
       }
     } else if (bracketType === "double_elimination") {
       const firstRoundMatches = Math.ceil(shuffled.length / 2);
       for (let i = 0; i < firstRoundMatches; i++) {
-        newMatches.push({
-          tournament_id: id!,
-          round: 1,
-          match_number: i + 1,
-          player1_id: shuffled[i * 2]?.user_id || null,
-          player2_id: shuffled[i * 2 + 1]?.user_id || null,
-        });
+        newMatches.push({ tournament_id: id!, round: 1, match_number: i + 1, player1_id: shuffled[i * 2]?.user_id || null, player2_id: shuffled[i * 2 + 1]?.user_id || null });
       }
       for (let i = 0; i < firstRoundMatches; i++) {
-        newMatches.push({
-          tournament_id: id!,
-          round: 2,
-          match_number: i + 1,
-          player1_id: null,
-          player2_id: null,
-        });
+        newMatches.push({ tournament_id: id!, round: 2, match_number: i + 1, player1_id: null, player2_id: null });
       }
     }
 
     const { error } = await supabase.from("match_results").insert(newMatches);
-
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
@@ -181,7 +145,6 @@ const Brackets = () => {
     return profileMap[playerId]?.full_name || "A definir";
   };
 
-  // Group matches by round
   const rounds = matches.reduce((acc: Record<number, any[]>, m) => {
     if (!acc[m.round]) acc[m.round] = [];
     acc[m.round].push(m);
@@ -191,7 +154,12 @@ const Brackets = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
-        <div className="container flex h-16 items-center justify-between">
+        <div className="container flex h-16 items-center gap-4">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={`/tournaments/${id}/manage`} className="gap-2">
+              <ArrowLeft className="h-4 w-4" /> Voltar
+            </Link>
+          </Button>
           <Link to={`/tournaments/${id}/manage`} className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
         </div>
       </header>

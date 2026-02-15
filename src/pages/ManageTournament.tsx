@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ArrowLeft } from "lucide-react";
 
 const MOOD_COMMISSION_PERCENT = 10;
 
@@ -87,7 +87,12 @@ const ManageTournament = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
-        <div className="container flex h-16 items-center">
+        <div className="container flex h-16 items-center gap-4">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/dashboard" className="gap-2">
+              <ArrowLeft className="h-4 w-4" /> Voltar
+            </Link>
+          </Button>
           <Link to="/dashboard" className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
         </div>
       </header>

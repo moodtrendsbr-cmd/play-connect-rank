@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 const Tournaments = () => {
   const [tournaments, setTournaments] = useState<any[]>([]);
@@ -22,8 +23,20 @@ const Tournaments = () => {
   }, []);
 
   return (
-    <main className="px-4 py-6 pb-20 max-w-3xl mx-auto">
-      <h1 className="mb-6 text-3xl font-display" style={{ color: "#fff" }}>TORNEIOS DISPONÍVEIS</h1>
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border bg-card">
+        <div className="container flex h-16 items-center gap-4">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/dashboard" className="gap-2">
+              <ArrowLeft className="h-4 w-4" /> Voltar
+            </Link>
+          </Button>
+          <Link to="/dashboard" className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
+        </div>
+      </header>
+
+      <main className="px-4 py-6 pb-20 max-w-3xl mx-auto">
+        <h1 className="mb-6 text-3xl font-display text-foreground">TORNEIOS DISPONÍVEIS</h1>
 
       {loading ? (
         <p style={{ color: "#9CA3AF" }}>Carregando...</p>
@@ -55,7 +68,8 @@ const Tournaments = () => {
           })}
         </div>
       )}
-    </main>
+      </main>
+    </div>
   );
 };
 
