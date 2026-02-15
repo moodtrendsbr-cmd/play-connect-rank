@@ -80,13 +80,22 @@ const TournamentDetail = () => {
           A confirmação acontece automaticamente após pagamento.
         </div>
 
-        <div className="mt-8">
+        <div className="mt-8 space-y-3">
           {alreadyEnrolled ? (
             <Button className="w-full h-14 text-lg font-bold" asChild>
               <Link to={`/payment/${id}`}>Continuar para pagamento</Link>
             </Button>
           ) : available <= 0 ? (
             <Button disabled className="w-full h-14 text-lg">Vagas esgotadas</Button>
+          ) : tournament.match_enabled ? (
+            <>
+              <Button onClick={handleEnroll} className="w-full h-14 text-lg font-bold box-glow">
+                👥 Tenho dupla/time
+              </Button>
+              <Button variant="outline" className="w-full h-14 text-lg font-bold border-primary text-primary" asChild>
+                <Link to={`/tournaments/${id}/match`}>🔍 Procurar parceiros</Link>
+              </Button>
+            </>
           ) : (
             <Button onClick={handleEnroll} className="w-full h-14 text-lg font-bold box-glow">
               🟢 Inscrever-se

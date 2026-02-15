@@ -236,6 +236,193 @@ export type Database = {
           },
         ]
       }
+      match_conversation_members: {
+        Row: {
+          conversation_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_conversation_members_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "match_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          pair_id: string | null
+          tournament_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          pair_id?: string | null
+          tournament_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          pair_id?: string | null
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_conversations_pair_id_fkey"
+            columns: ["pair_id"]
+            isOneToOne: false
+            referencedRelation: "match_pairs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_conversations_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          read_at: string | null
+          sender_id: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          sender_id: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "match_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_pair_members: {
+        Row: {
+          id: string
+          pair_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          pair_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          pair_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_pair_members_pair_id_fkey"
+            columns: ["pair_id"]
+            isOneToOne: false
+            referencedRelation: "match_pairs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_pairs: {
+        Row: {
+          created_at: string
+          id: string
+          match_type: string
+          tournament_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          match_type?: string
+          tournament_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          match_type?: string
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_pairs_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_requests: {
+        Row: {
+          created_at: string
+          from_user_id: string
+          id: string
+          status: string
+          to_user_id: string
+          tournament_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_user_id: string
+          id?: string
+          status?: string
+          to_user_id: string
+          tournament_id: string
+        }
+        Update: {
+          created_at?: string
+          from_user_id?: string
+          id?: string
+          status?: string
+          to_user_id?: string
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_requests_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_results: {
         Row: {
           created_at: string
@@ -617,6 +804,56 @@ export type Database = {
         }
         Relationships: []
       }
+      tournament_match_pool: {
+        Row: {
+          availability: string | null
+          bio: string | null
+          category: string
+          created_at: string
+          id: string
+          level: string
+          match_type: string
+          position: string | null
+          status: string
+          tournament_id: string
+          user_id: string
+        }
+        Insert: {
+          availability?: string | null
+          bio?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          level?: string
+          match_type?: string
+          position?: string | null
+          status?: string
+          tournament_id: string
+          user_id: string
+        }
+        Update: {
+          availability?: string | null
+          bio?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          level?: string
+          match_type?: string
+          position?: string | null
+          status?: string
+          tournament_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_match_pool_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournaments: {
         Row: {
           address: string | null
@@ -628,6 +865,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_public: boolean
+          match_enabled: boolean
           max_slots: number
           name: string
           organizer_id: string
@@ -648,6 +886,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_public?: boolean
+          match_enabled?: boolean
           max_slots?: number
           name: string
           organizer_id: string
@@ -668,6 +907,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_public?: boolean
+          match_enabled?: boolean
           max_slots?: number
           name?: string
           organizer_id?: string
@@ -741,6 +981,14 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_match_conversation_member: {
+        Args: { _conversation_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_pair_member: {
+        Args: { _pair_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_tournament_owner: {
         Args: { _tournament_id: string; _user_id: string }
         Returns: boolean

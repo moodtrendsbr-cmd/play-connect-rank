@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 
 const CreateTournament = () => {
@@ -26,6 +27,7 @@ const CreateTournament = () => {
     max_slots: "16",
     payment_deadline_days: "3",
     rules: "",
+    match_enabled: false,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,7 +49,8 @@ const CreateTournament = () => {
       max_slots: parseInt(form.max_slots) || 16,
       payment_deadline_days: parseInt(form.payment_deadline_days) || 3,
       rules: form.rules,
-    });
+      match_enabled: form.match_enabled,
+    } as any);
 
     setLoading(false);
 
@@ -148,6 +151,14 @@ const CreateTournament = () => {
           <div>
             <Label>Regulamento</Label>
             <Textarea value={form.rules} onChange={(e) => update("rules", e.target.value)} rows={5} className="mt-1" />
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
+            <div>
+              <Label className="text-base">Match (Procurar parceiros)</Label>
+              <p className="text-sm text-muted-foreground mt-0.5">Permitir que atletas encontrem duplas/times</p>
+            </div>
+            <Switch checked={form.match_enabled} onCheckedChange={(v) => setForm({ ...form, match_enabled: v })} />
           </div>
 
           <Button type="submit" className="w-full h-12 text-lg font-bold box-glow" disabled={loading}>
