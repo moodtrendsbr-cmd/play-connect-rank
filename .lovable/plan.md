@@ -1,228 +1,107 @@
 
 
-# Sistema de Chaveamentos por Modalidade - Mood Play
+# Atualizar paginas de torneios para novo formato de modalidades + busca por cidade
 
 ## Resumo
 
-Reimplementar completamente a pagina de chaveamentos com suporte a multiplas modalidades por torneio, visual bracket premium inspirado na referencia, e fluxo inteligente para organizador e publico.
+Atualizar as paginas de gerenciamento, listagem publica e resultados para usar o novo sistema de modalidades. Adicionar busca por cidade na listagem publica de torneios.
 
 ---
 
-## 1. Novas Tabelas no Banco de Dados
+## 1. Pagina Publica de Torneios (`src/pages/Tournaments.tsx`)
 
-### `tournament_modalities`
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| tournament_id | uuid | FK para tournaments |
-| name | text | Ex: "Dupla Mista", "Trio Feminino" |
-| type | text | individual, dupla, trio, equipe |
-| status | text | open, closed, bracket_generated, finished |
-| bracket_format | text | single_elimination, double_elimination, round_robin, groups |
-| num_groups | integer | Quantidade de grupos (se aplicavel) |
-| created_at | timestamptz | |
+### Mudancas:
+- Adicionar campo de **busca por cidade** (Input com icone de busca)
+- Filtrar torneios apenas **em andamento** (data atual entre start_date e end_date) ou futuros
+- Adicionar filtro visual por status: "Todos", "Em andamento", "Proximos"
+- Adicionar badge de status em cada card (Em andamento / Inscricoes abertas)
+- Adicionar link para chaveamentos em cada card de torneio
+- Melhorar visual com skeleton loader durante carregamento
 
-### `modality_entries`
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| modality_id | uuid | FK para tournament_modalities |
-| name | text | Nome da equipe/dupla (gerado automaticamente) |
-| seed | integer | Cabeca de chave (opcional) |
-| created_at | timestamptz | |
-
-### `modality_entry_members`
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| entry_id | uuid | FK para modality_entries |
-| user_id | uuid | Referencia ao jogador |
-
-### `modality_groups`
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| modality_id | uuid | FK para tournament_modalities |
-| group_name | text | A, B, C... |
-
-### `modality_group_members`
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| group_id | uuid | FK para modality_groups |
-| entry_id | uuid | FK para modality_entries |
-
-### `modality_matches`
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| modality_id | uuid | FK |
-| group_id | uuid | Nullable - se fase de grupos |
-| round_number | integer | |
-| match_number | integer | |
-| entry_a_id | uuid | Nullable - FK para modality_entries |
-| entry_b_id | uuid | Nullable |
-| score_a | integer | Nullable |
-| score_b | integer | Nullable |
-| winner_entry_id | uuid | Nullable |
-| status | text | scheduled, in_progress, finished |
-| created_at | timestamptz | |
-
-### `modality_placements`
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| modality_id | uuid | FK |
-| entry_id | uuid | FK |
-| position | integer | 1 a 4 |
-
-### `modality_prizes`
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| modality_id | uuid | FK |
-| position | integer | 1 a 4 |
-| amount | numeric | Valor em R$ |
-| description | text | Descricao do premio |
-
-### Politicas RLS
-
-Todas as novas tabelas terao:
-- **SELECT publico** (true) - dados de chaveamento sao publicos
-- **INSERT/UPDATE/DELETE** restritos a organizador do torneio (`is_tournament_owner`) ou admin (`is_admin`)
-
----
-
-## 2. Nova Rota
-
+### Logica de filtro:
 ```text
-/tournaments/:id/brackets  (reescrita completa)
-```
-
-A rota existente sera substituida pela nova implementacao. A rota de Results tambem sera absorvida dentro da nova pagina (aba "Jogos/Resultados").
-
----
-
-## 3. Arquitetura de Componentes
-
-```text
-src/pages/Brackets.tsx (reescrito - pagina principal)
-src/components/brackets/
-  ModalityCard.tsx          -- Card de modalidade na lista
-  ModalityDetail.tsx        -- Container com abas da modalidade
-  TabEntries.tsx            -- Aba Inscritos
-  TabGroups.tsx             -- Aba Grupos
-  TabBracketView.tsx        -- Aba Chaveamento (visual bracket)
-  BracketConnector.tsx      -- Componente de bracket visual com conectores SVG
-  TabMatches.tsx            -- Aba Jogos/Resultados
-  TabPlacements.tsx         -- Aba Top 4 e Premiacao
-  TabPartners.tsx           -- Aba Parceiros
-  GenerateBracketDialog.tsx -- Modal para organizador gerar chaveamento
-  ScoreEntryDialog.tsx      -- Modal para lancar resultado de partida
+- Busca por cidade: filtro local no state (case-insensitive)
+- Torneios visiveis: is_public = true E end_date >= hoje
+- Status: start_date <= hoje = "Em andamento", start_date > hoje = "Inscricoes abertas"
 ```
 
 ---
 
-## 4. Fluxo da Pagina
+## 2. Pagina de Gerenciamento (`src/pages/ManageTournament.tsx`)
 
-### 4.1 Tela Inicial - Lista de Modalidades
+### Mudancas:
+- Remover botoes antigos "Gerar Chaves" e "Lancar Resultados" (linhas 192-194) que apontam para o formato antigo
+- Substituir por **secao de Modalidades** que lista as modalidades do torneio
+- Cada modalidade mostra: nome, tipo, status, total de inscritos, botao "Gerenciar"
+- Botao "Gerenciar" leva para `/tournaments/:id/brackets` (que ja tem o novo sistema)
+- Adicionar botao "Adicionar Modalidade" inline (sem precisar ir para outra pagina)
+- Manter resumo financeiro e listagem de inscricoes como estao
 
-**Header**: Nome do torneio, local, data, botao Voltar para `/tournaments/:id`
-
-**Grid de modalidades**: Cards com nome, tipo (dupla/trio/etc), total de inscritos, badge de status (Inscricoes abertas / Em andamento / Finalizado), botao "Ver"
-
-**Organizador/Admin ve extra**: Botao "Adicionar modalidade" no topo
-
-### 4.2 Detalhe da Modalidade (ao clicar)
-
-Transicao suave (framer-motion fade+slide). Exibe abas:
-
-**Inscritos**: Grid de cards com avatar circular, nome dos membros da entry, badge de nivel. Contador total no topo.
-
-**Grupos**: Se modalidade tem grupos, cards por grupo (A, B, C) com entries dentro. Tabela de classificacao com V/D/Pts.
-
-**Chaveamento**: Bracket visual em CSS Grid com conectores SVG. Rounds em colunas, confrontos empilhados verticalmente. Fotos dos atletas, nomes abreviados, placar se finalizado. Vencedor destacado em verde (#2BFF88). Fallback em modo tabela para telas pequenas.
-
-**Jogos/Resultados**: Lista de partidas como cards. Entry A vs Entry B, placar, status badge. Organizador ve botao "Lancar resultado" em cada partida.
-
-**Top 4 e Premiacao**: Cards grandes para posicoes 1-4 com emoji de medalha, fotos, nomes, pontos bonus (+80, +50, +30, +10). Premiacao em R$ se cadastrada.
-
-**Parceiros**: Faixa horizontal com logos das empresas parceiras do torneio. Link para marketplace.
-
-### 4.3 Acoes do Organizador (dentro da mesma tela)
-
-Detectadas via `tournament.organizer_id === user.id` ou `is_admin`:
-
-1. **Gerar chaveamento** - Dialog com selecao de formato, quantidade de grupos, botao "Gerar automaticamente"
-2. **Lancar resultado** - Dialog por partida com campos de placar e selecao de vencedor. Ao salvar, avanca vencedor no bracket automaticamente
-3. **Finalizar modalidade** - Define Top 4, aplica bonus de pontos, atualiza status
-
----
-
-## 5. Bracket Visual (CSS Grid + SVG)
-
-Inspirado na imagem de referencia:
-
-- Fundo escuro (#050708)
-- Cards dos confrontos com gradiente sutil (borda #2BFF88 para vencedor)
-- Conectores SVG brancos/cinza entre rounds
-- Layout responsivo: horizontal em desktop, scroll horizontal em mobile
-- Cada round e uma coluna CSS Grid
-- Confrontos centralizados verticalmente com espacamento proporcional
-
+### Secao adicionada (entre inscricoes e botoes):
 ```text
-ROUND 1        ROUND 2        FINAL
-[A vs B] ──┐
-            ├── [W1 vs W2] ──┐
-[C vs D] ──┘                  ├── [CAMPEAO]
-[E vs F] ──┐                  │
-            ├── [W3 vs W4] ──┘
-[G vs H] ──┘
+MODALIDADES
+[+ Adicionar Modalidade]
+
+Card: Dupla Mista | 12 inscritos | Em andamento | [Gerenciar]
+Card: Trio Feminino | 8 inscritos | Inscricoes abertas | [Gerenciar]
 ```
 
 ---
 
-## 6. Detalhes Tecnicos
+## 3. Pagina de Resultados (`src/pages/Results.tsx`)
 
-### Migracao SQL
-- Criar 7 novas tabelas com RLS
-- Criar funcao auxiliar `is_modality_tournament_owner` para simplificar politicas
-- Manter tabelas antigas (`match_results`) intactas para compatibilidade
+### Mudancas:
+- Atualizar para usar o novo sistema de modalidades em vez do antigo `match_results`
+- Listar modalidades do torneio com status
+- Para cada modalidade, mostrar resumo: total de jogos, jogos finalizados, top 4 (se finalizado)
+- Clicar em "Ver resultados" leva para `/tournaments/:id/brackets` com a modalidade pre-selecionada
+- Manter como pagina de visao geral dos resultados, redirecionando para o sistema principal de brackets
 
-### Animacoes (framer-motion)
-- Transicao entre lista de modalidades e detalhe: fade + slideY
-- Skeleton loaders durante carregamento
-- Badges com cores por status
-
-### Dados
-- Pagina publica (sem exigir login para visualizar)
-- Organizador precisa estar logado para acoes de gestao
-- Perfis dos membros carregados em batch via `profiles` table
-
-### Compatibilidade
-- Pagina antiga de Brackets sera substituida
-- Pagina de Results sera absorvida (funcionalidade movida para aba "Jogos/Resultados")
-- Links no admin (`AdminTournaments.tsx`) continuarao funcionando pois a rota e a mesma
+### Alternativa simplificada:
+- Redirecionar diretamente para `/tournaments/:id/brackets` ja que toda a funcionalidade de resultados ja existe la (aba "Jogos/Resultados" e "Top 4")
+- Manter a pagina Results como um wrapper que redireciona para Brackets
 
 ---
 
-## 7. Arquivos Modificados/Criados
+## 4. Dashboard (`src/pages/Dashboard.tsx`)
 
-**Criados (novos):**
-- `src/components/brackets/ModalityCard.tsx`
-- `src/components/brackets/ModalityDetail.tsx`
-- `src/components/brackets/TabEntries.tsx`
-- `src/components/brackets/TabGroups.tsx`
-- `src/components/brackets/TabBracketView.tsx`
-- `src/components/brackets/BracketConnector.tsx`
-- `src/components/brackets/TabMatches.tsx`
-- `src/components/brackets/TabPlacements.tsx`
-- `src/components/brackets/TabPartners.tsx`
-- `src/components/brackets/GenerateBracketDialog.tsx`
-- `src/components/brackets/ScoreEntryDialog.tsx`
+### Mudancas:
+- Nos cards de torneio do organizador, adicionar botao "Chaveamentos" ao lado de "Gerenciar"
+- Para atletas, adicionar link para ver chaveamentos do torneio inscrito
 
-**Modificados:**
-- `src/pages/Brackets.tsx` - reescrita completa
-- `src/App.tsx` - manter rota existente (nenhuma mudanca necessaria)
-- Migracao SQL para novas tabelas
+---
+
+## Detalhes tecnicos
+
+### `src/pages/Tournaments.tsx`
+- Adicionar state `search` e `filter` (all/active/upcoming)
+- Adicionar `Input` com placeholder "Buscar por cidade..." no topo
+- Filtrar `tournaments` localmente por `city` ou `state` contendo o texto de busca
+- Filtrar por data: `end_date >= today` para esconder encerrados
+- Badge de status: comparar `start_date` e `end_date` com data atual
+- Adicionar `Skeleton` loader durante carregamento
+
+### `src/pages/ManageTournament.tsx`
+- Importar `supabase` para buscar `tournament_modalities` e `modality_entries`
+- Adicionar state para modalidades
+- Renderizar secao "MODALIDADES" entre a listagem de inscritos e os botoes antigos
+- Remover botoes antigos de "Gerar Chaves" e "Lancar Resultados"
+- Cada modalidade card com Link para `/tournaments/:id/brackets`
+
+### `src/pages/Results.tsx`
+- Substituir query de `match_results` por `tournament_modalities` + `modality_matches`
+- Listar modalidades com contagem de jogos finalizados
+- Botao "Ver detalhes" leva para `/tournaments/:id/brackets`
+
+### `src/pages/Dashboard.tsx`
+- No card de torneio do organizador, adicionar segundo botao "Chaveamentos" linkando para `/tournaments/:id/brackets`
+
+---
+
+## Arquivos modificados
+
+1. `src/pages/Tournaments.tsx` - busca por cidade + filtro de status + visual melhorado
+2. `src/pages/ManageTournament.tsx` - secao de modalidades + remover botoes antigos
+3. `src/pages/Results.tsx` - migrar para novo formato de modalidades
+4. `src/pages/Dashboard.tsx` - link para chaveamentos nos cards de torneio
 
