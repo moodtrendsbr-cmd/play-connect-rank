@@ -136,6 +136,7 @@ const UserProfile = () => {
         state={profile.state}
         bio={profile.bio}
         team={profile.team}
+        arena={(profile as any).arena}
         titles={profile.titles}
         whatsapp={profile.whatsapp}
         link={(profile as any).link}
