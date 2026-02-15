@@ -10,7 +10,7 @@ import { toast } from "@/hooks/use-toast";
 const MarketplaceProduct = () => {
   const { productId } = useParams();
   const { user } = useAuth();
-  const { addToCart } = useCart();
+  const { addToCart } = useCart()!;
   const navigate = useNavigate();
   const [product, setProduct] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);

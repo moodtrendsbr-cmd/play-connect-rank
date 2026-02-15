@@ -10,7 +10,7 @@ import { ArrowLeft, CreditCard, QrCode, Loader2, Copy, CheckCircle } from "lucid
 import { toast } from "@/hooks/use-toast";
 
 const MarketplaceCheckout = () => {
-  const { items, companyId, getSubtotal, clearCart } = useCart();
+  const { items, companyId, getSubtotal, clearCart } = useCart()!;
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();

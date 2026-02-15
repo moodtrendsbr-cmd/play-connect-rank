@@ -17,7 +17,7 @@ interface ViaCepResult {
 }
 
 const Cart = () => {
-  const { items, companyId, companyName, removeFromCart, updateQuantity, clearCart, getSubtotal } = useCart();
+  const { items, companyId, companyName, removeFromCart, updateQuantity, clearCart, getSubtotal } = useCart()!;
   const { user } = useAuth();
   const navigate = useNavigate();
 
