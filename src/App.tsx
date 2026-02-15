@@ -37,6 +37,7 @@ import AdminCompanies from "./pages/admin/AdminCompanies";
 import AdminProducts from "./pages/admin/AdminProducts";
 import AdminAds from "./pages/admin/AdminAds";
 import AdminSponsors from "./pages/admin/AdminSponsors";
+import AdminMonetization from "./pages/admin/AdminMonetization";
 import Marketplace from "./pages/Marketplace";
 import MarketplaceCompany from "./pages/MarketplaceCompany";
 import MarketplaceProduct from "./pages/MarketplaceProduct";
@@ -91,6 +92,7 @@ const App = () => (
               <Route path="products" element={<AdminProducts />} />
               <Route path="ads" element={<AdminAds />} />
               <Route path="sponsors" element={<AdminSponsors />} />
+              <Route path="monetization" element={<AdminMonetization />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -116,6 +116,7 @@ export type Database = {
       }
       companies: {
         Row: {
+          billing_status: string
           category: string | null
           city: string | null
           commission_rate: number
@@ -130,12 +131,14 @@ export type Database = {
           owner_user_id: string
           phone: string | null
           plan: string
+          plan_id: string | null
           state: string | null
           status: string
           tournament_visibility: boolean
           updated_at: string
         }
         Insert: {
+          billing_status?: string
           category?: string | null
           city?: string | null
           commission_rate?: number
@@ -150,12 +153,14 @@ export type Database = {
           owner_user_id: string
           phone?: string | null
           plan?: string
+          plan_id?: string | null
           state?: string | null
           status?: string
           tournament_visibility?: boolean
           updated_at?: string
         }
         Update: {
+          billing_status?: string
           category?: string | null
           city?: string | null
           commission_rate?: number
@@ -170,8 +175,65 @@ export type Database = {
           owner_user_id?: string
           phone?: string | null
           plan?: string
+          plan_id?: string | null
           state?: string | null
           status?: string
+          tournament_visibility?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "companies_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "company_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_plans: {
+        Row: {
+          banner_feed_enabled: boolean
+          commission_rate: number
+          created_at: string
+          description: string | null
+          display_name: string
+          id: string
+          marketplace_highlight: boolean
+          max_products: number | null
+          monthly_price: number
+          name: string
+          sponsored_posts_per_month: number
+          tournament_visibility: boolean
+          updated_at: string
+        }
+        Insert: {
+          banner_feed_enabled?: boolean
+          commission_rate?: number
+          created_at?: string
+          description?: string | null
+          display_name: string
+          id?: string
+          marketplace_highlight?: boolean
+          max_products?: number | null
+          monthly_price?: number
+          name: string
+          sponsored_posts_per_month?: number
+          tournament_visibility?: boolean
+          updated_at?: string
+        }
+        Update: {
+          banner_feed_enabled?: boolean
+          commission_rate?: number
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          id?: string
+          marketplace_highlight?: boolean
+          max_products?: number | null
+          monthly_price?: number
+          name?: string
+          sponsored_posts_per_month?: number
           tournament_visibility?: boolean
           updated_at?: string
         }
@@ -226,6 +288,47 @@ export type Database = {
             columns: ["tournament_id"]
             isOneToOne: false
             referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_ledger: {
+        Row: {
+          amount: number
+          company_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          mood_share: number
+          source: string
+          source_id: string | null
+        }
+        Insert: {
+          amount: number
+          company_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          mood_share?: number
+          source: string
+          source_id?: string | null
+        }
+        Update: {
+          amount?: number
+          company_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          mood_share?: number
+          source?: string
+          source_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_ledger_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -1052,6 +1155,54 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscriptions: {
+        Row: {
+          canceled_at: string | null
+          company_id: string
+          created_at: string
+          id: string
+          next_billing_at: string | null
+          plan_id: string
+          started_at: string
+          status: string
+        }
+        Insert: {
+          canceled_at?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          next_billing_at?: string | null
+          plan_id: string
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          canceled_at?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          next_billing_at?: string | null
+          plan_id?: string
+          started_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "company_plans"
             referencedColumns: ["id"]
           },
         ]

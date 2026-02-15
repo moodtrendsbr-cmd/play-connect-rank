@@ -10,13 +10,15 @@ import { DollarSign, TrendingUp, AlertTriangle } from "lucide-react";
 const AdminFinances = () => {
   const [balances, setBalances] = useState<any[]>([]);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
-  const [totals, setTotals] = useState({ revenue: 0, orgPending: 0, withdrawalsPending: 0 });
+  const [ledger, setLedger] = useState<any[]>([]);
+  const [totals, setTotals] = useState({ revenue: 0, orgPending: 0, withdrawalsPending: 0, subRevenue: 0, mkRevenue: 0 });
 
   const fetchData = async () => {
-    const [balRes, wdRes, profiles] = await Promise.all([
+    const [balRes, wdRes, profiles, ledgerRes] = await Promise.all([
       supabase.from("organizer_balances").select("*").order("created_at", { ascending: false }),
       supabase.from("withdrawal_requests").select("*").order("created_at", { ascending: false }),
       supabase.from("profiles").select("user_id, full_name"),
+      supabase.from("financial_ledger").select("*, companies(name)").order("created_at", { ascending: false }).limit(50),
     ]);
 
     const nameMap: Record<string, string> = {};
@@ -29,9 +31,14 @@ const AdminFinances = () => {
     const orgPending = bals.filter((b) => b.status === "pending").reduce((s, b) => s + Number(b.amount), 0);
     const wdPending = wds.filter((w) => w.status === "pending").reduce((s, w) => s + Number(w.amount), 0);
 
+    const ledgerData = ledgerRes.data || [];
+    const subRevenue = ledgerData.filter((l: any) => l.source === "subscription").reduce((s: number, l: any) => s + Number(l.amount), 0);
+    const mkRevenue = ledgerData.filter((l: any) => l.source === "marketplace_order").reduce((s: number, l: any) => s + Number(l.mood_share), 0);
+
     setBalances(bals);
     setWithdrawals(wds);
-    setTotals({ revenue, orgPending, withdrawalsPending: wdPending });
+    setLedger(ledgerData);
+    setTotals({ revenue, orgPending, withdrawalsPending: wdPending, subRevenue, mkRevenue });
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -67,6 +74,20 @@ const AdminFinances = () => {
             <AlertTriangle className="h-5 w-5 text-destructive" />
           </CardHeader>
           <CardContent><div className="text-2xl font-bold text-destructive">R$ {totals.withdrawalsPending.toFixed(2)}</div></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium font-sans">Receita Assinaturas</CardTitle>
+            <TrendingUp className="h-5 w-5 text-primary" />
+          </CardHeader>
+          <CardContent><div className="text-2xl font-bold text-primary">R$ {totals.subRevenue.toFixed(2)}</div></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium font-sans">Receita Marketplace</CardTitle>
+            <DollarSign className="h-5 w-5 text-primary" />
+          </CardHeader>
+          <CardContent><div className="text-2xl font-bold text-primary">R$ {totals.mkRevenue.toFixed(2)}</div></CardContent>
         </Card>
       </div>
 
