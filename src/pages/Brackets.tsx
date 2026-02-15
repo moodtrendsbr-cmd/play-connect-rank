@@ -82,7 +82,7 @@ const Brackets = () => {
       setPlayers(enrollData);
     };
     if (id && user) fetch();
-  }, [id]);
+  }, [id, user]);
 
   const generateBracket = async () => {
     if (players.length < 2) {
