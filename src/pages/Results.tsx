@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { ArrowLeft } from "lucide-react";
 
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 
@@ -84,7 +85,12 @@ const Results = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
-        <div className="container flex h-16 items-center">
+        <div className="container flex h-16 items-center gap-4">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={`/tournaments/${id}/manage`} className="gap-2">
+              <ArrowLeft className="h-4 w-4" /> Voltar
+            </Link>
+          </Button>
           <Link to={`/tournaments/${id}/manage`} className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
         </div>
       </header>
