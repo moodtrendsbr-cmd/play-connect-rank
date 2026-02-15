@@ -18,6 +18,8 @@ import Payment from "./pages/Payment";
 import Profile from "./pages/Profile";
 import Ranking from "./pages/Ranking";
 import Feed from "./pages/Feed";
+import Messages from "./pages/Messages";
+import ChatView from "./pages/ChatView";
 import NotFound from "./pages/NotFound";
 import UserProfile from "./pages/UserProfile";
 import AppLayout from "./components/layout/AppLayout";
@@ -51,6 +53,8 @@ const App = () => (
               <Route path="/profile" element={<Profile />} />
               <Route path="/profile/:userId" element={<UserProfile />} />
               <Route path="/payment/:id" element={<Payment />} />
+              <Route path="/messages" element={<Messages />} />
+              <Route path="/messages/:userId" element={<ChatView />} />
             </Route>
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />

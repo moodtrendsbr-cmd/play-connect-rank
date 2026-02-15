@@ -1,5 +1,8 @@
-import { Home, Medal, Plus, Trophy, User } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Home, Medal, Plus, Trophy, User, Mail } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface FeedBottomNavProps {
   onCreatePost?: () => void;
@@ -8,13 +11,34 @@ interface FeedBottomNavProps {
 const navItems = [
   { icon: Home, label: "Feed", path: "/feed" },
   { icon: Medal, label: "Ranking", path: "/ranking" },
-  { icon: null, label: "Criar", path: "" }, // placeholder for center button
+  { icon: null, label: "Criar", path: "" },
   { icon: Trophy, label: "Torneios", path: "/tournaments" },
-  { icon: User, label: "Perfil", path: "/profile" },
+  { icon: Mail, label: "Msgs", path: "/messages" },
 ];
 
 const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
   const location = useLocation();
+  const { user } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchUnread = async () => {
+      const { count } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("receiver_id", user.id)
+        .eq("read", false);
+      setUnreadCount(count || 0);
+    };
+    fetchUnread();
+
+    const channel = supabase
+      .channel("unread-badge")
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => fetchUnread())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
 
   return (
     <nav
@@ -41,7 +65,7 @@ const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
           );
         }
 
-        const isActive = location.pathname === item.path;
+        const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + "/");
         const Icon = item.icon!;
 
         const handleClick = (e: React.MouseEvent) => {
@@ -56,9 +80,17 @@ const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
             key={item.path}
             to={item.path}
             onClick={handleClick}
-            className="flex flex-col items-center gap-0.5 py-1 px-3"
+            className="flex flex-col items-center gap-0.5 py-1 px-3 relative"
           >
             <Icon className="h-5 w-5" style={{ color: isActive ? "#2BFF88" : "#9CA3AF" }} />
+            {item.path === "/messages" && unreadCount > 0 && (
+              <span
+                className="absolute -top-0.5 right-1 h-4 min-w-[16px] rounded-full flex items-center justify-center text-[9px] font-bold px-1"
+                style={{ background: "#2BFF88", color: "#050708" }}
+              >
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
             <span
               className="text-[10px] font-medium"
               style={{ color: isActive ? "#2BFF88" : "#9CA3AF" }}

@@ -1,10 +1,10 @@
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { ImagePlus, X, Loader2 } from "lucide-react";
+import { ImagePlus, X, Loader2, Handshake } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import MentionInput from "./MentionInput";
 
 interface CreatePostDialogProps {
   open: boolean;
@@ -38,48 +38,52 @@ const CreatePostDialog = ({ open, onOpenChange, userId, onCreated }: CreatePostD
   const extractAndSaveHashtags = async (postId: string, text: string) => {
     const matches = text.match(/#(\w+)/g);
     if (!matches) return;
-
     const uniqueTags = [...new Set(matches.map((m) => m.slice(1).toLowerCase()))];
     for (const tag of uniqueTags) {
-      // Upsert hashtag
       const { data: existing } = await supabase.from("hashtags").select("id").eq("tag", tag).maybeSingle();
       let hashtagId: string;
-      if (existing) {
-        hashtagId = existing.id;
-      } else {
-        const { data: inserted } = await supabase.from("hashtags").insert({ tag }).select("id").single();
-        if (!inserted) continue;
-        hashtagId = inserted.id;
-      }
-      // Link to post
+      if (existing) { hashtagId = existing.id; }
+      else { const { data: inserted } = await supabase.from("hashtags").insert({ tag }).select("id").single(); if (!inserted) continue; hashtagId = inserted.id; }
       await supabase.from("post_hashtags").insert({ post_id: postId, hashtag_id: hashtagId });
+    }
+  };
+
+  const extractAndSaveMentions = async (postId: string, text: string, commentId?: string) => {
+    const matches = text.match(/@([^\s@]+(?:\s[^\s@#]+)*)/g);
+    if (!matches) return;
+    const names = [...new Set(matches.map((m) => m.slice(1).trim()))];
+    for (const name of names) {
+      const { data: profile } = await supabase.from("profiles").select("user_id").ilike("full_name", name).maybeSingle();
+      if (!profile) continue;
+      await supabase.from("mentions").insert({
+        mentioned_user_id: profile.user_id,
+        mentioner_id: userId,
+        post_id: postId,
+        comment_id: commentId || null,
+      } as any);
     }
   };
 
   const handleSubmit = async () => {
     if (!content.trim() && files.length === 0) return;
     setLoading(true);
-
     try {
       const { data: post, error: postError } = await supabase
         .from("posts")
         .insert({ author_id: userId, content: content.trim() || "", type: "user" })
         .select("id")
         .single();
-
       if (postError) throw postError;
 
-      // Extract hashtags
       await extractAndSaveHashtags(post.id, content);
+      await extractAndSaveMentions(post.id, content);
 
-      // Upload images
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const ext = file.name.split(".").pop();
         const path = `${userId}/${post.id}_${i}.${ext}`;
         const { error: upErr } = await supabase.storage.from("post-images").upload(path, file);
         if (upErr) throw upErr;
-
         const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
         await supabase.from("post_media").insert({ post_id: post.id, media_url: urlData.publicUrl, order_index: i });
       }
@@ -93,7 +97,6 @@ const CreatePostDialog = ({ open, onOpenChange, userId, onCreated }: CreatePostD
     } catch (err: any) {
       toast({ title: "Erro", description: err.message, variant: "destructive" });
     }
-
     setLoading(false);
   };
 
@@ -104,11 +107,12 @@ const CreatePostDialog = ({ open, onOpenChange, userId, onCreated }: CreatePostD
           <DialogTitle className="font-display text-xl" style={{ color: "#2BFF88" }}>Novo Post</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <Textarea
-            placeholder="O que está acontecendo? Use #hashtags"
+          <MentionInput
             value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="min-h-[100px] bg-transparent border-[#9CA3AF]/20 text-white placeholder:text-[#9CA3AF] resize-none"
+            onChange={setContent}
+            placeholder="O que está acontecendo? Use #hashtags e @menções"
+            className="min-h-[100px] w-full rounded-md border px-3 py-2 text-sm bg-transparent border-[#9CA3AF]/20 text-white placeholder:text-[#9CA3AF] resize-none"
+            multiline
           />
           {previews.length > 0 && (
             <div className="flex gap-2 flex-wrap">
@@ -123,10 +127,19 @@ const CreatePostDialog = ({ open, onOpenChange, userId, onCreated }: CreatePostD
             </div>
           )}
           <div className="flex items-center justify-between">
-            <input ref={inputRef} type="file" accept="image/*" multiple onChange={handleFiles} className="hidden" />
-            <button onClick={() => inputRef.current?.click()} className="flex items-center gap-2 text-sm" style={{ color: "#2BFF88" }}>
-              <ImagePlus className="h-5 w-5" /> Adicionar imagens
-            </button>
+            <div className="flex items-center gap-3">
+              <input ref={inputRef} type="file" accept="image/*" multiple onChange={handleFiles} className="hidden" />
+              <button onClick={() => inputRef.current?.click()} className="flex items-center gap-2 text-sm" style={{ color: "#2BFF88" }}>
+                <ImagePlus className="h-5 w-5" /> Imagens
+              </button>
+              <button
+                onClick={() => toast({ title: "Em breve!", description: "Cadastro de empresas em desenvolvimento." })}
+                className="flex items-center gap-2 text-sm"
+                style={{ color: "#9CA3AF" }}
+              >
+                <Handshake className="h-5 w-5" /> Parceiro
+              </button>
+            </div>
             <Button onClick={handleSubmit} disabled={loading || (!content.trim() && files.length === 0)} className="font-semibold" style={{ background: "#2BFF88", color: "#050708" }}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Publicar"}
             </Button>
