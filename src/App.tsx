@@ -19,6 +19,7 @@ import Profile from "./pages/Profile";
 import Ranking from "./pages/Ranking";
 import Feed from "./pages/Feed";
 import NotFound from "./pages/NotFound";
+import AppLayout from "./components/layout/AppLayout";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
@@ -41,15 +42,17 @@ const App = () => (
             <Route path="/register" element={<Register />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/tournaments/create" element={<CreateTournament />} />
-            <Route path="/tournaments" element={<Tournaments />} />
-            <Route path="/tournaments/:id" element={<TournamentDetail />} />
+            <Route element={<AppLayout />}>
+              <Route path="/feed" element={<Feed />} />
+              <Route path="/ranking" element={<Ranking />} />
+              <Route path="/tournaments" element={<Tournaments />} />
+              <Route path="/tournaments/:id" element={<TournamentDetail />} />
+              <Route path="/profile" element={<Profile />} />
+            </Route>
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />
             <Route path="/tournaments/:id/results" element={<Results />} />
             <Route path="/payment/:id" element={<Payment />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/ranking" element={<Ranking />} />
-            <Route path="/feed" element={<Feed />} />
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
               <Route path="users" element={<AdminUsers />} />

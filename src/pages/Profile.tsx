@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -135,148 +134,105 @@ const Profile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container flex h-16 items-center justify-between">
-          <Link to="/dashboard" className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
-          <Button variant="ghost" onClick={signOut}>Sair</Button>
-        </div>
-      </header>
+    <main className="px-4 py-6 pb-20 max-w-lg mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-display" style={{ color: "#fff" }}>{profile.full_name || "Atleta"}</h1>
+        <Button variant="ghost" onClick={signOut} style={{ color: "#9CA3AF" }}>Sair</Button>
+      </div>
+      {profile.city && <p className="text-sm mb-4" style={{ color: "#9CA3AF" }}>📍 {profile.city} - {profile.state}</p>}
 
-      <main className="container max-w-lg py-8">
-        <h1 className="text-4xl font-display text-foreground">{profile.full_name || "Atleta"}</h1>
-        {profile.city && <p className="text-muted-foreground mt-1">📍 {profile.city} - {profile.state}</p>}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <Card style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}><CardContent className="pt-4 text-center"><p className="text-2xl font-bold" style={{ color: "#fff" }}>#{stats.rank || "—"}</p><p className="text-xs" style={{ color: "#9CA3AF" }}>Ranking</p></CardContent></Card>
+        <Card style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}><CardContent className="pt-4 text-center"><p className="text-2xl font-bold" style={{ color: "#fff" }}>{stats.tournaments}</p><p className="text-xs" style={{ color: "#9CA3AF" }}>Torneios</p></CardContent></Card>
+        <Card style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}><CardContent className="pt-4 text-center"><p className="text-2xl font-bold" style={{ color: "#2BFF88" }}>{stats.wins}</p><p className="text-xs" style={{ color: "#9CA3AF" }}>Vitórias</p></CardContent></Card>
+      </div>
 
-        <div className="mt-6 grid grid-cols-3 gap-4">
-          <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">#{stats.rank || "—"}</p><p className="text-xs text-muted-foreground">Ranking</p></CardContent></Card>
-          <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{stats.tournaments}</p><p className="text-xs text-muted-foreground">Torneios</p></CardContent></Card>
-          <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-primary">{stats.wins}</p><p className="text-xs text-muted-foreground">Vitórias</p></CardContent></Card>
-        </div>
-
-        {editing ? (
-          <div className="mt-8 space-y-4">
-            <div><Label>Nome</Label><Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className="mt-1" /></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Cidade</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="mt-1" /></div>
-              <div><Label>Estado</Label><Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} className="mt-1" /></div>
-            </div>
-            <div><Label>WhatsApp</Label><Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} className="mt-1" /></div>
-            <div className="flex gap-2">
-              <Button onClick={handleSave}>Salvar</Button>
-              <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
-            </div>
+      {editing ? (
+        <div className="space-y-4">
+          <div><Label style={{ color: "#9CA3AF" }}>Nome</Label><Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className="mt-1" /></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><Label style={{ color: "#9CA3AF" }}>Cidade</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="mt-1" /></div>
+            <div><Label style={{ color: "#9CA3AF" }}>Estado</Label><Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} className="mt-1" /></div>
           </div>
-        ) : (
-          <Button className="mt-8" variant="outline" onClick={() => setEditing(true)}>Editar perfil</Button>
-        )}
+          <div><Label style={{ color: "#9CA3AF" }}>WhatsApp</Label><Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} className="mt-1" /></div>
+          <div className="flex gap-2">
+            <Button onClick={handleSave}>Salvar</Button>
+            <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
+          </div>
+        </div>
+      ) : (
+        <Button className="mb-6" variant="outline" onClick={() => setEditing(true)}>Editar perfil</Button>
+      )}
 
-        {/* Organizer Section */}
-        {isOrganizer && (
-          <div className="mt-10 space-y-6">
-            <h2 className="text-2xl font-display text-foreground">💰 ÁREA DO ORGANIZADOR</h2>
+      {/* Organizer Section */}
+      {isOrganizer && (
+        <div className="mt-6 space-y-4">
+          <h2 className="text-2xl font-display" style={{ color: "#fff" }}>💰 ÁREA DO ORGANIZADOR</h2>
 
-            {/* MP Account */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-sans text-base flex items-center gap-2">
-                  <Wallet className="h-4 w-4" /> Conta Mercado Pago
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {!mpCollectorId && (
-                  <div className="flex items-start gap-2 rounded-md bg-secondary/10 p-3 text-sm text-secondary">
-                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                    <p>Vincule sua conta MP para receber pagamentos automaticamente via split. Sem conta, o valor fica no saldo interno para saque manual via PIX.</p>
-                  </div>
-                )}
-                <div>
-                  <Label className="text-xs">Collector ID (Mercado Pago)</Label>
-                  <Input
-                    value={mpCollectorId}
-                    onChange={(e) => setMpCollectorId(e.target.value)}
-                    placeholder="Ex: 123456789"
-                    className="mt-1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">Encontre em: Mercado Pago → Seu negócio → Configurações → Credenciais</p>
+          <Card style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}>
+            <CardHeader>
+              <CardTitle className="font-sans text-base flex items-center gap-2" style={{ color: "#fff" }}>
+                <Wallet className="h-4 w-4" /> Conta Mercado Pago
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {!mpCollectorId && (
+                <div className="flex items-start gap-2 rounded-md p-3 text-sm" style={{ background: "rgba(43,255,136,0.05)", color: "#9CA3AF" }}>
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <p>Vincule sua conta MP para receber pagamentos automaticamente.</p>
                 </div>
-                <Button size="sm" onClick={handleSaveMp} disabled={savingMp}>
-                  {savingMp ? "Salvando..." : "Salvar conta MP"}
-                </Button>
-              </CardContent>
-            </Card>
+              )}
+              <div>
+                <Label className="text-xs" style={{ color: "#9CA3AF" }}>Collector ID</Label>
+                <Input value={mpCollectorId} onChange={(e) => setMpCollectorId(e.target.value)} placeholder="Ex: 123456789" className="mt-1" />
+              </div>
+              <Button size="sm" onClick={handleSaveMp} disabled={savingMp}>
+                {savingMp ? "Salvando..." : "Salvar conta MP"}
+              </Button>
+            </CardContent>
+          </Card>
 
-            {/* Balance & Withdrawal */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-sans text-base">Saldo disponível</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-3xl font-bold text-primary">R$ {balance.toFixed(2)}</p>
-                {balance > 0 && (
-                  <Dialog open={withdrawDialog} onOpenChange={setWithdrawDialog}>
-                    <DialogTrigger asChild>
-                      <Button>Solicitar Saque via PIX</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Solicitar Saque</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label>Valor (máx R$ {balance.toFixed(2)})</Label>
-                          <Input
-                            type="number"
-                            max={balance}
-                            value={withdrawAmount}
-                            onChange={(e) => setWithdrawAmount(e.target.value)}
-                            placeholder="0.00"
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label>Chave PIX</Label>
-                          <Input
-                            value={withdrawPixKey}
-                            onChange={(e) => setWithdrawPixKey(e.target.value)}
-                            placeholder="CPF, email, telefone ou chave aleatória"
-                            className="mt-1"
-                          />
-                        </div>
-                        <Button onClick={handleWithdraw} disabled={withdrawing} className="w-full">
-                          {withdrawing ? "Enviando..." : "Confirmar Saque"}
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Withdrawal History */}
-            {withdrawals.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-sans text-base">Histórico de saques</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {withdrawals.map((w) => (
-                    <div key={w.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-                      <div>
-                        <p className="text-sm font-medium">R$ {Number(w.amount).toFixed(2)}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(w.created_at).toLocaleDateString("pt-BR")}</p>
-                      </div>
-                      <Badge className={statusColors[w.status] || ""}>
-                        {w.status === "pending" ? "Pendente" : w.status === "approved" ? "Aprovado" : w.status === "paid" ? "Pago" : "Rejeitado"}
-                      </Badge>
+          <Card style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}>
+            <CardHeader><CardTitle className="font-sans text-base" style={{ color: "#fff" }}>Saldo disponível</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-3xl font-bold" style={{ color: "#2BFF88" }}>R$ {balance.toFixed(2)}</p>
+              {balance > 0 && (
+                <Dialog open={withdrawDialog} onOpenChange={setWithdrawDialog}>
+                  <DialogTrigger asChild><Button>Solicitar Saque via PIX</Button></DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>Solicitar Saque</DialogTitle></DialogHeader>
+                    <div className="space-y-4">
+                      <div><Label>Valor (máx R$ {balance.toFixed(2)})</Label><Input type="number" max={balance} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="0.00" className="mt-1" /></div>
+                      <div><Label>Chave PIX</Label><Input value={withdrawPixKey} onChange={(e) => setWithdrawPixKey(e.target.value)} placeholder="CPF, email, telefone ou chave aleatória" className="mt-1" /></div>
+                      <Button onClick={handleWithdraw} disabled={withdrawing} className="w-full">{withdrawing ? "Enviando..." : "Confirmar Saque"}</Button>
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
-      </main>
-    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </CardContent>
+          </Card>
+
+          {withdrawals.length > 0 && (
+            <Card style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}>
+              <CardHeader><CardTitle className="font-sans text-base" style={{ color: "#fff" }}>Histórico de saques</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                {withdrawals.map((w) => (
+                  <div key={w.id} className="flex items-center justify-between rounded-lg p-3" style={{ borderWidth: 1, borderColor: "rgba(43,255,136,0.1)" }}>
+                    <div>
+                      <p className="text-sm font-medium" style={{ color: "#fff" }}>R$ {Number(w.amount).toFixed(2)}</p>
+                      <p className="text-xs" style={{ color: "#9CA3AF" }}>{new Date(w.created_at).toLocaleDateString("pt-BR")}</p>
+                    </div>
+                    <Badge className={statusColors[w.status] || ""}>
+                      {w.status === "pending" ? "Pendente" : w.status === "approved" ? "Aprovado" : w.status === "paid" ? "Pago" : "Rejeitado"}
+                    </Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+    </main>
   );
 };
 
