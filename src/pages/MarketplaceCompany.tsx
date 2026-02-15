@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Store, ArrowLeft } from "lucide-react";
+import { Store, ArrowLeft, Mail, Phone, MapPin, MessageCircle } from "lucide-react";
 
 const MarketplaceCompany = () => {
   const { companyId } = useParams();
@@ -25,13 +25,17 @@ const MarketplaceCompany = () => {
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">Carregando...</div>;
   if (!company) return <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">Empresa não encontrada</div>;
 
+  const whatsappLink = company.whatsapp
+    ? `https://wa.me/55${company.whatsapp.replace(/\D/g, "")}`
+    : null;
+
   return (
     <main className="pt-4 pb-20 px-4 max-w-xl mx-auto">
       <Link to="/marketplace" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-4">
         <ArrowLeft className="h-4 w-4" /> Voltar
       </Link>
 
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-4 mb-4">
         {company.logo_url ? (
           <img src={company.logo_url} alt={company.name} className="h-20 w-20 rounded-xl object-cover" />
         ) : (
@@ -45,7 +49,38 @@ const MarketplaceCompany = () => {
         </div>
       </div>
 
-      {company.description && <p className="text-sm text-muted-foreground mb-6">{company.description}</p>}
+      {company.description && <p className="text-sm text-muted-foreground mb-4">{company.description}</p>}
+
+      {/* Contact & Address Section */}
+      <div className="rounded-lg p-4 mb-6 space-y-2" style={{ background: "#0B0F12" }}>
+        <h3 className="text-sm font-medium text-foreground mb-2">Contato</h3>
+        {company.email && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Mail className="h-4 w-4 shrink-0" />
+            <a href={`mailto:${company.email}`} className="hover:underline">{company.email}</a>
+          </div>
+        )}
+        {company.whatsapp && (
+          <div className="flex items-center gap-2 text-sm">
+            <MessageCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <a href={whatsappLink!} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: "#2BFF88" }}>
+              {company.whatsapp}
+            </a>
+          </div>
+        )}
+        {company.phone && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Phone className="h-4 w-4 shrink-0" />
+            <span>{company.phone}</span>
+          </div>
+        )}
+        {(company.address || company.zip_code) && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <MapPin className="h-4 w-4 shrink-0" />
+            <span>{[company.address, company.city, company.state, company.zip_code].filter(Boolean).join(", ")}</span>
+          </div>
+        )}
+      </div>
 
       <h2 className="font-display text-lg text-foreground mb-3">PRODUTOS</h2>
 

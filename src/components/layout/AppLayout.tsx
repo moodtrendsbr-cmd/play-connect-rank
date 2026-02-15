@@ -3,18 +3,18 @@ import { Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import FeedBottomNav from "@/components/feed/FeedBottomNav";
 import CreatePostDialog from "@/components/feed/CreatePostDialog";
+import CartButton from "@/components/marketplace/CartButton";
 
 const AppLayout = () => {
   const { user } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
 
-  const handleRefresh = () => {
-    // Posts refresh is handled within Feed page via its own state
-  };
+  const handleRefresh = () => {};
 
   return (
     <div className="min-h-screen" style={{ background: "#050708" }}>
       <Outlet />
+      <CartButton />
       <FeedBottomNav onCreatePost={() => setCreateOpen(true)} />
       {user && (
         <CreatePostDialog

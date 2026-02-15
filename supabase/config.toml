@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.generate-sponsored-posts]
 verify_jwt = false
+
+[functions.create-marketplace-payment]
+verify_jwt = false
+
+[functions.marketplace-webhook]
+verify_jwt = false
