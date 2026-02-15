@@ -4,73 +4,42 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "@/hooks/use-toast";
-import { ArrowLeft } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowLeft, Trophy, Users, ChevronRight } from "lucide-react";
 
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+
+const statusConfig: Record<string, { label: string; className: string }> = {
+  open: { label: "Inscrições Abertas", className: "bg-primary/20 text-primary border-primary/30" },
+  closed: { label: "Encerradas", className: "bg-secondary/20 text-secondary border-secondary/30" },
+  bracket_generated: { label: "Em Andamento", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  finished: { label: "Finalizado", className: "bg-muted text-muted-foreground border-border" },
+};
 
 const Results = () => {
   const { id } = useParams();
   const { user, loading: authLoading } = useAuth();
   const [tournament, setTournament] = useState<any>(null);
-  const [matches, setMatches] = useState<any[]>([]);
-  const [profileMap, setProfileMap] = useState<Record<string, any>>({});
+  const [modalities, setModalities] = useState<any[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
 
-  const fetchProfiles = async (ids: string[]) => {
-    const uniqueIds = [...new Set(ids.filter(Boolean))];
-    if (uniqueIds.length === 0) return {};
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("user_id, full_name")
-      .in("user_id", uniqueIds);
-    const map: Record<string, any> = {};
-    (profiles || []).forEach((p) => { map[p.user_id] = p; });
-    return map;
-  };
-
-  const fetchData = async () => {
-    if (!id || !isValidUUID(id)) {
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!id || !isValidUUID(id)) {
+        setDataLoaded(true);
+        return;
+      }
+      const [tRes, mRes] = await Promise.all([
+        supabase.from("tournaments").select("*").eq("id", id).maybeSingle(),
+        supabase.from("tournament_modalities").select("*, modality_matches(count), modality_entries(count)").eq("tournament_id", id!),
+      ]);
+      setTournament(tRes.data);
+      setModalities(mRes.data || []);
       setDataLoaded(true);
-      setTournament(null);
-      return;
-    }
-    const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).maybeSingle();
-    setTournament(t);
-    setDataLoaded(true);
-    if (!t) return;
-
-    const { data: m } = await supabase
-      .from("match_results")
-      .select("*")
-      .eq("tournament_id", id!)
-      .order("round")
-      .order("match_number");
-    const matchData = m || [];
-    setMatches(matchData);
-
-    const playerIds = matchData.flatMap((mt) => [mt.player1_id, mt.player2_id]);
-    const map = await fetchProfiles(playerIds);
-    setProfileMap(map);
-  };
-
-  useEffect(() => { if (id && user) fetchData(); }, [id, user]);
-
-  const updateResult = async (matchId: string, score1: number, score2: number, winnerId: string | null) => {
-    const { error } = await supabase
-      .from("match_results")
-      .update({ score1, score2, winner_id: winnerId })
-      .eq("id", matchId);
-
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Resultado atualizado!" });
-      fetchData();
-    }
-  };
+    };
+    if (id && user) fetchData();
+  }, [id, user]);
 
   if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
   if (!user) return <Navigate to="/login" replace />;
@@ -80,7 +49,15 @@ const Results = () => {
       <Button asChild><Link to="/dashboard">Voltar</Link></Button>
     </div>
   );
-  if (!tournament) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
+  if (!tournament) return (
+    <div className="min-h-screen bg-background p-8 max-w-3xl mx-auto">
+      <Skeleton className="h-10 w-1/2 mb-4" />
+      <Skeleton className="h-6 w-1/3 mb-8" />
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -96,76 +73,53 @@ const Results = () => {
       </header>
 
       <main className="container max-w-3xl py-8">
-        <h1 className="mb-2 text-4xl font-display text-foreground">LANÇAR RESULTADOS</h1>
+        <h1 className="mb-2 text-4xl font-display text-foreground">RESULTADOS</h1>
         <p className="text-muted-foreground mb-8">{tournament.name}</p>
 
-        {matches.length === 0 ? (
+        {modalities.length === 0 ? (
           <Card className="p-8 text-center">
-            <p className="text-muted-foreground">Gere as chaves primeiro.</p>
-            <Button className="mt-4" asChild>
-              <Link to={`/tournaments/${id}/brackets`}>Gerar Chaves</Link>
+            <p className="text-muted-foreground mb-3">Nenhuma modalidade cadastrada neste torneio.</p>
+            <Button asChild>
+              <Link to={`/tournaments/${id}/manage`}>Ir para gerenciamento</Link>
             </Button>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {matches.map((m) => (
-              <MatchResultCard key={m.id} match={m} profileMap={profileMap} onUpdate={updateResult} />
-            ))}
+          <div className="space-y-3">
+            {modalities.map((mod) => {
+              const status = statusConfig[mod.status] || statusConfig.open;
+              const matchCount = mod.modality_matches?.[0]?.count || 0;
+              const entryCount = mod.modality_entries?.[0]?.count || 0;
+              return (
+                <Link
+                  key={mod.id}
+                  to={`/tournaments/${id}/brackets`}
+                  className="block rounded-xl border border-border bg-card p-5 hover:border-primary/30 transition-colors group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1.5">
+                      <h3 className="text-xl font-display text-foreground">{mod.name}</h3>
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className={status.className}>{status.label}</Badge>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Users className="h-3 w-3" /> {entryCount} inscritos
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          🏐 {matchCount} jogos
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Trophy className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                      <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </main>
     </div>
-  );
-};
-
-const MatchResultCard = ({ match, profileMap, onUpdate }: { match: any; profileMap: Record<string, any>; onUpdate: (id: string, s1: number, s2: number, w: string | null) => void }) => {
-  const [score1, setScore1] = useState(match.score1?.toString() || "");
-  const [score2, setScore2] = useState(match.score2?.toString() || "");
-  const [winner, setWinner] = useState(match.winner_id || "");
-
-  const p1Name = profileMap[match.player1_id]?.full_name || "A definir";
-  const p2Name = profileMap[match.player2_id]?.full_name || "A definir";
-
-  const handleSave = () => {
-    onUpdate(match.id, parseInt(score1) || 0, parseInt(score2) || 0, winner || null);
-  };
-
-  return (
-    <Card className={match.winner_id ? "border-primary/30" : ""}>
-      <CardContent className="py-4 space-y-3">
-        <p className="text-xs text-muted-foreground">Rodada {match.round} — Partida {match.match_number}</p>
-
-        <div className="grid grid-cols-5 items-center gap-2">
-          <span className="col-span-2 text-sm font-medium truncate">{p1Name}</span>
-          <Input type="number" value={score1} onChange={(e) => setScore1(e.target.value)} className="text-center" placeholder="0" />
-          <span className="text-center text-muted-foreground">vs</span>
-          <div />
-        </div>
-        <div className="grid grid-cols-5 items-center gap-2">
-          <span className="col-span-2 text-sm font-medium truncate">{p2Name}</span>
-          <Input type="number" value={score2} onChange={(e) => setScore2(e.target.value)} className="text-center" placeholder="0" />
-          <div />
-          <div />
-        </div>
-
-        {match.player1_id && match.player2_id && (
-          <div>
-            <label className="text-xs text-muted-foreground">Vencedor</label>
-            <Select value={winner} onValueChange={setWinner}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={match.player1_id}>{p1Name}</SelectItem>
-                <SelectItem value={match.player2_id}>{p2Name}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        <Button size="sm" onClick={handleSave} disabled={!match.player1_id || !match.player2_id}>
-          Salvar resultado
-        </Button>
-      </CardContent>
-    </Card>
   );
 };
 

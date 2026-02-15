@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, Users, Clock, DollarSign, Plus, LogOut, Shield } from "lucide-react";
+import { Trophy, Users, Clock, DollarSign, Plus, LogOut, Shield, GitBranch } from "lucide-react";
 
 const Dashboard = () => {
   const { user, userRole, signOut } = useAuth();
@@ -167,11 +167,18 @@ const Dashboard = () => {
                 <CardContent className="space-y-2">
                   <p className="text-sm">📅 {t.start_date}</p>
                   <p className="text-sm">💰 R$ {Number(t.entry_fee).toFixed(2)}</p>
-                  <Button className="w-full mt-2" variant="outline" asChild>
-                    <Link to={userRole === "organizer" ? `/tournaments/${t.id}/manage` : `/tournaments/${t.id}`}>
-                      {userRole === "organizer" ? "Gerenciar" : "Ver detalhes"}
-                    </Link>
-                  </Button>
+                  <div className="flex gap-2 mt-2">
+                    <Button className="flex-1" variant="outline" asChild>
+                      <Link to={userRole === "organizer" ? `/tournaments/${t.id}/manage` : `/tournaments/${t.id}`}>
+                        {userRole === "organizer" ? "Gerenciar" : "Ver detalhes"}
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="icon" asChild title="Chaveamentos">
+                      <Link to={`/tournaments/${t.id}/brackets`}>
+                        <GitBranch className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}

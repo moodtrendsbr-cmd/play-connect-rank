@@ -3,24 +3,58 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowLeft, Search, Trophy, MapPin, Calendar, Ticket } from "lucide-react";
+
+type StatusFilter = "all" | "active" | "upcoming";
+
+const getTournamentStatus = (t: any) => {
+  const now = new Date();
+  const start = new Date(t.start_date);
+  const end = new Date(t.end_date);
+  if (now >= start && now <= end) return "active";
+  if (now < start) return "upcoming";
+  return "finished";
+};
+
+const statusConfig: Record<string, { label: string; className: string }> = {
+  active: { label: "Em andamento", className: "bg-primary/20 text-primary border-primary/30" },
+  upcoming: { label: "Inscrições abertas", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  finished: { label: "Finalizado", className: "bg-muted text-muted-foreground border-border" },
+};
 
 const Tournaments = () => {
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<StatusFilter>("all");
 
   useEffect(() => {
     const fetch = async () => {
+      const today = new Date().toISOString().split("T")[0];
       const { data } = await supabase
         .from("tournaments")
         .select("*, enrollments(count)")
         .eq("is_public", true)
+        .gte("end_date", today)
         .order("start_date", { ascending: true });
       setTournaments(data || []);
       setLoading(false);
     };
     fetch();
   }, []);
+
+  const filtered = tournaments.filter((t) => {
+    const matchesSearch = search === "" ||
+      t.city?.toLowerCase().includes(search.toLowerCase()) ||
+      t.state?.toLowerCase().includes(search.toLowerCase()) ||
+      t.name?.toLowerCase().includes(search.toLowerCase());
+    const status = getTournamentStatus(t);
+    const matchesFilter = filter === "all" || status === filter;
+    return matchesSearch && matchesFilter;
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -38,36 +72,101 @@ const Tournaments = () => {
       <main className="px-4 py-6 pb-20 max-w-3xl mx-auto">
         <h1 className="mb-6 text-3xl font-display text-foreground">TORNEIOS DISPONÍVEIS</h1>
 
-      {loading ? (
-        <p style={{ color: "#9CA3AF" }}>Carregando...</p>
-      ) : tournaments.length === 0 ? (
-        <Card className="p-8 text-center" style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}>
-          <p style={{ color: "#9CA3AF" }}>Nenhum torneio disponível no momento.</p>
-        </Card>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {tournaments.map((t) => {
-            const enrolled = t.enrollments?.[0]?.count || 0;
-            const available = t.max_slots - enrolled;
-            return (
-              <Card key={t.id} className="overflow-hidden" style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}>
-                <CardHeader>
-                  <CardTitle className="font-sans text-lg" style={{ color: "#fff" }}>🏐 {t.name}</CardTitle>
-                  <p className="text-sm" style={{ color: "#9CA3AF" }}>📍 {t.city} - {t.state}</p>
-                </CardHeader>
+        {/* Search */}
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por cidade, estado ou nome..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex gap-2 mb-6">
+          {([
+            { key: "all", label: "Todos" },
+            { key: "active", label: "Em andamento" },
+            { key: "upcoming", label: "Próximos" },
+          ] as { key: StatusFilter; label: string }[]).map((f) => (
+            <Button
+              key={f.key}
+              size="sm"
+              variant={filter === f.key ? "default" : "outline"}
+              onClick={() => setFilter(f.key)}
+              className="text-xs"
+            >
+              {f.label}
+            </Button>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="overflow-hidden">
+                <CardHeader><Skeleton className="h-5 w-3/4" /><Skeleton className="h-4 w-1/2 mt-2" /></CardHeader>
                 <CardContent className="space-y-2">
-                  <p className="text-sm" style={{ color: "#9CA3AF" }}>📅 {t.start_date}</p>
-                  <p className="text-sm" style={{ color: "#9CA3AF" }}>💰 R$ {Number(t.entry_fee).toFixed(2)}</p>
-                  <p className="text-sm" style={{ color: "#9CA3AF" }}>🎟 Vagas: {available > 0 ? available : 0}</p>
-                  <Button className="w-full mt-3" asChild>
-                    <Link to={`/tournaments/${t.id}`}>Ver detalhes</Link>
-                  </Button>
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-9 w-full mt-3" />
                 </CardContent>
               </Card>
-            );
-          })}
-        </div>
-      )}
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <Card className="p-8 text-center">
+            <p className="text-muted-foreground">
+              {search ? "Nenhum torneio encontrado para essa busca." : "Nenhum torneio disponível no momento."}
+            </p>
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {filtered.map((t) => {
+              const enrolled = t.enrollments?.[0]?.count || 0;
+              const available = t.max_slots - enrolled;
+              const status = getTournamentStatus(t);
+              const statusInfo = statusConfig[status];
+              return (
+                <Card key={t.id} className="overflow-hidden hover:border-primary/30 transition-colors">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="font-sans text-lg">🏐 {t.name}</CardTitle>
+                      <Badge variant="outline" className={statusInfo.className}>
+                        {statusInfo.label}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5" /> {t.city} - {t.state}
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" /> {t.start_date}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      💰 R$ {Number(t.entry_fee).toFixed(2)}
+                    </p>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Ticket className="h-3.5 w-3.5" /> Vagas: {available > 0 ? available : 0}
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <Button className="flex-1" asChild>
+                        <Link to={`/tournaments/${t.id}`}>Ver detalhes</Link>
+                      </Button>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/tournaments/${t.id}/brackets`} className="gap-1">
+                          <Trophy className="h-3.5 w-3.5" /> Chaves
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </main>
     </div>
   );
