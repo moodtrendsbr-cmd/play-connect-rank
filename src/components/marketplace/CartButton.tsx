@@ -3,10 +3,12 @@ import { useCart } from "@/contexts/CartContext";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const CartButton = () => {
-  const { getTotalItems } = useCart();
+  const cart = useCart();
   const navigate = useNavigate();
   const location = useLocation();
-  const count = getTotalItems();
+
+  if (!cart) return null;
+  const count = cart.getTotalItems();
 
   if (count === 0) return null;
   if (location.pathname === "/marketplace/cart" || location.pathname === "/marketplace/checkout") return null;
