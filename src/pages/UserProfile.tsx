@@ -3,8 +3,9 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import ProfileHeader from "@/components/profile/ProfileHeader";
-import PostCard, { PostData } from "@/components/feed/PostCard";
+import { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
+import PostGrid from "@/components/profile/PostGrid";
 
 const UserProfile = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -39,7 +40,7 @@ const UserProfile = () => {
     }
 
     // Fetch posts
-    const { data: rawPosts } = await supabase.from("posts").select("*").eq("author_id", userId).order("created_at", { ascending: false }).limit(50);
+    const { data: rawPosts } = await supabase.from("posts").select("*").eq("author_id", userId).order("pinned_at" as any, { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(50);
     if (rawPosts && rawPosts.length > 0) {
       const postIds = rawPosts.map((p) => p.id);
       const [mediaRes, likesRes, commentsRes, myLikesRes, mySavesRes] = await Promise.all([
@@ -73,6 +74,7 @@ const UserProfile = () => {
         top_comments: [],
         liked_by_me: myLikedSet.has(p.id),
         saved_by_me: mySavedSet.has(p.id),
+        pinned_at: (p as any).pinned_at || null,
       }));
       setPosts(enriched);
     } else {
@@ -143,11 +145,7 @@ const UserProfile = () => {
       {posts.length === 0 ? (
         <p className="text-sm text-center py-8" style={{ color: "#9CA3AF" }}>Nenhum post ainda</p>
       ) : (
-        <div className="space-y-4">
-          {posts.map((post) => (
-            <PostCard key={post.id} post={post} userId={user?.id} onLike={handleLike} onSave={handleSave} onRefresh={fetchProfile} />
-          ))}
-        </div>
+        <PostGrid posts={posts} userId={user?.id} onLike={handleLike} onSave={handleSave} onRefresh={fetchProfile} />
       )}
     </main>
   );

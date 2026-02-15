@@ -12,8 +12,9 @@ import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Wallet, AlertCircle } from "lucide-react";
 import ProfileHeader from "@/components/profile/ProfileHeader";
-import PostCard, { PostData } from "@/components/feed/PostCard";
+import { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
+import PostGrid from "@/components/profile/PostGrid";
 
 const Profile = () => {
   const { user, signOut } = useAuth();
@@ -64,15 +65,16 @@ const Profile = () => {
     const myLikedSet = new Set((myLikesRes.data || []).map((l: any) => l.post_id));
     const mySavedSet = new Set((mySavesRes.data || []).map((s: any) => s.post_id));
 
-    return rawPosts.map((p) => {
-      const prof = profileMap[p.author_id];
-      return {
-        id: p.id, author_id: p.author_id, author_name: prof?.full_name || "Atleta", author_avatar: prof?.avatar_url || null,
-        content: p.content, type: p.type, created_at: p.created_at, media: mediaMap[p.id] || [],
-        likes_count: likesCount[p.id] || 0, comments_count: commentsCount[p.id] || 0, top_comments: [],
-        liked_by_me: myLikedSet.has(p.id), saved_by_me: mySavedSet.has(p.id),
-      };
-    });
+      return rawPosts.map((p) => {
+        const prof = profileMap[p.author_id];
+        return {
+          id: p.id, author_id: p.author_id, author_name: prof?.full_name || "Atleta", author_avatar: prof?.avatar_url || null,
+          content: p.content, type: p.type, created_at: p.created_at, media: mediaMap[p.id] || [],
+          likes_count: likesCount[p.id] || 0, comments_count: commentsCount[p.id] || 0, top_comments: [],
+          liked_by_me: myLikedSet.has(p.id), saved_by_me: mySavedSet.has(p.id),
+          pinned_at: (p as any).pinned_at || null,
+        };
+      });
   }, [user]);
 
   useEffect(() => {
@@ -121,7 +123,7 @@ const Profile = () => {
     const fetchTabPosts = async () => {
       setLoadingPosts(true);
       if (activeTab === "posts") {
-        const { data } = await supabase.from("posts").select("*").eq("author_id", user.id).order("created_at", { ascending: false }).limit(50);
+        const { data } = await supabase.from("posts").select("*").eq("author_id", user.id).order("pinned_at" as any, { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(50);
         const enriched = await enrichPostsSimple(data || []);
         setPosts(enriched);
       } else {
@@ -293,11 +295,7 @@ const Profile = () => {
           {activeTab === "posts" ? "Nenhum post ainda" : "Nenhum post salvo"}
         </p>
       ) : (
-        <div className="space-y-4">
-          {currentPosts.map((post) => (
-            <PostCard key={post.id} post={post} userId={user?.id} onLike={handleLike} onSave={handleSavePost} onRefresh={() => {}} />
-          ))}
-        </div>
+        <PostGrid posts={currentPosts} userId={user?.id} onLike={handleLike} onSave={handleSavePost} onRefresh={() => {}} />
       )}
 
       {/* Organizer Section */}

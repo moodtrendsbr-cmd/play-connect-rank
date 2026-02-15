@@ -1,0 +1,1 @@
+ALTER TABLE public.posts ADD COLUMN pinned_at timestamptz DEFAULT NULL;
