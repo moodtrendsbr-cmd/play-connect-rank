@@ -1,139 +1,67 @@
 
-# Melhorias no Perfil, PostCard e Clips/Stories
+# Filtro no Ranking, Medalhas no Perfil, Fixes de Layout e Barra Menor
 
-## Resumo
+## 1. Filtro na pagina de Ranking
 
-Adicionar foto de perfil editavel, funcionalidade dos 3 pontinhos e compartilhar no PostCard, campo de link clicavel no perfil, secao de destaques, e sistema de Clips (stories) no topo do feed.
+Adicionar tabs ou botoes de filtro no topo do Ranking para que o usuario escolha qual secao visualizar. Opcoes:
 
----
+- **Todos** (padrao): mostra tudo como esta hoje
+- **Vitorias**: apenas a secao de ranking de vitorias
+- **Perfis**: apenas top perfis por seguidores
+- **Hashtags**: apenas trending hashtags
 
-## 1. Foto de Perfil Editavel
+Implementacao: estado `filter` com valor `"all" | "victories" | "profiles" | "hashtags"`, e renderizacao condicional das secoes. Chips horizontais estilizados em neon verde.
 
-### ProfileHeader.tsx
-- No perfil proprio, ao clicar no avatar, abrir um file input para selecionar imagem
-- Upload da imagem para o bucket `post-images` (ja existe) no path `avatars/{userId}`
-- Atualizar `profiles.avatar_url` com a URL publica
-- Mostrar um icone de camera sobre o avatar quando for perfil proprio
+## 2. Medalha no perfil para top 3 do ranking
 
-### Profile.tsx (formulario de edicao)
-- Adicionar botao "Alterar foto" no formulario de edicao tambem
+Para atletas que estao nas posicoes 1, 2 ou 3 do ranking de vitorias, exibir uma medalha ao lado do nome no `ProfileHeader.tsx` e `UserProfile.tsx`.
 
----
+### Logica:
+- No `ProfileHeader`, ao montar, buscar `match_results` e calcular o ranking de vitorias (mesma logica do `Ranking.tsx`)
+- Verificar se o `profileUserId` esta entre os top 3
+- Se sim, exibir o emoji da medalha (ouro, prata, bronze) e um tooltip/descricao curta: "1o lugar no Ranking de Vitorias" etc.
+- A medalha aparece ao lado do nome do atleta, visivel para todos
 
-## 2. Tres Pontinhos (Menu do Post) - PostCard.tsx
+### Detalhes tecnicos:
+- Reutilizar a query de `match_results` agrupando vitorias
+- Calcular posicao do usuario atual no ranking
+- Mostrar badge colorido ao lado do `<h1>` do nome
 
-- Ao clicar nos 3 pontinhos, abrir um DropdownMenu com opcoes:
-  - **Se for autor do post**: "Excluir post" (delete da tabela posts)
-  - **Para qualquer usuario**: "Copiar link", "Denunciar" (placeholder)
-  - **Se for perfil proprio**: "Adicionar aos Destaques" (salvar em nova tabela)
+## 3. TournamentDetail: conteudo escondido atras da barra fixa
 
----
+O `TournamentDetail` esta dentro do `AppLayout` (que tem a bottom nav fixa), mas nao tem `pb-20` suficiente. O conteudo inferior fica atras da barra.
 
-## 3. Botao Compartilhar Funcional - PostCard.tsx
+### Fix:
+- Na `<main>` do `TournamentDetail.tsx`, adicionar `pb-24` para garantir espaco suficiente abaixo do ultimo elemento
 
-- Usar a Web Share API (`navigator.share`) quando disponivel (mobile)
-- Fallback: copiar link para clipboard e mostrar toast "Link copiado!"
-- O link sera `{origin}/feed#${post.id}`
+## 4. Payment: sem barra de navegacao e sem botao de voltar
 
----
+A rota `/payment/:id` esta FORA do `AppLayout` (linha 57 do App.tsx), entao nao tem a bottom nav. Solucoes:
 
-## 4. Campo de Link no Perfil
+### Opcao escolhida:
+- Mover a rota `/payment/:id` para dentro do `AppLayout` para que tenha a barra de navegacao fixa
+- Adicionar um botao "Voltar" no topo da pagina de Payment apontando para `/tournaments/:id`
+- Adicionar `pb-24` ao conteudo do Payment
 
-### Banco de dados
-- Adicionar coluna `link` (text, nullable) na tabela `profiles`
+## 5. Diminuir tamanho da barra fixa e do botao "+"
 
-### ProfileHeader.tsx
-- Exibir link logo abaixo da bio, com icone de link externo
-- Renderizar como `<a>` clicavel abrindo em nova aba
-- Cor neon verde (#2BFF88)
+Atualmente a barra tem `h-16` e o botao `+` tem `h-14 w-14` com `-mt-5`.
 
-### Profile.tsx (formulario de edicao)
-- Adicionar campo "Link" no formulario
-
----
-
-## 5. Destaques no Perfil
-
-### Banco de dados
-- Nova tabela `profile_highlights`:
-  - id (uuid PK)
-  - user_id (uuid NOT NULL)
-  - post_id (uuid NOT NULL, refs posts ON DELETE CASCADE)
-  - created_at (timestamptz default now())
-  - UNIQUE(user_id, post_id)
-  - RLS: SELECT publico, INSERT/DELETE onde auth.uid() = user_id
-
-### ProfileHeader.tsx / Profile.tsx / UserProfile.tsx
-- Adicionar secao horizontal scrollavel abaixo do header com thumbnails dos posts destacados
-- Cada thumbnail: primeira imagem do post (ou icone de texto se nao tiver imagem)
-- Ao clicar, abrir o post em destaque (dialog ou scroll para ele)
-- No perfil proprio: mostrar botao "+" para adicionar novo destaque
-
-### PostCard.tsx (menu 3 pontinhos)
-- Opcao "Destacar" para posts proprios
-- Insert/delete na tabela profile_highlights
+### Ajustes:
+- Barra: reduzir para `h-14`
+- Botao `+`: reduzir para `h-11 w-11` com `-mt-4`
+- Icone do `+`: reduzir de `h-7 w-7` para `h-5 w-5`
+- Icones dos outros itens: manter `h-5 w-5` (ja estao proporcionais)
+- Atualizar `pb-20` para `pb-18` nas paginas que usam padding bottom (ou manter `pb-20` que ainda e seguro)
 
 ---
 
-## 6. Clips (Stories) no Topo do Feed
-
-### Banco de dados
-- Nova tabela `clips`:
-  - id (uuid PK)
-  - author_id (uuid NOT NULL)
-  - media_url (text NOT NULL) -- video curto
-  - thumbnail_url (text, nullable)
-  - caption (text, nullable)
-  - created_at (timestamptz default now())
-  - expires_at (timestamptz default now() + interval '24 hours')
-  - RLS: SELECT publico, INSERT onde auth.uid() = author_id, DELETE onde auth.uid() = author_id
-
-### Componentes novos
-- `src/components/feed/ClipsBar.tsx`:
-  - Barra horizontal scrollavel no topo do feed (abaixo do FeedTopBar)
-  - Mostra circulos com avatar de quem tem clips ativos (nao expirados)
-  - Primeiro circulo: "+" para adicionar clip proprio
-  - Borda neon verde animada nos circulos com clips nao vistos
-  - Ao rolar o feed para baixo, a barra sobe junto (nao e fixa)
-  - Ao clicar em "Feed" na bottom nav, scroll volta ao topo e a barra reaparece
-
-- `src/components/feed/ClipViewer.tsx`:
-  - Modal fullscreen para assistir clips
-  - Reproduz video com controles basicos (pause/play ao tocar)
-  - Mostra nome do autor, caption, e tempo restante
-  - Swipe horizontal para proximo/anterior clip do mesmo autor
-  - Botao fechar (X) no topo
-
-- `src/components/feed/CreateClipDialog.tsx`:
-  - Dialog para upload de video curto (max 60s sugerido)
-  - Campo de caption opcional
-  - Upload para bucket de storage
-
-### Feed.tsx
-- Adicionar `<ClipsBar />` no topo do conteudo (dentro do `<main>`, antes dos posts)
-- Ao clicar no icone Feed na bottom nav, fazer scroll to top
-
-### FeedBottomNav.tsx
-- Ao clicar em "Feed" quando ja esta na pagina do feed, emitir evento/callback para scroll to top
-
----
-
-## Resumo de Arquivos
-
-### Criar
-- `src/components/feed/ClipsBar.tsx` -- barra de clips/stories
-- `src/components/feed/ClipViewer.tsx` -- visualizador fullscreen de clips
-- `src/components/feed/CreateClipDialog.tsx` -- dialog para criar clip
+## Resumo de arquivos
 
 ### Editar
-- `src/components/profile/ProfileHeader.tsx` -- upload de foto, link, secao destaques
-- `src/pages/Profile.tsx` -- campos link, destaques, upload avatar no form
-- `src/pages/UserProfile.tsx` -- secao destaques
-- `src/components/feed/PostCard.tsx` -- menu 3 pontinhos funcional, share funcional, opcao destacar
-- `src/pages/Feed.tsx` -- integrar ClipsBar, scroll to top
-- `src/components/feed/FeedBottomNav.tsx` -- callback scroll to top no Feed
-
-### Migracao SQL
-- Adicionar coluna `link` em profiles
-- Criar tabela `profile_highlights` com RLS
-- Criar tabela `clips` com RLS
+- `src/pages/Ranking.tsx` -- adicionar filtro por secao (tabs/chips)
+- `src/components/profile/ProfileHeader.tsx` -- buscar e exibir medalha do ranking ao lado do nome
+- `src/pages/TournamentDetail.tsx` -- adicionar `pb-24` no main, remover header proprio (ja vem do AppLayout)
+- `src/pages/Payment.tsx` -- adicionar botao voltar, `pb-24` no conteudo
+- `src/App.tsx` -- mover rota `/payment/:id` para dentro do `AppLayout`
+- `src/components/feed/FeedBottomNav.tsx` -- reduzir altura da barra e tamanho do botao `+`
