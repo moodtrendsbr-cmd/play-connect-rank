@@ -179,7 +179,12 @@ const Register = () => {
           <Link to="/login" className="text-primary hover:underline">Entrar</Link>
         </p>
 
-        {!isOrganizer && (
+        {isOrganizer ? (
+          <p className="text-center text-sm text-muted-foreground">
+            Quer competir como atleta?{" "}
+            <Link to="/register" className="text-primary hover:underline">Cadastrar como atleta</Link>
+          </p>
+        ) : (
           <p className="text-center text-sm text-muted-foreground">
             Quer organizar torneios?{" "}
             <Link to="/register?role=organizer" className="text-secondary hover:underline">Cadastrar como organizador</Link>
