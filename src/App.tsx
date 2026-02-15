@@ -22,6 +22,10 @@ import Messages from "./pages/Messages";
 import ChatView from "./pages/ChatView";
 import NotFound from "./pages/NotFound";
 import UserProfile from "./pages/UserProfile";
+import TournamentMatch from "./pages/TournamentMatch";
+import MatchRequests from "./pages/MatchRequests";
+import MatchPair from "./pages/MatchPair";
+import MatchChat from "./pages/MatchChat";
 import AppLayout from "./components/layout/AppLayout";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -55,6 +59,10 @@ const App = () => (
               <Route path="/payment/:id" element={<Payment />} />
               <Route path="/messages" element={<Messages />} />
               <Route path="/messages/:userId" element={<ChatView />} />
+              <Route path="/tournaments/:id/match" element={<TournamentMatch />} />
+              <Route path="/tournaments/:id/match/requests" element={<MatchRequests />} />
+              <Route path="/tournaments/:id/match/pair" element={<MatchPair />} />
+              <Route path="/tournaments/:id/match/chat/:conversationId" element={<MatchChat />} />
             </Route>
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />
