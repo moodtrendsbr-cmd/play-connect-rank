@@ -1,190 +1,139 @@
 
+# Melhorias no Perfil, PostCard e Clips/Stories
 
-# Social Completo: Perfil, Seguir, Hashtags, Busca Global e Ranking Enriquecido
+## Resumo
 
-## Visao Geral
-
-Implementar sistema de seguidores, perfil social completo com posts salvos e campos adicionais, hashtags, busca global inteligente, perfil publico, e ranking redesenhado com secoes de trending.
-
----
-
-## Fase 1: Banco de Dados (Migracao SQL)
-
-### Nova tabela `follows`
-- id (uuid PK), follower_id (uuid NOT NULL), following_id (uuid NOT NULL), created_at (timestamptz default now())
-- UNIQUE(follower_id, following_id)
-- CHECK(follower_id != following_id)
-- RLS: SELECT publico, INSERT onde auth.uid() = follower_id, DELETE onde auth.uid() = follower_id
-
-### Nova tabela `hashtags`
-- id (uuid PK), tag (text NOT NULL UNIQUE), created_at (timestamptz default now())
-
-### Nova tabela `post_hashtags`
-- id (uuid PK), post_id (uuid NOT NULL refs posts ON DELETE CASCADE), hashtag_id (uuid NOT NULL refs hashtags ON DELETE CASCADE)
-- UNIQUE(post_id, hashtag_id)
-- RLS: SELECT publico, INSERT para author do post
-
-### Nova tabela `hashtag_searches`
-- id (uuid PK), hashtag_id (uuid refs hashtags), searched_by (uuid nullable), created_at (timestamptz default now())
-- RLS: SELECT publico, INSERT autenticado
-- Registra cada busca por hashtag para calcular trending
-
-### Novos campos na tabela `profiles`
-- bio (text nullable)
-- team (text nullable)
-- titles (text nullable)
-- show_contact (boolean default false)
+Adicionar foto de perfil editavel, funcionalidade dos 3 pontinhos e compartilhar no PostCard, campo de link clicavel no perfil, secao de destaques, e sistema de Clips (stories) no topo do feed.
 
 ---
 
-## Fase 2: Sistema de Hashtags
+## 1. Foto de Perfil Editavel
 
-### Na criacao do post (CreatePostDialog)
-- Extrair hashtags do texto via regex `/#(\w+)/g`
-- Para cada hashtag encontrada: UPSERT na tabela `hashtags`, depois INSERT em `post_hashtags`
-- As hashtags no texto do post serao renderizadas em cor neon verde clicavel
+### ProfileHeader.tsx
+- No perfil proprio, ao clicar no avatar, abrir um file input para selecionar imagem
+- Upload da imagem para o bucket `post-images` (ja existe) no path `avatars/{userId}`
+- Atualizar `profiles.avatar_url` com a URL publica
+- Mostrar um icone de camera sobre o avatar quando for perfil proprio
 
-### No PostCard
-- Renderizar hashtags dentro do texto como `<span>` clicavel com cor `#2BFF88`
-- Ao clicar numa hashtag, preencher o campo de busca do feed com essa hashtag
-
----
-
-## Fase 3: Busca Global Inteligente (FeedTopBar + Feed.tsx)
-
-### Logica de busca expandida
-Quando o usuario digitar no campo de busca, buscar em paralelo:
-1. **Posts por conteudo**: `ilike content '%termo%'`
-2. **Posts por nome do autor**: buscar `profiles` com `ilike full_name '%termo%'`, pegar user_ids, buscar posts com `author_id IN (...)`
-3. **Posts por hashtag**: se comeca com `#`, buscar na tabela `hashtags` -> `post_hashtags` -> posts
-4. Combinar resultados sem duplicatas, ordenar por created_at desc
-
-### Debounce
-- Adicionar debounce de 400ms na busca para nao disparar a cada tecla
+### Profile.tsx (formulario de edicao)
+- Adicionar botao "Alterar foto" no formulario de edicao tambem
 
 ---
 
-## Fase 4: Perfil Redesenhado (Profile.tsx)
+## 2. Tres Pontinhos (Menu do Post) - PostCard.tsx
 
-### Layout novo
-- Avatar grande (com iniciais como fallback)
-- Nome, localizacao, bio
-- Campos adicionais: time, titulos
-- Toggle "mostrar contato" no modo edicao
-- Contadores clicaveis: posts | seguidores | seguindo
-- Tabs: "Posts" e "Salvos"
-
-### Aba Posts
-- Buscar posts onde author_id = user.id
-- Renderizar com PostCard reutilizado
-
-### Aba Salvos
-- Buscar post_saves do usuario -> enriquecer com enrichPosts
-- Renderizar com PostCard
-
-### Formulario de edicao expandido
-- Adicionar campos: bio, team, titles, show_contact (switch)
+- Ao clicar nos 3 pontinhos, abrir um DropdownMenu com opcoes:
+  - **Se for autor do post**: "Excluir post" (delete da tabela posts)
+  - **Para qualquer usuario**: "Copiar link", "Denunciar" (placeholder)
+  - **Se for perfil proprio**: "Adicionar aos Destaques" (salvar em nova tabela)
 
 ---
 
-## Fase 5: Perfil Publico (UserProfile.tsx)
+## 3. Botao Compartilhar Funcional - PostCard.tsx
 
-### Nova rota `/profile/:userId`
-- Adicionar em App.tsx dentro do AppLayout
-- Mostra perfil de qualquer usuario
-- Botao Seguir/Deixar de seguir (otimista)
-- Contadores: posts, seguidores, seguindo
-- Aba Posts (sem aba Salvos)
-- Mostra contato somente se show_contact=true
-- Mostra team, titles, bio
-
-### FollowListDialog.tsx
-- Modal que lista seguidores ou seguindo
-- Cada item: avatar + nome + botao seguir
-- Clicavel para ir ao perfil
+- Usar a Web Share API (`navigator.share`) quando disponivel (mobile)
+- Fallback: copiar link para clipboard e mostrar toast "Link copiado!"
+- O link sera `{origin}/feed#${post.id}`
 
 ---
 
-## Fase 6: Seguir no PostCard e Feed
+## 4. Campo de Link no Perfil
 
-### PostCard
-- Avatar e nome viram links para `/profile/:authorId`
-- Usar `useNavigate` ou `Link`
+### Banco de dados
+- Adicionar coluna `link` (text, nullable) na tabela `profiles`
 
-### Feed priorizado
-- Ao carregar, buscar `follows` do usuario: `SELECT following_id FROM follows WHERE follower_id = user.id`
-- Marcar cada post com `is_following: boolean`
-- Separar e concatenar: posts de seguidos primeiro, depois restante
-- Manter scroll infinito e busca funcionando
+### ProfileHeader.tsx
+- Exibir link logo abaixo da bio, com icone de link externo
+- Renderizar como `<a>` clicavel abrindo em nova aba
+- Cor neon verde (#2BFF88)
+
+### Profile.tsx (formulario de edicao)
+- Adicionar campo "Link" no formulario
 
 ---
 
-## Fase 7: Ranking Redesenhado (Ranking.tsx)
+## 5. Destaques no Perfil
 
-### Secoes do ranking
+### Banco de dados
+- Nova tabela `profile_highlights`:
+  - id (uuid PK)
+  - user_id (uuid NOT NULL)
+  - post_id (uuid NOT NULL, refs posts ON DELETE CASCADE)
+  - created_at (timestamptz default now())
+  - UNIQUE(user_id, post_id)
+  - RLS: SELECT publico, INSERT/DELETE onde auth.uid() = user_id
 
-**1. Hashtags em Alta (Trending)**
-- Query: contar ocorrencias em `hashtag_searches` dos ultimos 7 dias, agrupado por hashtag_id
-- Exibir top 10 hashtags como chips/pills clicaveis
-- Ao clicar, navegar para `/feed` com busca pre-preenchida com a hashtag
-- Visual: fundo `#0B0F12`, texto `#2BFF88`, pill arredondado
+### ProfileHeader.tsx / Profile.tsx / UserProfile.tsx
+- Adicionar secao horizontal scrollavel abaixo do header com thumbnails dos posts destacados
+- Cada thumbnail: primeira imagem do post (ou icone de texto se nao tiver imagem)
+- Ao clicar, abrir o post em destaque (dialog ou scroll para ele)
+- No perfil proprio: mostrar botao "+" para adicionar novo destaque
 
-**2. Post Mais Curtido da Semana**
-- Query: contar likes dos ultimos 7 dias agrupado por post_id, pegar o top 1
-- Exibir como um card destacado com imagem (se tiver), nome do autor, contagem de likes
-- Visual: card com borda glow verde mais forte
+### PostCard.tsx (menu 3 pontinhos)
+- Opcao "Destacar" para posts proprios
+- Insert/delete na tabela profile_highlights
 
-**3. Perfis com Mais Seguidores (50+)**
-- Query: contar follows agrupado por following_id, filtrar >= 50
-- Buscar profiles correspondentes
-- Exibir lista rankeada com avatar, nome, contagem de seguidores
-- Visual: medalhas para top 3, cards estilo existente
+---
 
-**4. Ranking de Vitorias (existente, mantido)**
-- Manter a logica atual de match_results
-- Reestilizar para combinar com as novas secoes
+## 6. Clips (Stories) no Topo do Feed
 
-### Layout final do Ranking
-```text
-+----------------------------------+
-|  RANKING                         |
-|                                  |
-|  # Em Alta                       |
-|  [#beach] [#volei] [#copa2025]  |
-|                                  |
-|  Post da Semana                  |
-|  [Card com imagem + likes]       |
-|                                  |
-|  Top Perfis                      |
-|  1. Joao - 120 seguidores       |
-|  2. Maria - 89 seguidores       |
-|                                  |
-|  Ranking de Vitorias             |
-|  1. Atleta1 - 50pts             |
-|  2. Atleta2 - 40pts             |
-+----------------------------------+
-```
+### Banco de dados
+- Nova tabela `clips`:
+  - id (uuid PK)
+  - author_id (uuid NOT NULL)
+  - media_url (text NOT NULL) -- video curto
+  - thumbnail_url (text, nullable)
+  - caption (text, nullable)
+  - created_at (timestamptz default now())
+  - expires_at (timestamptz default now() + interval '24 hours')
+  - RLS: SELECT publico, INSERT onde auth.uid() = author_id, DELETE onde auth.uid() = author_id
+
+### Componentes novos
+- `src/components/feed/ClipsBar.tsx`:
+  - Barra horizontal scrollavel no topo do feed (abaixo do FeedTopBar)
+  - Mostra circulos com avatar de quem tem clips ativos (nao expirados)
+  - Primeiro circulo: "+" para adicionar clip proprio
+  - Borda neon verde animada nos circulos com clips nao vistos
+  - Ao rolar o feed para baixo, a barra sobe junto (nao e fixa)
+  - Ao clicar em "Feed" na bottom nav, scroll volta ao topo e a barra reaparece
+
+- `src/components/feed/ClipViewer.tsx`:
+  - Modal fullscreen para assistir clips
+  - Reproduz video com controles basicos (pause/play ao tocar)
+  - Mostra nome do autor, caption, e tempo restante
+  - Swipe horizontal para proximo/anterior clip do mesmo autor
+  - Botao fechar (X) no topo
+
+- `src/components/feed/CreateClipDialog.tsx`:
+  - Dialog para upload de video curto (max 60s sugerido)
+  - Campo de caption opcional
+  - Upload para bucket de storage
+
+### Feed.tsx
+- Adicionar `<ClipsBar />` no topo do conteudo (dentro do `<main>`, antes dos posts)
+- Ao clicar no icone Feed na bottom nav, fazer scroll to top
+
+### FeedBottomNav.tsx
+- Ao clicar em "Feed" quando ja esta na pagina do feed, emitir evento/callback para scroll to top
 
 ---
 
 ## Resumo de Arquivos
 
 ### Criar
-- `src/pages/UserProfile.tsx` -- perfil publico
-- `src/components/profile/FollowListDialog.tsx` -- lista seguidores/seguindo
-- `src/components/profile/ProfileHeader.tsx` -- header reutilizavel (avatar, stats, bio, follow)
+- `src/components/feed/ClipsBar.tsx` -- barra de clips/stories
+- `src/components/feed/ClipViewer.tsx` -- visualizador fullscreen de clips
+- `src/components/feed/CreateClipDialog.tsx` -- dialog para criar clip
 
 ### Editar
-- `src/pages/Profile.tsx` -- redesenho com tabs Posts/Salvos, campos adicionais, contadores
-- `src/pages/Feed.tsx` -- busca global multi-campo, priorizacao por follows, debounce
-- `src/pages/Ranking.tsx` -- redesenho completo com 4 secoes
-- `src/components/feed/PostCard.tsx` -- hashtags clicaveis, avatar/nome como link
-- `src/components/feed/FeedTopBar.tsx` -- debounce na busca
-- `src/components/feed/CreatePostDialog.tsx` -- extracao e persistencia de hashtags
-- `src/App.tsx` -- nova rota /profile/:userId
+- `src/components/profile/ProfileHeader.tsx` -- upload de foto, link, secao destaques
+- `src/pages/Profile.tsx` -- campos link, destaques, upload avatar no form
+- `src/pages/UserProfile.tsx` -- secao destaques
+- `src/components/feed/PostCard.tsx` -- menu 3 pontinhos funcional, share funcional, opcao destacar
+- `src/pages/Feed.tsx` -- integrar ClipsBar, scroll to top
+- `src/components/feed/FeedBottomNav.tsx` -- callback scroll to top no Feed
 
 ### Migracao SQL
-- Criar tabelas: follows, hashtags, post_hashtags, hashtag_searches
-- Adicionar colunas em profiles: bio, team, titles, show_contact
-- RLS para todas as novas tabelas
-
+- Adicionar coluna `link` em profiles
+- Criar tabela `profile_highlights` com RLS
+- Criar tabela `clips` com RLS
