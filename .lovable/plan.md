@@ -1,76 +1,93 @@
 
-# Popular Banco com Dados Completos para Teste
+# Reestruturar Marketplace: Produtos na Home, Video, Estoque Ilimitado
 
-## Objetivo
+## Resumo das mudancas
 
-Atualizar a funcao de seed para criar dados em TODAS as areas da plataforma, permitindo visualizar todas as paginas com conteudo real.
+A pagina principal do Marketplace passara a exibir **produtos** (em vez de empresas). Ao clicar em um produto, o usuario sera levado a pagina da empresa com todos os seus produtos. A ordenacao prioriza empresas com plano pago e produtos em destaque. O estoque nao sera visivel para o usuario final. No cadastro de produtos, sera possivel marcar estoque como ilimitado e adicionar ate 10 imagens + 1 video.
 
-## Dados a serem criados
+---
 
-### Empresas (companies) - 3 empresas
-- "Volei Store SP" (vestuario, Sao Paulo/SP, status: approved, plan: pro)
-- "Beach Gear RJ" (acessorios, Rio de Janeiro/RJ, status: approved, plan: elite)
-- "Foto Esportiva" (fotografia, Curitiba/PR, status: pending_approval, plan: free)
+## 1. Migracao de banco de dados
 
-### Produtos (products) - 6 produtos
-- 2 produtos por empresa aprovada (Volei Store e Beach Gear)
-- 2 produtos da empresa pendente (para testar aprovacao no admin)
-- Mix de status: approved, pending
-- Com precos, descricoes e stock
+Adicionar coluna `video_url` na tabela `products`:
 
-### Planos de empresa (company_plans) - 3 planos
-- Free, Pro, Elite (se nao existirem ainda)
+```sql
+ALTER TABLE public.products ADD COLUMN video_url text;
+```
 
-### Assinaturas (subscriptions) - para as empresas Pro e Elite
+---
 
-### Patrocinios de atletas (athlete_sponsors) - 2 registros
-- Beach Gear patrocinando Lucas Oliveira
-- Volei Store patrocinando Ana Costa
+## 2. Marketplace.tsx - Pagina principal mostra produtos
 
-### Pedidos do marketplace (marketplace_orders) - 3 pedidos
-- Atletas comprando produtos aprovados
+**Antes:** Lista empresas aprovadas.
+**Depois:** Lista produtos aprovados (de empresas aprovadas), com busca e filtro por categoria.
 
-### Ledger financeiro (financial_ledger) - 5 registros
-- Entradas de torneios, assinaturas e marketplace
+- Buscar produtos com join na empresa: `products(*, companies(*))`
+- Filtrar: `status = 'approved'` e empresa `status = 'approved'`
+- Busca por nome do produto (ilike)
+- Filtro por categoria da empresa
+- Ordenacao:
+  1. Produtos em destaque (`featured = true`) primeiro
+  2. Empresas com plano pago (`companies.plan != 'free'`) segundo
+  3. Empresas da mesma cidade do usuario terceiro
+  4. Restante por data de criacao
+- Card do produto: imagem, nome, preco, badge da empresa, badge "Destaque" se aplicavel
+- Ao clicar no produto -> navega para `/marketplace/company/:companyId` (pagina da empresa)
+- Manter links "Cadastrar empresa" e "Gerenciar minha empresa"
+- **NAO** mostrar estoque
 
-### Saldos de organizadores (organizer_balances) - 2 registros
-- Saldos pendentes para os 2 organizadores
+---
 
-### Match Pool (tournament_match_pool) - 3 entradas
-- Atletas buscando parceiros no primeiro torneio
+## 3. MarketplaceCompany.tsx - Pagina da empresa (sem mudancas grandes)
 
-### Match Requests (match_requests) - 1 convite
-- Atleta 1 convidando atleta 2
+- Manter como esta: header da empresa + grid de produtos
+- Ao clicar num produto -> `/marketplace/product/:productId`
+- **NAO** mostrar estoque nos cards
+
+---
+
+## 4. MarketplaceProduct.tsx - Pagina do produto
+
+- Remover a linha que exibe estoque (`Estoque: X unidades`)
+- Suportar exibicao de video (`video_url`) alem das imagens no carrossel
+
+---
+
+## 5. MyCompany.tsx - Cadastro de produto (dialog)
+
+Atualizar o formulario de "Novo Produto" para incluir:
+
+- **Checkbox "Estoque ilimitado"**: quando marcado, o campo de estoque fica desabilitado e envia `null` ao banco (null = ilimitado)
+- **Upload de ate 10 imagens**: campo de input de URLs (por enquanto como texto, ja que nao ha storage configurado para uploads de imagem do usuario). Permitir adicionar multiplas URLs de imagem
+- **1 video (URL)**: campo para URL do video
+- Salvar `video_url` e array de `image_urls` no insert
 
 ---
 
 ## Detalhes tecnicos
 
-### Arquivo a editar
-- `supabase/functions/seed-test-data/index.ts`
+### Marketplace.tsx (reescrita principal)
+- Query: `supabase.from("products").select("*, companies(*)").eq("status", "approved")`
+- Filtrar no frontend empresas com `status !== 'approved'` (ja que o RLS da products ja filtra por empresa aprovada na policy publica)
+- Ordenar no frontend: featured primeiro, depois por plano da empresa, depois por cidade
+- Renderizar grid 2 colunas com cards de produto (imagem, nome, preco, nome da empresa)
+- Clicar no card -> `/marketplace/company/:companyId`
 
-### Sequencia de insercao (respeitando dependencias)
-1. Usuarios (ja existente)
-2. Perfis (ja existente)
-3. Torneios (ja existente)
-4. Inscricoes (ja existente)
-5. Match results (ja existente)
-6. **Company plans** (verificar se ja existem)
-7. **Companies** (com owner_user_id dos organizadores)
-8. **Subscriptions** (vinculando empresas a planos)
-9. **Products** (vinculando a companies)
-10. **Marketplace orders** (atletas comprando)
-11. **Athlete sponsors** (empresas patrocinando atletas)
-12. **Financial ledger** (entradas de receita)
-13. **Organizer balances** (saldos dos organizadores)
-14. **Tournament match pool** (atletas no pool de match)
-15. **Match requests** (convites de parceria)
-16. Posts (ja existente)
+### MarketplaceProduct.tsx
+- Remover linha 82 (`{product.stock != null && ...}`)
+- Adicionar renderizacao de video se `product.video_url` existir
 
-### Observacoes
-- Usar service role key (ja configurado) para bypass de RLS
-- Tratar erros de duplicata para poder rodar multiplas vezes
-- Atualizar status das empresas para "approved" onde necessario
+### MyCompany.tsx - Formulario de produto
+- Adicionar estado `unlimitedStock` (boolean, default true)
+- Adicionar estado `imageUrls` (array de strings, ate 10)
+- Adicionar estado `videoUrl` (string)
+- Checkbox para "Estoque ilimitado" - quando marcado, stock = null
+- Campos para adicionar URLs de imagens (input + botao adicionar, lista com remover)
+- Campo para URL do video
+- No submit: `image_urls: imageUrls, video_url: videoUrl || null, stock: unlimitedStock ? null : Number(stock)`
 
-### Como executar
-Apos deploy, chamar a edge function `seed-test-data` via curl ou pelo admin.
+### Arquivos a editar
+1. **Migracao SQL** - adicionar `video_url` na tabela products
+2. **src/pages/Marketplace.tsx** - reescrever para listar produtos
+3. **src/pages/MarketplaceProduct.tsx** - remover estoque, adicionar video
+4. **src/pages/MyCompany.tsx** - expandir formulario de cadastro de produto
