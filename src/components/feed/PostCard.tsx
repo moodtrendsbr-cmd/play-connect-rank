@@ -44,9 +44,16 @@ interface PostCardProps {
 const getInitials = (name: string) => name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 
 const renderContent = (content: string) => {
-  const parts = content.split(/(#\w+)/g);
+  const parts = content.split(/(#\w+|@[^\s@]+(?:\s[^\s@#]+)*)/g);
   return parts.map((part, i) => {
     if (part.match(/^#\w+$/)) {
+      return (
+        <span key={i} className="cursor-pointer font-semibold" style={{ color: "#2BFF88" }}>
+          {part}
+        </span>
+      );
+    }
+    if (part.match(/^@/)) {
       return (
         <span key={i} className="cursor-pointer font-semibold" style={{ color: "#2BFF88" }}>
           {part}

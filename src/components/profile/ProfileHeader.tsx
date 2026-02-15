@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { MapPin, Users, FileText, Trophy, MessageCircle, Camera, LinkIcon, ExternalLink } from "lucide-react";
+import { MapPin, Users, FileText, Trophy, MessageCircle, Camera, LinkIcon, ExternalLink, Mail } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import FollowListDialog from "./FollowListDialog";
@@ -216,7 +216,7 @@ const ProfileHeader = ({
         </p>
       )}
 
-      {/* Follow / Edit button */}
+      {/* Follow / Edit / Message buttons */}
       <div className="flex gap-2">
         {isOwnProfile ? (
           onEditClick && (
@@ -225,13 +225,20 @@ const ProfileHeader = ({
             </Button>
           )
         ) : currentUserId ? (
-          <Button
-            size="sm"
-            onClick={onFollowToggle}
-            style={isFollowing ? { background: "transparent", border: "1px solid rgba(43,255,136,0.3)", color: "#9CA3AF" } : { background: "#2BFF88", color: "#050708" }}
-          >
-            {isFollowing ? "Seguindo" : "Seguir"}
-          </Button>
+          <>
+            <Button
+              size="sm"
+              onClick={onFollowToggle}
+              style={isFollowing ? { background: "transparent", border: "1px solid rgba(43,255,136,0.3)", color: "#9CA3AF" } : { background: "#2BFF88", color: "#050708" }}
+            >
+              {isFollowing ? "Seguindo" : "Seguir"}
+            </Button>
+            <Link to={`/messages/${profileUserId}`}>
+              <Button size="sm" variant="outline" className="border-[#2BFF88]/30 text-white">
+                <Mail className="h-4 w-4 mr-1" /> Mensagem
+              </Button>
+            </Link>
+          </>
         ) : null}
       </div>
 
