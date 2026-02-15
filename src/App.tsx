@@ -19,6 +19,7 @@ import Profile from "./pages/Profile";
 import Ranking from "./pages/Ranking";
 import Feed from "./pages/Feed";
 import NotFound from "./pages/NotFound";
+import UserProfile from "./pages/UserProfile";
 import AppLayout from "./components/layout/AppLayout";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -48,6 +49,7 @@ const App = () => (
               <Route path="/tournaments" element={<Tournaments />} />
               <Route path="/tournaments/:id" element={<TournamentDetail />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/profile/:userId" element={<UserProfile />} />
             </Route>
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />

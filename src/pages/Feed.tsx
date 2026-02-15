@@ -14,9 +14,15 @@ const Feed = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef(0);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const enrichPosts = useCallback(
     async (rawPosts: any[]): Promise<PostData[]> => {
@@ -25,7 +31,6 @@ const Feed = () => {
       const postIds = rawPosts.map((p) => p.id);
       const authorIds = [...new Set(rawPosts.map((p) => p.author_id))];
 
-      // Parallel fetches
       const [profilesRes, mediaRes, commentsRes, likesCountRes, commentsCountRes, myLikesRes, mySavesRes] =
         await Promise.all([
           supabase.from("profiles").select("user_id, full_name, avatar_url").in("user_id", authorIds),
@@ -48,7 +53,6 @@ const Feed = () => {
         mediaMap[m.post_id].push({ media_url: m.media_url, order_index: m.order_index });
       });
 
-      // Group comments by post for top 2
       const commentsByPost: Record<string, any[]> = {};
       const commentAuthorIds = new Set<string>();
       (commentsRes.data || []).forEach((c) => {
@@ -57,27 +61,16 @@ const Feed = () => {
         commentAuthorIds.add(c.author_id);
       });
 
-      // Fetch comment author names
       let commentProfileMap: Record<string, string> = {};
       if (commentAuthorIds.size > 0) {
-        const { data: cp } = await supabase
-          .from("profiles")
-          .select("user_id, full_name")
-          .in("user_id", Array.from(commentAuthorIds));
-        (cp || []).forEach((p) => {
-          commentProfileMap[p.user_id] = p.full_name;
-        });
+        const { data: cp } = await supabase.from("profiles").select("user_id, full_name").in("user_id", Array.from(commentAuthorIds));
+        (cp || []).forEach((p) => { commentProfileMap[p.user_id] = p.full_name; });
       }
 
-      // Count likes/comments per post
       const likesCount: Record<string, number> = {};
-      (likesCountRes.data || []).forEach((l: any) => {
-        likesCount[l.post_id] = (likesCount[l.post_id] || 0) + 1;
-      });
+      (likesCountRes.data || []).forEach((l: any) => { likesCount[l.post_id] = (likesCount[l.post_id] || 0) + 1; });
       const commentsCount: Record<string, number> = {};
-      (commentsCountRes.data || []).forEach((c: any) => {
-        commentsCount[c.post_id] = (commentsCount[c.post_id] || 0) + 1;
-      });
+      (commentsCountRes.data || []).forEach((c: any) => { commentsCount[c.post_id] = (commentsCount[c.post_id] || 0) + 1; });
 
       const myLikedSet = new Set((myLikesRes.data || []).map((l: any) => l.post_id));
       const mySavedSet = new Set((mySavesRes.data || []).map((s: any) => s.post_id));
@@ -86,26 +79,13 @@ const Feed = () => {
         const profile = profileMap[p.author_id] || { name: "Atleta", avatar: null };
         const postComments = commentsByPost[p.id] || [];
         const top2 = postComments.slice(-2).map((c) => ({
-          id: c.id,
-          content: c.content,
-          author_name: commentProfileMap[c.author_id] || "Atleta",
-          created_at: c.created_at,
+          id: c.id, content: c.content, author_name: commentProfileMap[c.author_id] || "Atleta", created_at: c.created_at,
         }));
-
         return {
-          id: p.id,
-          author_id: p.author_id,
-          author_name: profile.name,
-          author_avatar: profile.avatar,
-          content: p.content,
-          type: p.type,
-          created_at: p.created_at,
-          media: mediaMap[p.id] || [],
-          likes_count: likesCount[p.id] || 0,
-          comments_count: commentsCount[p.id] || 0,
-          top_comments: top2,
-          liked_by_me: myLikedSet.has(p.id),
-          saved_by_me: mySavedSet.has(p.id),
+          id: p.id, author_id: p.author_id, author_name: profile.name, author_avatar: profile.avatar,
+          content: p.content, type: p.type, created_at: p.created_at, media: mediaMap[p.id] || [],
+          likes_count: likesCount[p.id] || 0, comments_count: commentsCount[p.id] || 0, top_comments: top2,
+          liked_by_me: myLikedSet.has(p.id), saved_by_me: mySavedSet.has(p.id),
         };
       });
     },
@@ -119,44 +99,98 @@ const Feed = () => {
 
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
+      const term = debouncedSearch.trim();
 
-      let query = supabase
-        .from("posts")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .range(from, to);
+      let postIds: string[] | null = null;
 
-      if (searchQuery.trim()) {
-        query = query.ilike("content", `%${searchQuery.trim()}%`);
+      if (term) {
+        // Global search: content, author name, hashtags
+        const results = new Set<string>();
+
+        // 1. Search by content
+        const { data: contentPosts } = await supabase.from("posts").select("id").ilike("content", `%${term}%`).limit(100);
+        (contentPosts || []).forEach((p) => results.add(p.id));
+
+        // 2. Search by author name
+        const { data: matchedProfiles } = await supabase.from("profiles").select("user_id").ilike("full_name", `%${term}%`);
+        if (matchedProfiles && matchedProfiles.length > 0) {
+          const authorIds = matchedProfiles.map((p) => p.user_id);
+          const { data: authorPosts } = await supabase.from("posts").select("id").in("author_id", authorIds).limit(100);
+          (authorPosts || []).forEach((p) => results.add(p.id));
+        }
+
+        // 3. Search by hashtag
+        if (term.startsWith("#")) {
+          const tag = term.slice(1).toLowerCase();
+          const { data: ht } = await supabase.from("hashtags").select("id").ilike("tag", `%${tag}%`);
+          if (ht && ht.length > 0) {
+            const htIds = ht.map((h) => h.id);
+            const { data: phData } = await supabase.from("post_hashtags").select("post_id").in("hashtag_id", htIds);
+            (phData || []).forEach((ph: any) => results.add(ph.post_id));
+
+            // Log search for trending
+            if (user) {
+              for (const h of ht) {
+                supabase.from("hashtag_searches").insert({ hashtag_id: h.id, searched_by: user.id }).then(() => {});
+              }
+            }
+          }
+        }
+
+        postIds = Array.from(results);
+        if (postIds.length === 0) {
+          setPosts([]);
+          setHasMore(false);
+          setLoading(false);
+          setLoadingMore(false);
+          return;
+        }
       }
 
-      const { data: rawPosts } = await query;
+      // Fetch posts, prioritize followed users
+      let followingIds: string[] = [];
+      if (user) {
+        const { data: follows } = await supabase.from("follows").select("following_id").eq("follower_id", user.id);
+        followingIds = (follows || []).map((f: any) => f.following_id);
+      }
+
+      let query = supabase.from("posts").select("*").order("created_at", { ascending: false });
+      if (postIds) {
+        query = query.in("id", postIds);
+      }
+
+      const { data: rawPosts } = await query.range(from, to);
 
       if (!rawPosts || rawPosts.length < PAGE_SIZE) setHasMore(false);
       else setHasMore(true);
 
       const enriched = await enrichPosts(rawPosts || []);
 
-      if (append) {
-        setPosts((prev) => [...prev, ...enriched]);
+      // Sort: followed users first, then rest
+      if (followingIds.length > 0 && !term) {
+        const followingSet = new Set(followingIds);
+        const followed = enriched.filter((p) => followingSet.has(p.author_id));
+        const rest = enriched.filter((p) => !followingSet.has(p.author_id));
+        const sorted = [...followed, ...rest];
+        if (append) setPosts((prev) => [...prev, ...sorted]);
+        else setPosts(sorted);
       } else {
-        setPosts(enriched);
+        if (append) setPosts((prev) => [...prev, ...enriched]);
+        else setPosts(enriched);
       }
 
       setLoading(false);
       setLoadingMore(false);
     },
-    [enrichPosts, searchQuery]
+    [enrichPosts, debouncedSearch, user]
   );
 
-  // Initial + search
   useEffect(() => {
     pageRef.current = 0;
     setHasMore(true);
     fetchPosts(0, false);
   }, [fetchPosts]);
 
-  // Infinite scroll observer
   useEffect(() => {
     if (!loadMoreRef.current) return;
     const observer = new IntersectionObserver(
@@ -176,41 +210,18 @@ const Feed = () => {
     if (!user) return;
     const post = posts.find((p) => p.id === postId);
     if (!post) return;
-
-    // Optimistic update
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              liked_by_me: !p.liked_by_me,
-              likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1,
-            }
-          : p
-      )
-    );
-
-    if (post.liked_by_me) {
-      await supabase.from("likes").delete().eq("post_id", postId).eq("user_id", user.id);
-    } else {
-      await supabase.from("likes").insert({ user_id: user.id, post_id: postId });
-    }
+    setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, liked_by_me: !p.liked_by_me, likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1 } : p));
+    if (post.liked_by_me) await supabase.from("likes").delete().eq("post_id", postId).eq("user_id", user.id);
+    else await supabase.from("likes").insert({ user_id: user.id, post_id: postId });
   };
 
   const handleSave = async (postId: string) => {
     if (!user) return;
     const post = posts.find((p) => p.id === postId);
     if (!post) return;
-
-    setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, saved_by_me: !p.saved_by_me } : p))
-    );
-
-    if (post.saved_by_me) {
-      await supabase.from("post_saves").delete().eq("post_id", postId).eq("user_id", user.id);
-    } else {
-      await supabase.from("post_saves").insert({ user_id: user.id, post_id: postId });
-    }
+    setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, saved_by_me: !p.saved_by_me } : p));
+    if (post.saved_by_me) await supabase.from("post_saves").delete().eq("post_id", postId).eq("user_id", user.id);
+    else await supabase.from("post_saves").insert({ user_id: user.id, post_id: postId });
   };
 
   const handleRefresh = () => {
@@ -221,36 +232,19 @@ const Feed = () => {
   return (
     <>
       <FeedTopBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-
       <main className="pt-16 pb-20 px-4 max-w-xl mx-auto space-y-4">
         {loading ? (
-          <>
-            <PostSkeleton />
-            <PostSkeleton />
-            <PostSkeleton />
-          </>
+          <><PostSkeleton /><PostSkeleton /><PostSkeleton /></>
         ) : posts.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-lg font-display" style={{ color: "#9CA3AF" }}>
-              Nenhum post encontrado
-            </p>
-            <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>
-              Seja o primeiro a publicar!
-            </p>
+            <p className="text-lg font-display" style={{ color: "#9CA3AF" }}>Nenhum post encontrado</p>
+            <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>Seja o primeiro a publicar!</p>
           </div>
         ) : (
           posts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              userId={user?.id}
-              onLike={handleLike}
-              onSave={handleSave}
-              onRefresh={handleRefresh}
-            />
+            <PostCard key={post.id} post={post} userId={user?.id} onLike={handleLike} onSave={handleSave} onRefresh={handleRefresh} />
           ))
         )}
-
         {loadingMore && <PostSkeleton />}
         <div ref={loadMoreRef} className="h-4" />
       </main>
