@@ -1,30 +1,35 @@
 
-# Corrigir paginas de torneios (Brackets, Results, Manage)
+# Corrigir paginas de torneios - Analise completa
 
-## Problema
+## Problemas encontrados
 
-As paginas `/tournaments/:id/manage`, `/tournaments/:id/brackets` e `/tournaments/:id/results` mostram "torneio nao encontrado" ou ficam carregando infinitamente porque o parametro `:id` da URL nao esta sendo validado. Quando o ID e invalido (ou literal `:id`), a query ao banco falha com erro de UUID e a pagina nunca carrega corretamente.
+### 1. Bug no Brackets.tsx - dependencia do useEffect
+O `useEffect` no Brackets.tsx tem `[id]` como dependencia, mas o codigo verifica `if (id && user)` antes de executar. Quando o componente monta, o `user` ainda pode ser `null` (auth carregando). Quando o `user` finalmente carrega, o efeito nao re-executa porque `user` nao esta no array de dependencias. Isso causa o "Carregando..." infinito.
 
-## Solucao
+### 2. URLs literais
+As capturas de tela mostram URLs como `/tournaments/:id/manage` (literal `:id`). Isso ocorre quando o usuario digita a rota diretamente no navegador em vez de navegar pela aplicacao. A validacao de UUID ja trata esse caso corretamente mostrando "Torneio nao encontrado".
 
-### 1. `src/pages/Brackets.tsx`
-- Substituir `.single()` por `.maybeSingle()` na query do torneio (linha 56)
-- Adicionar validacao de UUID no parametro `id` antes de fazer queries
-- Se `id` for invalido, mostrar mensagem de erro imediatamente sem chamar o banco
+## Correcoes
 
-### 2. `src/pages/Results.tsx`
-- Substituir `.single()` por `.maybeSingle()` na query do torneio (linha 32)
-- Adicionar mesma validacao de UUID
+### `src/pages/Brackets.tsx`
+- Adicionar `user` ao array de dependencias do `useEffect` (linha 85): mudar `[id]` para `[id, user]`
+- Isso garante que quando a autenticacao terminar de carregar, o efeito re-execute e busque os dados do torneio
 
-### 3. `src/pages/ManageTournament.tsx`
-- Substituir `.single()` por `.maybeSingle()` na query do torneio (linha 25)
-- Adicionar mesma validacao de UUID
+### Verificacao das outras paginas
+- `Results.tsx` (linha 58): ja tem `[id, user]` - correto
+- `ManageTournament.tsx` (linha 61): ja tem `[id, user]` - correto
+- `TournamentDetail.tsx`: verificar e corrigir se necessario
 
-### 4. `src/pages/TournamentDetail.tsx`
-- Substituir `.single()` por `.maybeSingle()` na query do torneio
-- Adicionar mesma validacao de UUID
+## Detalhes tecnicos
 
-### Detalhe tecnico
-- Funcao auxiliar de validacao UUID: `const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-.../.test(str)`
-- Se o ID nao for UUID valido, setar `dataLoaded = true` e `tournament = null` imediatamente, mostrando a tela de "Torneio nao encontrado" com botao de voltar
-- Isso previne erros 400 no banco e da feedback claro ao usuario
+A correcao e de uma unica linha:
+
+```text
+// Antes (Brackets.tsx, linha 85)
+}, [id]);
+
+// Depois
+}, [id, user]);
+```
+
+Isso resolve o problema de carregamento infinito na pagina de chaveamentos. As outras paginas (Results e Manage) ja possuem a dependencia correta e funcionam quando acessadas com um ID valido de torneio atraves dos links do app (Dashboard ou pagina do torneio).
