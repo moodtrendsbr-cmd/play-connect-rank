@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Store, Package } from "lucide-react";
+import { ArrowLeft, Plus, Store, Package, CreditCard, Crown, Zap } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
@@ -14,6 +16,8 @@ const MyCompany = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [company, setCompany] = useState<any>(null);
+  const [plan, setPlan] = useState<any>(null);
+  const [allPlans, setAllPlans] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,8 +28,17 @@ const MyCompany = () => {
   useEffect(() => {
     if (!user) return;
     const fetch = async () => {
-      const { data: comp } = await supabase.from("companies").select("*").eq("owner_user_id", user.id).maybeSingle();
+      const [compRes, plansRes] = await Promise.all([
+        supabase.from("companies").select("*").eq("owner_user_id", user.id).maybeSingle(),
+        supabase.from("company_plans").select("*").order("monthly_price"),
+      ]);
+      const comp = compRes.data;
       setCompany(comp);
+      setAllPlans(plansRes.data || []);
+      if (comp?.plan_id) {
+        const found = (plansRes.data || []).find((p: any) => p.id === comp.plan_id);
+        setPlan(found || null);
+      }
       if (comp) {
         const [prodRes, ordRes] = await Promise.all([
           supabase.from("products").select("*").eq("company_id", comp.id).order("created_at", { ascending: false }),
@@ -96,6 +109,54 @@ const MyCompany = () => {
           {st.text}
         </span>
       </div>
+
+      {/* Plan Section */}
+      <Card className="mb-6 border-primary/20">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <CreditCard className="h-5 w-5 text-primary" />
+            Meu Plano
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {plan ? (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-2xl font-display text-primary">{plan.display_name}</span>
+                {company.billing_status && company.billing_status !== "none" && (
+                  <Badge variant={company.billing_status === "active" ? "default" : company.billing_status === "overdue" ? "destructive" : "secondary"}>
+                    {company.billing_status === "active" ? "Ativo" : company.billing_status === "overdue" ? "Atrasado" : "Cancelado"}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground mb-2">{plan.description}</p>
+              <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                <span>Comissão: {plan.commission_rate}%</span>
+                {plan.max_products && <span>Até {plan.max_products} produtos</span>}
+                {!plan.max_products && <span>Produtos ilimitados</span>}
+                {plan.sponsored_posts_per_month > 0 && <span>{plan.sponsored_posts_per_month} post(s)/mês</span>}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-muted-foreground mb-3">Plano Free ativo. Faça upgrade para mais recursos!</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {allPlans.filter((p) => p.monthly_price > 0).map((p) => (
+                  <div key={p.id} className="rounded-lg border border-border p-3">
+                    <div className="flex items-center gap-1 mb-1">
+                      {p.name === "elite" ? <Crown className="h-4 w-4 text-primary" /> : <Zap className="h-4 w-4 text-primary" />}
+                      <span className="font-display text-sm">{p.display_name}</span>
+                    </div>
+                    <p className="text-lg font-bold text-primary mb-1">R$ {Number(p.monthly_price).toFixed(0)}/mês</p>
+                    <p className="text-xs text-muted-foreground">{p.description}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Entre em contato para fazer upgrade.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-display text-lg text-foreground">PRODUTOS ({products.length})</h2>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Trophy, ClipboardList, DollarSign, AlertTriangle, UserCheck, Store, Package, ShoppingCart } from "lucide-react";
+import { Users, Trophy, ClipboardList, DollarSign, AlertTriangle, UserCheck, Store, Package, ShoppingCart, CreditCard } from "lucide-react";
 
 const AdminDashboard = () => {
   const [metrics, setMetrics] = useState({
@@ -19,20 +19,25 @@ const AdminDashboard = () => {
     totalProducts: 0,
     totalOrders: 0,
     marketplaceRevenue: 0,
+    activeSubscriptions: 0,
+    subscriptionRevenue: 0,
+    overdueCompanies: 0,
   });
 
   useEffect(() => {
     const fetch = async () => {
-      const [profiles, roles, tournaments, enrollments, balances, withdrawals, companiesRes, productsRes, ordersRes] = await Promise.all([
+      const [profiles, roles, tournaments, enrollments, balances, withdrawals, companiesRes, productsRes, ordersRes, subsRes, ledgerRes] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }),
         supabase.from("user_roles").select("role"),
         supabase.from("tournaments").select("id, start_date, end_date"),
         supabase.from("enrollments").select("status"),
         supabase.from("organizer_balances").select("commission"),
         supabase.from("withdrawal_requests").select("amount, status"),
-        supabase.from("companies").select("id, status"),
+        supabase.from("companies").select("id, status, billing_status"),
         supabase.from("products").select("id", { count: "exact", head: true }),
         supabase.from("marketplace_orders").select("mood_commission"),
+        supabase.from("subscriptions").select("status"),
+        supabase.from("financial_ledger").select("source, amount"),
       ]);
 
       const organizers = (roles.data || []).filter((r) => r.role === "organizer").length;
@@ -44,6 +49,8 @@ const AdminDashboard = () => {
 
       const companiesData = companiesRes.data || [];
       const mkRevenue = (ordersRes.data || []).reduce((s, o) => s + Number((o as any).mood_commission || 0), 0);
+      const subsData = subsRes.data || [];
+      const subRevenue = (ledgerRes.data || []).filter((l: any) => l.source === "subscription").reduce((s: number, l: any) => s + Number(l.amount), 0);
 
       setMetrics({
         totalUsers: profiles.count || 0,
@@ -60,6 +67,9 @@ const AdminDashboard = () => {
         totalProducts: productsRes.count || 0,
         totalOrders: (ordersRes.data || []).length,
         marketplaceRevenue: mkRevenue,
+        activeSubscriptions: subsData.filter((s: any) => s.status === "active").length,
+        subscriptionRevenue: subRevenue,
+        overdueCompanies: companiesData.filter((c: any) => c.billing_status === "overdue").length,
       });
     };
     fetch();
@@ -76,6 +86,9 @@ const AdminDashboard = () => {
     { label: "Produtos", value: metrics.totalProducts, icon: Package },
     { label: "Pedidos Marketplace", value: metrics.totalOrders, icon: ShoppingCart },
     { label: "Receita Marketplace", value: `R$ ${metrics.marketplaceRevenue.toFixed(2)}`, icon: DollarSign },
+    { label: "Assinaturas Ativas", value: metrics.activeSubscriptions, icon: CreditCard },
+    { label: "Receita Assinaturas", value: `R$ ${metrics.subscriptionRevenue.toFixed(2)}`, icon: CreditCard },
+    { label: "Empresas Overdue", value: metrics.overdueCompanies, icon: AlertTriangle },
   ];
 
   return (

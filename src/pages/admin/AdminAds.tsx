@@ -104,18 +104,42 @@ const AdminAds = () => {
       </div>
 
       {loading ? <p className="text-muted-foreground">Carregando...</p> : (
-        <div className="space-y-2 mb-8">
-          {sponsoredPosts.map((sp) => (
-            <div key={sp.id} className="rounded-lg p-3 flex items-center gap-3" style={{ background: "#0B0F12" }}>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{sp.title}</p>
-                <p className="text-xs text-muted-foreground">{(sp as any).companies?.name}</p>
+        <>
+          {/* Auto-generated ads awaiting approval */}
+          {sponsoredPosts.filter((sp) => !sp.active).length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">⚡ Ads Automáticos (aguardando aprovação)</h3>
+              <div className="space-y-2">
+                {sponsoredPosts.filter((sp) => !sp.active).map((sp) => (
+                  <div key={sp.id} className="rounded-lg p-3 flex items-center gap-3 border border-dashed border-primary/30 bg-card">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{sp.title}</p>
+                      <p className="text-xs text-muted-foreground">{(sp as any).companies?.name}</p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => toggleActive(sp.id, true)}>Aprovar</Button>
+                    <Button size="sm" variant="destructive" onClick={async () => {
+                      await supabase.from("sponsored_posts").delete().eq("id", sp.id);
+                      fetchData();
+                    }}>Rejeitar</Button>
+                  </div>
+                ))}
               </div>
-              <Switch checked={sp.active} onCheckedChange={(v) => toggleActive(sp.id, v)} />
             </div>
-          ))}
-          {sponsoredPosts.length === 0 && <p className="text-sm text-muted-foreground">Nenhum post patrocinado</p>}
-        </div>
+          )}
+
+          <div className="space-y-2 mb-8">
+            {sponsoredPosts.filter((sp) => sp.active).map((sp) => (
+              <div key={sp.id} className="rounded-lg p-3 flex items-center gap-3 bg-card border border-border">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{sp.title}</p>
+                  <p className="text-xs text-muted-foreground">{(sp as any).companies?.name}</p>
+                </div>
+                <Switch checked={sp.active} onCheckedChange={(v) => toggleActive(sp.id, v)} />
+              </div>
+            ))}
+            {sponsoredPosts.length === 0 && <p className="text-sm text-muted-foreground">Nenhum post patrocinado</p>}
+          </div>
+        </>
       )}
 
       <div className="flex items-center justify-between mb-4">
