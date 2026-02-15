@@ -105,31 +105,27 @@ const Marketplace = () => {
       </header>
 
       <main className="pt-16 pb-20 px-4 max-w-xl mx-auto">
-        <div className="flex items-center gap-2 rounded-full px-3 py-1.5 mb-4" style={{ background: "#0B0F12" }}>
-          <Search className="h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Buscar produtos..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
-          />
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat.value}
-              onClick={() => setCategory(cat.value)}
-              className="whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium transition-colors"
-              style={{
-                background: category === cat.value ? "#2BFF88" : "#0B0F12",
-                color: category === cat.value ? "#050708" : "#9CA3AF",
-              }}
-            >
-              {cat.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 mb-4">
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="rounded-full px-3 py-1.5 text-xs font-medium outline-none appearance-none cursor-pointer shrink-0"
+            style={{ background: "#0B0F12", color: "#9CA3AF", border: "1px solid rgba(43,255,136,0.15)" }}
+          >
+            {CATEGORIES.map((cat) => (
+              <option key={cat.value} value={cat.value}>{cat.label}</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-2 rounded-full px-3 py-1.5 flex-1 min-w-0" style={{ background: "#0B0F12" }}>
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              placeholder="Buscar..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
+            />
+          </div>
         </div>
 
         <div className="flex items-center justify-between mb-4">
