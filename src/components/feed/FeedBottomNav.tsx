@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Home, Medal, Plus, Trophy, User, Mail } from "lucide-react";
+import { Home, Medal, Plus, Trophy, User, ShoppingBag } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +13,7 @@ const navItems = [
   { icon: Medal, label: "Ranking", path: "/ranking" },
   { icon: null, label: "Criar", path: "" },
   { icon: Trophy, label: "Torneios", path: "/tournaments" },
-  { icon: Mail, label: "Msgs", path: "/messages" },
+  { icon: ShoppingBag, label: "Loja", path: "/marketplace" },
 ];
 
 const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
@@ -83,14 +83,6 @@ const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
             className="flex flex-col items-center gap-0.5 py-1 px-3 relative"
           >
             <Icon className="h-5 w-5" style={{ color: isActive ? "#2BFF88" : "#9CA3AF" }} />
-            {item.path === "/messages" && unreadCount > 0 && (
-              <span
-                className="absolute -top-0.5 right-1 h-4 min-w-[16px] rounded-full flex items-center justify-center text-[9px] font-bold px-1"
-                style={{ background: "#2BFF88", color: "#050708" }}
-              >
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
             <span
               className="text-[10px] font-medium"
               style={{ color: isActive ? "#2BFF88" : "#9CA3AF" }}
