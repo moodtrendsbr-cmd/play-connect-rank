@@ -1,35 +1,38 @@
 
-# Corrigir paginas de torneios - Analise completa
+# Adicionar botao "Voltar" em todas as paginas de torneios
 
-## Problemas encontrados
+## Problema
+Varias paginas nao possuem botao de voltar visivel, deixando o usuario "preso" sem opcao de navegacao alem do logo.
 
-### 1. Bug no Brackets.tsx - dependencia do useEffect
-O `useEffect` no Brackets.tsx tem `[id]` como dependencia, mas o codigo verifica `if (id && user)` antes de executar. Quando o componente monta, o `user` ainda pode ser `null` (auth carregando). Quando o `user` finalmente carrega, o efeito nao re-executa porque `user` nao esta no array de dependencias. Isso causa o "Carregando..." infinito.
+## Paginas e alteracoes
 
-### 2. URLs literais
-As capturas de tela mostram URLs como `/tournaments/:id/manage` (literal `:id`). Isso ocorre quando o usuario digita a rota diretamente no navegador em vez de navegar pela aplicacao. A validacao de UUID ja trata esse caso corretamente mostrando "Torneio nao encontrado".
+### 1. `src/pages/Tournaments.tsx`
+- Adicionar um header com logo e botao "Voltar" para `/dashboard` ou `/feed`
+- Atualmente a pagina nao tem header nenhum
 
-## Correcoes
+### 2. `src/pages/TournamentDetail.tsx`
+- Adicionar botao "Voltar" ao lado do logo no header, apontando para `/tournaments`
 
-### `src/pages/Brackets.tsx`
-- Adicionar `user` ao array de dependencias do `useEffect` (linha 85): mudar `[id]` para `[id, user]`
-- Isso garante que quando a autenticacao terminar de carregar, o efeito re-execute e busque os dados do torneio
+### 3. `src/pages/Brackets.tsx`
+- Adicionar botao "Voltar" no header, apontando para `/tournaments/{id}/manage`
 
-### Verificacao das outras paginas
-- `Results.tsx` (linha 58): ja tem `[id, user]` - correto
-- `ManageTournament.tsx` (linha 61): ja tem `[id, user]` - correto
-- `TournamentDetail.tsx`: verificar e corrigir se necessario
+### 4. `src/pages/Results.tsx`
+- Adicionar botao "Voltar" no header, apontando para `/tournaments/{id}/manage`
 
-## Detalhes tecnicos
+### 5. `src/pages/ManageTournament.tsx`
+- Adicionar botao "Voltar" no header, apontando para `/dashboard`
 
-A correcao e de uma unica linha:
+### 6. `src/pages/CreateTournament.tsx`
+- Adicionar botao "Voltar" no header, apontando para `/dashboard`
+
+## Padrao visual
+Todas as paginas receberao um botao com icone de seta (ArrowLeft do lucide-react) ao lado do logo no header, seguindo o padrao consistente:
 
 ```text
-// Antes (Brackets.tsx, linha 85)
-}, [id]);
-
-// Depois
-}, [id, user]);
+[<- Voltar]   MOOD PLAY
 ```
 
-Isso resolve o problema de carregamento infinito na pagina de chaveamentos. As outras paginas (Results e Manage) ja possuem a dependencia correta e funcionam quando acessadas com um ID valido de torneio atraves dos links do app (Dashboard ou pagina do torneio).
+## Detalhes tecnicos
+- Importar `ArrowLeft` do lucide-react em cada pagina
+- Adicionar `<Button variant="ghost" size="sm">` com `<Link>` dentro do header existente
+- Para paginas que nao tem header (Tournaments.tsx), criar o header padrao com border-b
