@@ -1,16 +1,30 @@
-# Ajustar CTAs do Marketplace
 
-## O que muda
+# Corrigir paginas de torneios (Brackets, Results, Manage)
 
-Na pagina principal do Marketplace, os dois links atuais ("+ Cadastrar empresa" e "Gerenciar minha empresa") serao removidos e substituidos por um unico CTA fixo no rodape da tela com o texto **"Quero vender meus produtos"**.
+## Problema
 
-## Detalhes
+As paginas `/tournaments/:id/manage`, `/tournaments/:id/brackets` e `/tournaments/:id/results` mostram "torneio nao encontrado" ou ficam carregando infinitamente porque o parametro `:id` da URL nao esta sendo validado. Quando o ID e invalido (ou literal `:id`), a query ao banco falha com erro de UUID e a pagina nunca carrega corretamente.
 
-### `src/pages/Marketplace.tsx`
+## Solucao
 
-1. **Remover** o link "+ Cadastrar empresa" que aparece ao lado da contagem de produtos (linha ~93).
-2. **Remover** o bloco "Gerenciar minha empresa" que aparece no final da pagina (linhas ~127-135). e colocar visivel na pagina da empresa
-3. **Adicionar** um botao/CTA fixo no rodape (acima do bottom nav), visivel para todos os usuarios, com o texto "Quero vender meus produtos". Ao clicar:
-  - Se o usuario estiver logado e ja tiver empresa, redireciona para `/marketplace/my-company`
-  - Caso contrario, redireciona para `/marketplace/register`
-4. O CTA tera estilo destacado com a cor verde da marca (#2BFF88), posicionado fixo na parte inferior com `fixed bottom-16` (acima da nav bar).
+### 1. `src/pages/Brackets.tsx`
+- Substituir `.single()` por `.maybeSingle()` na query do torneio (linha 56)
+- Adicionar validacao de UUID no parametro `id` antes de fazer queries
+- Se `id` for invalido, mostrar mensagem de erro imediatamente sem chamar o banco
+
+### 2. `src/pages/Results.tsx`
+- Substituir `.single()` por `.maybeSingle()` na query do torneio (linha 32)
+- Adicionar mesma validacao de UUID
+
+### 3. `src/pages/ManageTournament.tsx`
+- Substituir `.single()` por `.maybeSingle()` na query do torneio (linha 25)
+- Adicionar mesma validacao de UUID
+
+### 4. `src/pages/TournamentDetail.tsx`
+- Substituir `.single()` por `.maybeSingle()` na query do torneio
+- Adicionar mesma validacao de UUID
+
+### Detalhe tecnico
+- Funcao auxiliar de validacao UUID: `const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-.../.test(str)`
+- Se o ID nao for UUID valido, setar `dataLoaded = true` e `tournament = null` imediatamente, mostrando a tela de "Torneio nao encontrado" com botao de voltar
+- Isso previne erros 400 no banco e da feedback claro ao usuario
