@@ -195,6 +195,15 @@ const ProfileHeader = ({
                 </TooltipContent>
               </Tooltip>
             )}
+            {isOwnProfile && onEditClick && (
+              <button
+                onClick={onEditClick}
+                className="p-1.5 rounded-full transition-colors hover:bg-[#2BFF88]/20"
+                style={{ color: "#2BFF88" }}
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
           </h1>
           {(city || state) && (
             <p className="text-sm flex items-center gap-1 mt-1" style={{ color: "#9CA3AF" }}>
@@ -238,34 +247,22 @@ const ProfileHeader = ({
       )}
 
       {/* Follow / Edit / Message buttons */}
-      <div className="flex gap-2">
-      {isOwnProfile ? (
-          onEditClick && (
-            <button
-              onClick={onEditClick}
-              className="p-2 rounded-full transition-colors"
-              style={{ background: "rgba(43,255,136,0.1)", color: "#2BFF88" }}
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-          )
-        ) : currentUserId ? (
-          <>
-            <Button
-              size="sm"
-              onClick={onFollowToggle}
-              style={isFollowing ? { background: "transparent", border: "1px solid rgba(43,255,136,0.3)", color: "#9CA3AF" } : { background: "#2BFF88", color: "#050708" }}
-            >
-              {isFollowing ? "Seguindo" : "Seguir"}
+      {!isOwnProfile && currentUserId && (
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={onFollowToggle}
+            style={isFollowing ? { background: "transparent", border: "1px solid rgba(43,255,136,0.3)", color: "#9CA3AF" } : { background: "#2BFF88", color: "#050708" }}
+          >
+            {isFollowing ? "Seguindo" : "Seguir"}
+          </Button>
+          <Link to={`/messages/${profileUserId}`}>
+            <Button size="sm" variant="outline" className="border-[#2BFF88]/30 text-white">
+              <Mail className="h-4 w-4 mr-1" /> Mensagem
             </Button>
-            <Link to={`/messages/${profileUserId}`}>
-              <Button size="sm" variant="outline" className="border-[#2BFF88]/30 text-white">
-                <Mail className="h-4 w-4 mr-1" /> Mensagem
-              </Button>
-            </Link>
-          </>
-        ) : null}
-      </div>
+          </Link>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="flex gap-6 pt-2">
