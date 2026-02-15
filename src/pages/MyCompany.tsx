@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Store, Package, CreditCard, Crown, Zap } from "lucide-react";
+import { ArrowLeft, Plus, Store, Package, CreditCard, Crown, Zap, X, Image, Video } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
@@ -23,6 +24,10 @@ const MyCompany = () => {
   const [loading, setLoading] = useState(true);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [productForm, setProductForm] = useState({ name: "", description: "", price: "", external_link: "", stock: "" });
+  const [unlimitedStock, setUnlimitedStock] = useState(true);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [newImageUrl, setNewImageUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -52,6 +57,29 @@ const MyCompany = () => {
     fetch();
   }, [user]);
 
+  const addImageUrl = () => {
+    const url = newImageUrl.trim();
+    if (!url) return;
+    if (imageUrls.length >= 10) {
+      toast({ title: "Limite atingido", description: "Máximo de 10 imagens por produto.", variant: "destructive" });
+      return;
+    }
+    setImageUrls([...imageUrls, url]);
+    setNewImageUrl("");
+  };
+
+  const removeImageUrl = (index: number) => {
+    setImageUrls(imageUrls.filter((_, i) => i !== index));
+  };
+
+  const resetForm = () => {
+    setProductForm({ name: "", description: "", price: "", external_link: "", stock: "" });
+    setUnlimitedStock(true);
+    setImageUrls([]);
+    setNewImageUrl("");
+    setVideoUrl("");
+  };
+
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!company || !productForm.name || !productForm.price) return;
@@ -62,16 +90,17 @@ const MyCompany = () => {
       description: productForm.description,
       price: Number(productForm.price),
       external_link: productForm.external_link || null,
-      stock: productForm.stock ? Number(productForm.stock) : null,
-    });
+      stock: unlimitedStock ? null : (productForm.stock ? Number(productForm.stock) : null),
+      image_urls: imageUrls,
+      video_url: videoUrl || null,
+    } as any);
     setSaving(false);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Produto cadastrado!", description: "Aguardando aprovação do admin." });
       setShowAddProduct(false);
-      setProductForm({ name: "", description: "", price: "", external_link: "", stock: "" });
-      // Refresh
+      resetForm();
       const { data } = await supabase.from("products").select("*").eq("company_id", company.id).order("created_at", { ascending: false });
       setProducts(data || []);
     }
@@ -160,18 +189,69 @@ const MyCompany = () => {
 
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-display text-lg text-foreground">PRODUTOS ({products.length})</h2>
-        <Dialog open={showAddProduct} onOpenChange={setShowAddProduct}>
+        <Dialog open={showAddProduct} onOpenChange={(open) => { setShowAddProduct(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" variant="outline"><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Novo Produto</DialogTitle></DialogHeader>
             <form onSubmit={handleAddProduct} className="space-y-3">
               <div><Label>Nome *</Label><Input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} /></div>
               <div><Label>Preço *</Label><Input type="number" step="0.01" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></div>
               <div><Label>Descrição</Label><Textarea value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} rows={2} /></div>
               <div><Label>Link externo</Label><Input value={productForm.external_link} onChange={(e) => setProductForm({ ...productForm, external_link: e.target.value })} placeholder="https://..." /></div>
-              <div><Label>Estoque</Label><Input type="number" value={productForm.stock} onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })} /></div>
+
+              {/* Stock */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="unlimited-stock"
+                    checked={unlimitedStock}
+                    onCheckedChange={(checked) => setUnlimitedStock(checked === true)}
+                  />
+                  <Label htmlFor="unlimited-stock" className="cursor-pointer">Estoque ilimitado</Label>
+                </div>
+                {!unlimitedStock && (
+                  <div>
+                    <Label>Quantidade em estoque</Label>
+                    <Input type="number" value={productForm.stock} onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })} />
+                  </div>
+                )}
+              </div>
+
+              {/* Images */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1"><Image className="h-4 w-4" /> Imagens ({imageUrls.length}/10)</Label>
+                {imageUrls.map((url, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <img src={url} alt={`img-${i}`} className="h-10 w-10 rounded object-cover shrink-0" />
+                    <span className="text-xs text-muted-foreground truncate flex-1">{url}</span>
+                    <button type="button" onClick={() => removeImageUrl(i)} className="text-destructive hover:opacity-70">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                {imageUrls.length < 10 && (
+                  <div className="flex gap-2">
+                    <Input
+                      value={newImageUrl}
+                      onChange={(e) => setNewImageUrl(e.target.value)}
+                      placeholder="URL da imagem"
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addImageUrl(); } }}
+                    />
+                    <Button type="button" size="sm" variant="outline" onClick={addImageUrl}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Video */}
+              <div>
+                <Label className="flex items-center gap-1"><Video className="h-4 w-4" /> Vídeo (URL)</Label>
+                <Input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://...mp4" />
+              </div>
+
               <Button type="submit" className="w-full" disabled={saving}>{saving ? "Salvando..." : "Cadastrar produto"}</Button>
             </form>
           </DialogContent>

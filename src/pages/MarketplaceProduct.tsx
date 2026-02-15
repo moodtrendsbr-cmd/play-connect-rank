@@ -79,7 +79,12 @@ const MarketplaceProduct = () => {
       <p className="text-2xl font-bold mt-1" style={{ color: "#2BFF88" }}>R$ {Number(product.price).toFixed(2)}</p>
 
       {product.description && <p className="text-sm text-muted-foreground mt-4">{product.description}</p>}
-      {product.stock != null && <p className="text-xs text-muted-foreground mt-2">Estoque: {product.stock} unidades</p>}
+
+      {product.video_url && (
+        <div className="mt-4 rounded-xl overflow-hidden">
+          <video src={product.video_url} controls className="w-full" />
+        </div>
+      )}
 
       <Button onClick={handleBuy} className="w-full h-12 mt-6 text-lg font-bold">
         {product.external_link ? (
