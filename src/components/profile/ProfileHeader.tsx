@@ -2,10 +2,19 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { MapPin, Users, FileText, Trophy, MessageCircle, Camera, LinkIcon, ExternalLink, Mail, Pencil, Video } from "lucide-react";
+import { MapPin, Users, FileText, Trophy, MessageCircle, Camera, LinkIcon, ExternalLink, Mail, Pencil, Video, Instagram, Facebook, Youtube, Linkedin } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import FollowListDialog from "./FollowListDialog";
+
+interface SocialLinks {
+  instagram?: string | null;
+  facebook?: string | null;
+  youtube?: string | null;
+  tiktok?: string | null;
+  linkedin?: string | null;
+  x?: string | null;
+}
 
 interface ProfileHeaderProps {
   profileUserId: string;
@@ -19,6 +28,7 @@ interface ProfileHeaderProps {
   titles: string | null;
   whatsapp: string | null;
   link?: string | null;
+  socialLinks?: SocialLinks;
   showContact: boolean;
   postsCount: number;
   followersCount: number;
@@ -54,6 +64,7 @@ const ProfileHeader = ({
   titles,
   whatsapp,
   link,
+  socialLinks,
   showContact,
   postsCount,
   followersCount,
@@ -223,6 +234,42 @@ const ProfileHeader = ({
           {formatLink(link)}
           <ExternalLink className="h-3 w-3" />
         </a>
+      )}
+
+      {/* Social Links */}
+      {socialLinks && Object.values(socialLinks).some(v => v) && (
+        <div className="flex flex-wrap gap-2">
+          {socialLinks.instagram && (
+            <a href={getHref(socialLinks.instagram.startsWith("@") ? `instagram.com/${socialLinks.instagram.slice(1)}` : socialLinks.instagram)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full transition-colors hover:bg-[#2BFF88]/20" style={{ color: "#9CA3AF" }} title="Instagram">
+              <Instagram className="h-4 w-4" />
+            </a>
+          )}
+          {socialLinks.facebook && (
+            <a href={getHref(socialLinks.facebook)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full transition-colors hover:bg-[#2BFF88]/20" style={{ color: "#9CA3AF" }} title="Facebook">
+              <Facebook className="h-4 w-4" />
+            </a>
+          )}
+          {socialLinks.youtube && (
+            <a href={getHref(socialLinks.youtube)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full transition-colors hover:bg-[#2BFF88]/20" style={{ color: "#9CA3AF" }} title="YouTube">
+              <Youtube className="h-4 w-4" />
+            </a>
+          )}
+          {socialLinks.tiktok && (
+            <a href={getHref(socialLinks.tiktok.startsWith("@") ? `tiktok.com/${socialLinks.tiktok}` : socialLinks.tiktok)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full transition-colors hover:bg-[#2BFF88]/20" style={{ color: "#9CA3AF" }} title="TikTok">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 0 0-.79-.05A6.34 6.34 0 0 0 3.15 15a6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.1a8.16 8.16 0 0 0 4.76 1.52v-3.4c-.83 0-1.63-.2-2.34-.53h-.01l.01-.01-.66.01z"/></svg>
+            </a>
+          )}
+          {socialLinks.linkedin && (
+            <a href={getHref(socialLinks.linkedin)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full transition-colors hover:bg-[#2BFF88]/20" style={{ color: "#9CA3AF" }} title="LinkedIn">
+              <Linkedin className="h-4 w-4" />
+            </a>
+          )}
+          {socialLinks.x && (
+            <a href={getHref(socialLinks.x.startsWith("@") ? `x.com/${socialLinks.x.slice(1)}` : socialLinks.x)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full transition-colors hover:bg-[#2BFF88]/20" style={{ color: "#9CA3AF" }} title="X (Twitter)">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </a>
+          )}
+        </div>
       )}
 
       {/* Extra info */}

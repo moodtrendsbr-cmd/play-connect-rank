@@ -1059,6 +1059,12 @@ export type Database = {
           link: string | null
           mp_collector_id: string | null
           show_contact: boolean | null
+          social_facebook: string | null
+          social_instagram: string | null
+          social_linkedin: string | null
+          social_tiktok: string | null
+          social_x: string | null
+          social_youtube: string | null
           state: string | null
           team: string | null
           titles: string | null
@@ -1076,6 +1082,12 @@ export type Database = {
           link?: string | null
           mp_collector_id?: string | null
           show_contact?: boolean | null
+          social_facebook?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          social_tiktok?: string | null
+          social_x?: string | null
+          social_youtube?: string | null
           state?: string | null
           team?: string | null
           titles?: string | null
@@ -1093,6 +1105,12 @@ export type Database = {
           link?: string | null
           mp_collector_id?: string | null
           show_contact?: boolean | null
+          social_facebook?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          social_tiktok?: string | null
+          social_x?: string | null
+          social_youtube?: string | null
           state?: string | null
           team?: string | null
           titles?: string | null

@@ -139,6 +139,14 @@ const UserProfile = () => {
         titles={profile.titles}
         whatsapp={profile.whatsapp}
         link={(profile as any).link}
+        socialLinks={{
+          instagram: (profile as any).social_instagram,
+          facebook: (profile as any).social_facebook,
+          youtube: (profile as any).social_youtube,
+          tiktok: (profile as any).social_tiktok,
+          linkedin: (profile as any).social_linkedin,
+          x: (profile as any).social_x,
+        }}
         showContact={profile.show_contact || false}
         postsCount={postsCount}
         followersCount={followersCount}
