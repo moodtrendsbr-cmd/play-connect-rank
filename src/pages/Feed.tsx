@@ -1,12 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import FeedLayout from "@/components/feed/FeedLayout";
 import FeedTopBar from "@/components/feed/FeedTopBar";
-import FeedBottomNav from "@/components/feed/FeedBottomNav";
 import PostCard, { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
-import CreatePostDialog from "@/components/feed/CreatePostDialog";
 
 const PAGE_SIZE = 20;
 
@@ -222,7 +219,7 @@ const Feed = () => {
   };
 
   return (
-    <FeedLayout>
+    <>
       <FeedTopBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
       <main className="pt-16 pb-20 px-4 max-w-xl mx-auto space-y-4">
@@ -257,18 +254,7 @@ const Feed = () => {
         {loadingMore && <PostSkeleton />}
         <div ref={loadMoreRef} className="h-4" />
       </main>
-
-      <FeedBottomNav onCreatePost={() => setCreateOpen(true)} />
-
-      {user && (
-        <CreatePostDialog
-          open={createOpen}
-          onOpenChange={setCreateOpen}
-          userId={user.id}
-          onCreated={handleRefresh}
-        />
-      )}
-    </FeedLayout>
+    </>
   );
 };
 

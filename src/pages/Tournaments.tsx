@@ -22,51 +22,40 @@ const Tournaments = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container flex h-16 items-center justify-between">
-          <Link to="/" className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
-          <div className="flex items-center gap-4">
-            <Link to="/login"><Button variant="ghost">Entrar</Button></Link>
-          </div>
+    <main className="px-4 py-6 pb-20 max-w-3xl mx-auto">
+      <h1 className="mb-6 text-3xl font-display" style={{ color: "#fff" }}>TORNEIOS DISPONÍVEIS</h1>
+
+      {loading ? (
+        <p style={{ color: "#9CA3AF" }}>Carregando...</p>
+      ) : tournaments.length === 0 ? (
+        <Card className="p-8 text-center" style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}>
+          <p style={{ color: "#9CA3AF" }}>Nenhum torneio disponível no momento.</p>
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {tournaments.map((t) => {
+            const enrolled = t.enrollments?.[0]?.count || 0;
+            const available = t.max_slots - enrolled;
+            return (
+              <Card key={t.id} className="overflow-hidden" style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}>
+                <CardHeader>
+                  <CardTitle className="font-sans text-lg" style={{ color: "#fff" }}>🏐 {t.name}</CardTitle>
+                  <p className="text-sm" style={{ color: "#9CA3AF" }}>📍 {t.city} - {t.state}</p>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-sm" style={{ color: "#9CA3AF" }}>📅 {t.start_date}</p>
+                  <p className="text-sm" style={{ color: "#9CA3AF" }}>💰 R$ {Number(t.entry_fee).toFixed(2)}</p>
+                  <p className="text-sm" style={{ color: "#9CA3AF" }}>🎟 Vagas: {available > 0 ? available : 0}</p>
+                  <Button className="w-full mt-3" asChild>
+                    <Link to={`/tournaments/${t.id}`}>Ver detalhes</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
-      </header>
-
-      <main className="container py-8">
-        <h1 className="mb-8 text-4xl font-display text-foreground">TORNEIOS DISPONÍVEIS</h1>
-
-        {loading ? (
-          <p className="text-muted-foreground">Carregando...</p>
-        ) : tournaments.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-muted-foreground">Nenhum torneio disponível no momento.</p>
-          </Card>
-        ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {tournaments.map((t) => {
-              const enrolled = t.enrollments?.[0]?.count || 0;
-              const available = t.max_slots - enrolled;
-              return (
-                <Card key={t.id} className="overflow-hidden hover:border-primary/40 transition-colors">
-                  <CardHeader>
-                    <CardTitle className="font-sans text-xl">🏐 {t.name}</CardTitle>
-                    <p className="text-sm text-muted-foreground">📍 {t.city} - {t.state}</p>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <p className="text-sm">📅 {t.start_date}</p>
-                    <p className="text-sm">💰 R$ {Number(t.entry_fee).toFixed(2)}</p>
-                    <p className="text-sm">🎟 Vagas disponíveis: {available > 0 ? available : 0}</p>
-                    <Button className="w-full mt-4" asChild>
-                      <Link to={`/tournaments/${t.id}`}>Ver detalhes</Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </main>
-    </div>
+      )}
+    </main>
   );
 };
 

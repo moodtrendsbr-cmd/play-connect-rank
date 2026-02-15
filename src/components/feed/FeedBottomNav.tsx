@@ -2,7 +2,7 @@ import { Home, Medal, Plus, Trophy, User } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 interface FeedBottomNavProps {
-  onCreatePost: () => void;
+  onCreatePost?: () => void;
 }
 
 const navItems = [
@@ -29,7 +29,7 @@ const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
           return (
             <button
               key="create"
-              onClick={onCreatePost}
+              onClick={() => onCreatePost?.()}
               className="flex items-center justify-center rounded-full -mt-5 h-14 w-14 shadow-lg transition-transform active:scale-90"
               style={{
                 background: "#2BFF88",
