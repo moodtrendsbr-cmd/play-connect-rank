@@ -33,6 +33,15 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminTournaments from "./pages/admin/AdminTournaments";
 import AdminEnrollments from "./pages/admin/AdminEnrollments";
 import AdminFinances from "./pages/admin/AdminFinances";
+import AdminCompanies from "./pages/admin/AdminCompanies";
+import AdminProducts from "./pages/admin/AdminProducts";
+import AdminAds from "./pages/admin/AdminAds";
+import AdminSponsors from "./pages/admin/AdminSponsors";
+import Marketplace from "./pages/Marketplace";
+import MarketplaceCompany from "./pages/MarketplaceCompany";
+import MarketplaceProduct from "./pages/MarketplaceProduct";
+import MarketplaceRegister from "./pages/MarketplaceRegister";
+import MyCompany from "./pages/MyCompany";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +72,11 @@ const App = () => (
               <Route path="/tournaments/:id/match/requests" element={<MatchRequests />} />
               <Route path="/tournaments/:id/match/pair" element={<MatchPair />} />
               <Route path="/tournaments/:id/match/chat/:conversationId" element={<MatchChat />} />
+              <Route path="/marketplace" element={<Marketplace />} />
+              <Route path="/marketplace/register" element={<MarketplaceRegister />} />
+              <Route path="/marketplace/my-company" element={<MyCompany />} />
+              <Route path="/marketplace/company/:companyId" element={<MarketplaceCompany />} />
+              <Route path="/marketplace/product/:productId" element={<MarketplaceProduct />} />
             </Route>
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />
@@ -73,6 +87,10 @@ const App = () => (
               <Route path="tournaments" element={<AdminTournaments />} />
               <Route path="enrollments" element={<AdminEnrollments />} />
               <Route path="finances" element={<AdminFinances />} />
+              <Route path="companies" element={<AdminCompanies />} />
+              <Route path="products" element={<AdminProducts />} />
+              <Route path="ads" element={<AdminAds />} />
+              <Route path="sponsors" element={<AdminSponsors />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

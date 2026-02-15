@@ -6,6 +6,7 @@ import PostCard, { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
 import ClipsBar from "@/components/feed/ClipsBar";
 import FriendSuggestions from "@/components/feed/FriendSuggestions";
+import SponsoredPostCard from "@/components/feed/SponsoredPostCard";
 
 const PAGE_SIZE = 20;
 
@@ -16,6 +17,7 @@ const Feed = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sponsoredPosts, setSponsoredPosts] = useState<any[]>([]);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef(0);
@@ -26,6 +28,25 @@ const Feed = () => {
     const handler = () => mainRef.current?.scrollIntoView({ behavior: "smooth" });
     window.addEventListener("feed-scroll-top", handler);
     return () => window.removeEventListener("feed-scroll-top", handler);
+  }, []);
+
+  // Fetch sponsored posts
+  useEffect(() => {
+    const fetchSponsored = async () => {
+      const { data } = await supabase
+        .from("sponsored_posts")
+        .select("*, companies(name, logo_url)")
+        .eq("active", true)
+        .lte("active_from", new Date().toISOString())
+        .gte("active_to", new Date().toISOString());
+      setSponsoredPosts(
+        (data || []).map((sp: any) => ({
+          id: sp.id, title: sp.title, content: sp.content, image_url: sp.image_url,
+          company_id: sp.company_id, company_name: sp.companies?.name, company_logo: sp.companies?.logo_url,
+        }))
+      );
+    };
+    fetchSponsored();
   }, []);
 
   // Debounce search
@@ -261,6 +282,9 @@ const Feed = () => {
           posts.map((post, index) => (
             <div key={post.id}>
               {index === 3 && <FriendSuggestions />}
+              {index > 0 && index % 5 === 0 && sponsoredPosts.length > 0 && (
+                <SponsoredPostCard post={sponsoredPosts[Math.floor(index / 5 - 1) % sponsoredPosts.length]} />
+              )}
               <PostCard post={post} userId={user?.id} onLike={handleLike} onSave={handleSave} onRefresh={handleRefresh} />
             </div>
           ))

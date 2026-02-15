@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
+import { Store } from "lucide-react";
 
 const TournamentDetail = () => {
   const { id } = useParams();
@@ -14,6 +15,7 @@ const TournamentDetail = () => {
   const [enrollmentCount, setEnrollmentCount] = useState(0);
   const [alreadyEnrolled, setAlreadyEnrolled] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [partners, setPartners] = useState<any[]>([]);
 
   useEffect(() => {
     const fetch = async () => {
@@ -32,6 +34,14 @@ const TournamentDetail = () => {
           .maybeSingle();
         setAlreadyEnrolled(!!enrollment);
       }
+
+      // Fetch tournament partners
+      const { data: partnerData } = await supabase
+        .from("tournament_partners")
+        .select("*, companies(id, name, logo_url)")
+        .eq("tournament_id", id!)
+        .order("position_order");
+      setPartners(partnerData || []);
     };
     if (id) fetch();
   }, [id, user]);
@@ -102,6 +112,29 @@ const TournamentDetail = () => {
             </Button>
           )}
         </div>
+
+        {partners.length > 0 && (
+          <div className="mt-8">
+            <h3 className="font-display text-lg text-foreground mb-3">PARCEIROS</h3>
+            <div className="flex flex-wrap gap-3">
+              {partners.map((p) => (
+                <Link
+                  key={p.id}
+                  to={`/marketplace/company/${p.companies?.id}`}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 transition-opacity hover:opacity-80"
+                  style={{ background: "#0B0F12" }}
+                >
+                  {p.companies?.logo_url ? (
+                    <img src={p.companies.logo_url} className="h-8 w-8 rounded-lg object-cover" />
+                  ) : (
+                    <Store className="h-6 w-6 text-muted-foreground" />
+                  )}
+                  <span className="text-sm text-foreground">{p.companies?.name}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

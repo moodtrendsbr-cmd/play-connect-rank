@@ -14,7 +14,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User } from "lucide-react";
+import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart } from "lucide-react";
 
 const navItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
@@ -22,6 +22,13 @@ const navItems = [
   { title: "Torneios", url: "/admin/tournaments", icon: Trophy },
   { title: "Inscrições", url: "/admin/enrollments", icon: ClipboardList },
   { title: "Financeiro", url: "/admin/finances", icon: DollarSign },
+];
+
+const marketplaceNavItems = [
+  { title: "Empresas", url: "/admin/companies", icon: Store },
+  { title: "Produtos", url: "/admin/products", icon: Package },
+  { title: "Publicidade", url: "/admin/ads", icon: Megaphone },
+  { title: "Patrocínios", url: "/admin/sponsors", icon: Heart },
 ];
 
 const userNavItems = [
@@ -68,6 +75,23 @@ const AdminLayout = () => {
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild>
                         <NavLink to={item.url} end={item.url === "/admin"} className="hover:bg-muted/50" activeClassName="bg-muted text-primary font-medium">
+                          <item.icon className="mr-2 h-4 w-4" />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+            <SidebarGroup>
+              <SidebarGroupLabel>Marketplace</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {marketplaceNavItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink to={item.url} className="hover:bg-muted/50" activeClassName="bg-muted text-primary font-medium">
                           <item.icon className="mr-2 h-4 w-4" />
                           <span>{item.title}</span>
                         </NavLink>

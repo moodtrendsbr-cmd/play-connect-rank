@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Trophy, ClipboardList, DollarSign, AlertTriangle, UserCheck } from "lucide-react";
+import { Users, Trophy, ClipboardList, DollarSign, AlertTriangle, UserCheck, Store, Package, ShoppingCart } from "lucide-react";
 
 const AdminDashboard = () => {
   const [metrics, setMetrics] = useState({
@@ -14,17 +14,25 @@ const AdminDashboard = () => {
     pendingEnrollments: 0,
     totalRevenue: 0,
     pendingWithdrawals: 0,
+    totalCompanies: 0,
+    pendingCompanies: 0,
+    totalProducts: 0,
+    totalOrders: 0,
+    marketplaceRevenue: 0,
   });
 
   useEffect(() => {
     const fetch = async () => {
-      const [profiles, roles, tournaments, enrollments, balances, withdrawals] = await Promise.all([
+      const [profiles, roles, tournaments, enrollments, balances, withdrawals, companiesRes, productsRes, ordersRes] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }),
         supabase.from("user_roles").select("role"),
         supabase.from("tournaments").select("id, start_date, end_date"),
         supabase.from("enrollments").select("status"),
         supabase.from("organizer_balances").select("commission"),
         supabase.from("withdrawal_requests").select("amount, status"),
+        supabase.from("companies").select("id, status"),
+        supabase.from("products").select("id", { count: "exact", head: true }),
+        supabase.from("marketplace_orders").select("mood_commission"),
       ]);
 
       const organizers = (roles.data || []).filter((r) => r.role === "organizer").length;
@@ -33,6 +41,9 @@ const AdminDashboard = () => {
       const enrollData = enrollments.data || [];
       const revenue = (balances.data || []).reduce((s, b) => s + Number(b.commission), 0);
       const pendingW = (withdrawals.data || []).filter((w) => w.status === "pending").reduce((s, w) => s + Number(w.amount), 0);
+
+      const companiesData = companiesRes.data || [];
+      const mkRevenue = (ordersRes.data || []).reduce((s, o) => s + Number((o as any).mood_commission || 0), 0);
 
       setMetrics({
         totalUsers: profiles.count || 0,
@@ -44,6 +55,11 @@ const AdminDashboard = () => {
         pendingEnrollments: enrollData.filter((e) => e.status === "pending").length,
         totalRevenue: revenue,
         pendingWithdrawals: pendingW,
+        totalCompanies: companiesData.length,
+        pendingCompanies: companiesData.filter((c) => c.status === "pending_approval").length,
+        totalProducts: productsRes.count || 0,
+        totalOrders: (ordersRes.data || []).length,
+        marketplaceRevenue: mkRevenue,
       });
     };
     fetch();
@@ -56,6 +72,10 @@ const AdminDashboard = () => {
     { label: "Inscrições (Pagas/Pend.)", value: `${metrics.paidEnrollments}/${metrics.pendingEnrollments}`, icon: ClipboardList },
     { label: "Receita Mood (Comissões)", value: `R$ ${metrics.totalRevenue.toFixed(2)}`, icon: DollarSign },
     { label: "Saques Pendentes", value: `R$ ${metrics.pendingWithdrawals.toFixed(2)}`, icon: AlertTriangle },
+    { label: "Empresas (Aprov./Pend.)", value: `${metrics.totalCompanies - metrics.pendingCompanies}/${metrics.pendingCompanies}`, icon: Store },
+    { label: "Produtos", value: metrics.totalProducts, icon: Package },
+    { label: "Pedidos Marketplace", value: metrics.totalOrders, icon: ShoppingCart },
+    { label: "Receita Marketplace", value: `R$ ${metrics.marketplaceRevenue.toFixed(2)}`, icon: DollarSign },
   ];
 
   return (
