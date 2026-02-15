@@ -90,9 +90,18 @@ const Marketplace = () => {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 flex items-center px-4 h-14" style={{ background: "#050708", borderBottom: "1px solid rgba(43,255,136,0.1)" }}>
-        <ShoppingBag className="h-5 w-5 mr-2" style={{ color: "#2BFF88" }} />
-        <span className="font-display text-lg tracking-wider" style={{ color: "#2BFF88" }}>MARKETPLACE</span>
+      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14" style={{ background: "#050708", borderBottom: "1px solid rgba(43,255,136,0.1)" }}>
+        <div className="flex items-center">
+          <ShoppingBag className="h-5 w-5 mr-2" style={{ color: "#2BFF88" }} />
+          <span className="font-display text-lg tracking-wider" style={{ color: "#2BFF88" }}>MARKETPLACE</span>
+        </div>
+        <button
+          onClick={handleSellCTA}
+          className="text-xs font-medium px-3 py-1 rounded-full border transition-opacity hover:opacity-80"
+          style={{ borderColor: "rgba(43,255,136,0.4)", color: "#2BFF88" }}
+        >
+          Vender produtos
+        </button>
       </header>
 
       <main className="pt-16 pb-20 px-4 max-w-xl mx-auto">
@@ -173,15 +182,6 @@ const Marketplace = () => {
 
       </main>
 
-      <div className="fixed bottom-16 left-0 right-0 z-40 px-4 pb-2">
-        <button
-          onClick={handleSellCTA}
-          className="w-full max-w-xl mx-auto block text-center text-sm font-semibold py-3 rounded-full transition-opacity hover:opacity-90"
-          style={{ background: "#2BFF88", color: "#050708" }}
-        >
-          Quero vender meus produtos
-        </button>
-      </div>
     </>
   );
 };
