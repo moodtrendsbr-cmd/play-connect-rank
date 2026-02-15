@@ -44,10 +44,18 @@ const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
         const isActive = location.pathname === item.path;
         const Icon = item.icon!;
 
+        const handleClick = (e: React.MouseEvent) => {
+          if (item.path === "/feed" && isActive) {
+            e.preventDefault();
+            window.dispatchEvent(new Event("feed-scroll-top"));
+          }
+        };
+
         return (
           <Link
             key={item.path}
             to={item.path}
+            onClick={handleClick}
             className="flex flex-col items-center gap-0.5 py-1 px-3"
           >
             <Icon className="h-5 w-5" style={{ color: isActive ? "#2BFF88" : "#9CA3AF" }} />

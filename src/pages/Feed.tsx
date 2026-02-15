@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import FeedTopBar from "@/components/feed/FeedTopBar";
 import PostCard, { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
+import ClipsBar from "@/components/feed/ClipsBar";
 
 const PAGE_SIZE = 20;
 
@@ -17,6 +18,14 @@ const Feed = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef(0);
+  const mainRef = useRef<HTMLElement>(null);
+
+  // Expose scroll to top for bottom nav
+  useEffect(() => {
+    const handler = () => mainRef.current?.scrollIntoView({ behavior: "smooth" });
+    window.addEventListener("feed-scroll-top", handler);
+    return () => window.removeEventListener("feed-scroll-top", handler);
+  }, []);
 
   // Debounce search
   useEffect(() => {
@@ -232,7 +241,8 @@ const Feed = () => {
   return (
     <>
       <FeedTopBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-      <main className="pt-16 pb-20 px-4 max-w-xl mx-auto space-y-4">
+      <main ref={mainRef} className="pt-16 pb-20 px-4 max-w-xl mx-auto space-y-4">
+        <ClipsBar />
         {loading ? (
           <><PostSkeleton /><PostSkeleton /><PostSkeleton /></>
         ) : posts.length === 0 ? (
