@@ -20,7 +20,7 @@ const Profile = () => {
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ full_name: "", city: "", state: "", whatsapp: "", bio: "", team: "", titles: "", show_contact: false, link: "" });
+  const [form, setForm] = useState({ full_name: "", city: "", state: "", whatsapp: "", bio: "", team: "", titles: "", show_contact: false, link: "", social_instagram: "", social_facebook: "", social_youtube: "", social_tiktok: "", social_linkedin: "", social_x: "" });
   const [activeTab, setActiveTab] = useState<"posts" | "salvos">("posts");
   const [posts, setPosts] = useState<PostData[]>([]);
   const [savedPosts, setSavedPosts] = useState<PostData[]>([]);
@@ -87,6 +87,9 @@ const Profile = () => {
           full_name: p.full_name || "", city: p.city || "", state: p.state || "", whatsapp: p.whatsapp || "",
           bio: (p as any).bio || "", team: (p as any).team || "", titles: (p as any).titles || "", show_contact: (p as any).show_contact || false,
           link: (p as any).link || "",
+          social_instagram: (p as any).social_instagram || "", social_facebook: (p as any).social_facebook || "",
+          social_youtube: (p as any).social_youtube || "", social_tiktok: (p as any).social_tiktok || "",
+          social_linkedin: (p as any).social_linkedin || "", social_x: (p as any).social_x || "",
         });
         setMpCollectorId((p as any).mp_collector_id || "");
       }
@@ -234,6 +237,14 @@ const Profile = () => {
         titles={profile.titles}
         whatsapp={profile.whatsapp}
         link={profile.link}
+        socialLinks={{
+          instagram: profile.social_instagram,
+          facebook: profile.social_facebook,
+          youtube: profile.social_youtube,
+          tiktok: profile.social_tiktok,
+          linkedin: profile.social_linkedin,
+          x: profile.social_x,
+        }}
         showContact={profile.show_contact || false}
         postsCount={postsCount}
         followersCount={followersCount}
@@ -258,6 +269,20 @@ const Profile = () => {
           <div><Label style={{ color: "#9CA3AF" }}>Time</Label><Input value={form.team} onChange={(e) => setForm({ ...form, team: e.target.value })} className="mt-1" placeholder="Ex: Estrelas FC" /></div>
           <div><Label style={{ color: "#9CA3AF" }}>Títulos conquistados</Label><Input value={form.titles} onChange={(e) => setForm({ ...form, titles: e.target.value })} className="mt-1" placeholder="Ex: Campeão Municipal 2025" /></div>
           <div><Label style={{ color: "#9CA3AF" }}>Link</Label><Input value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} className="mt-1" placeholder="https://seusite.com" /></div>
+          
+          {/* Social Media */}
+          <div className="pt-2">
+            <Label className="text-sm font-semibold" style={{ color: "#2BFF88" }}>Redes Sociais</Label>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><Label style={{ color: "#9CA3AF" }}>Instagram</Label><Input value={form.social_instagram} onChange={(e) => setForm({ ...form, social_instagram: e.target.value })} className="mt-1" placeholder="@seuusuario" /></div>
+            <div><Label style={{ color: "#9CA3AF" }}>Facebook</Label><Input value={form.social_facebook} onChange={(e) => setForm({ ...form, social_facebook: e.target.value })} className="mt-1" placeholder="facebook.com/voce" /></div>
+            <div><Label style={{ color: "#9CA3AF" }}>YouTube</Label><Input value={form.social_youtube} onChange={(e) => setForm({ ...form, social_youtube: e.target.value })} className="mt-1" placeholder="youtube.com/@canal" /></div>
+            <div><Label style={{ color: "#9CA3AF" }}>TikTok</Label><Input value={form.social_tiktok} onChange={(e) => setForm({ ...form, social_tiktok: e.target.value })} className="mt-1" placeholder="@seuusuario" /></div>
+            <div><Label style={{ color: "#9CA3AF" }}>LinkedIn</Label><Input value={form.social_linkedin} onChange={(e) => setForm({ ...form, social_linkedin: e.target.value })} className="mt-1" placeholder="linkedin.com/in/voce" /></div>
+            <div><Label style={{ color: "#9CA3AF" }}>X (Twitter)</Label><Input value={form.social_x} onChange={(e) => setForm({ ...form, social_x: e.target.value })} className="mt-1" placeholder="@seuusuario" /></div>
+          </div>
+
           <div className="flex items-center justify-between">
             <Label style={{ color: "#9CA3AF" }}>Mostrar contato no perfil</Label>
             <Switch checked={form.show_contact} onCheckedChange={(v) => setForm({ ...form, show_contact: v })} />
