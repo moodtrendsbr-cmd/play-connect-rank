@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      athlete_sponsors: {
+        Row: {
+          amount: number
+          athlete_user_id: string
+          company_id: string
+          created_at: string
+          end_date: string | null
+          id: string
+          start_date: string
+        }
+        Insert: {
+          amount?: number
+          athlete_user_id: string
+          company_id: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          start_date: string
+        }
+        Update: {
+          amount?: number
+          athlete_user_id?: string
+          company_id?: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_sponsors_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clips: {
         Row: {
           author_id: string
@@ -75,6 +113,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      companies: {
+        Row: {
+          category: string | null
+          city: string | null
+          commission_rate: number
+          created_at: string
+          description: string | null
+          email: string | null
+          feed_ads_enabled: boolean
+          highlight_enabled: boolean
+          id: string
+          logo_url: string | null
+          name: string
+          owner_user_id: string
+          phone: string | null
+          plan: string
+          state: string | null
+          status: string
+          tournament_visibility: boolean
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          city?: string | null
+          commission_rate?: number
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          feed_ads_enabled?: boolean
+          highlight_enabled?: boolean
+          id?: string
+          logo_url?: string | null
+          name: string
+          owner_user_id: string
+          phone?: string | null
+          plan?: string
+          state?: string | null
+          status?: string
+          tournament_visibility?: boolean
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          city?: string | null
+          commission_rate?: number
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          feed_ads_enabled?: boolean
+          highlight_enabled?: boolean
+          id?: string
+          logo_url?: string | null
+          name?: string
+          owner_user_id?: string
+          phone?: string | null
+          plan?: string
+          state?: string | null
+          status?: string
+          tournament_visibility?: boolean
+          updated_at?: string
+        }
+        Relationships: []
       }
       enrollments: {
         Row: {
@@ -232,6 +333,50 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_orders: {
+        Row: {
+          buyer_user_id: string
+          company_amount: number
+          created_at: string
+          id: string
+          mood_commission: number
+          product_id: string
+          quantity: number
+          status: string
+          total_amount: number
+        }
+        Insert: {
+          buyer_user_id: string
+          company_amount?: number
+          created_at?: string
+          id?: string
+          mood_commission?: number
+          product_id: string
+          quantity?: number
+          status?: string
+          total_amount: number
+        }
+        Update: {
+          buyer_user_id?: string
+          company_amount?: number
+          created_at?: string
+          id?: string
+          mood_commission?: number
+          product_id?: string
+          quantity?: number
+          status?: string
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -721,6 +866,56 @@ export type Database = {
           },
         ]
       }
+      products: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string | null
+          external_link: string | null
+          featured: boolean
+          id: string
+          image_urls: string[]
+          name: string
+          price: number
+          status: string
+          stock: number | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description?: string | null
+          external_link?: string | null
+          featured?: boolean
+          id?: string
+          image_urls?: string[]
+          name: string
+          price: number
+          status?: string
+          stock?: number | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          external_link?: string | null
+          featured?: boolean
+          id?: string
+          image_urls?: string[]
+          name?: string
+          price?: number
+          status?: string
+          stock?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_highlights: {
         Row: {
           created_at: string
@@ -804,6 +999,63 @@ export type Database = {
         }
         Relationships: []
       }
+      sponsored_posts: {
+        Row: {
+          active: boolean
+          active_from: string
+          active_to: string
+          city: string | null
+          company_id: string
+          content: string
+          created_at: string
+          id: string
+          image_url: string | null
+          post_id: string | null
+          title: string
+        }
+        Insert: {
+          active?: boolean
+          active_from: string
+          active_to: string
+          city?: string | null
+          company_id: string
+          content: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          post_id?: string | null
+          title: string
+        }
+        Update: {
+          active?: boolean
+          active_from?: string
+          active_to?: string
+          city?: string | null
+          company_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          post_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsored_posts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsored_posts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournament_match_pool: {
         Row: {
           availability: string | null
@@ -847,6 +1099,45 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "tournament_match_pool_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tournament_partners: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          position_order: number
+          tournament_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          position_order?: number
+          tournament_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          position_order?: number
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_partners_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_partners_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
             referencedRelation: "tournaments"
@@ -981,6 +1272,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_company_owner: {
+        Args: { _company_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_match_conversation_member: {
         Args: { _conversation_id: string; _user_id: string }
         Returns: boolean
