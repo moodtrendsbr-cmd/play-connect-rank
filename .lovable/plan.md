@@ -1,38 +1,39 @@
 
-# Adicionar botao "Voltar" em todas as paginas de torneios
+# Adicionar acesso a Chaveamento e Resultados no painel admin
 
 ## Problema
-Varias paginas nao possuem botao de voltar visivel, deixando o usuario "preso" sem opcao de navegacao alem do logo.
+O painel admin mostra a lista de torneios com botoes de "Ver" e "Gerenciar", mas nao tem acesso direto ao chaveamento e resultados. O usuario precisa navegar por varias paginas para chegar la.
 
-## Paginas e alteracoes
+## Solucao
 
-### 1. `src/pages/Tournaments.tsx`
-- Adicionar um header com logo e botao "Voltar" para `/dashboard` ou `/feed`
-- Atualmente a pagina nao tem header nenhum
+### `src/pages/admin/AdminTournaments.tsx`
+Adicionar dois novos botoes de acao na coluna "Acoes" de cada torneio:
+- Botao de **Chaveamento** (icone `GitBranch` ou `Network`) linkando para `/tournaments/{id}/brackets`
+- Botao de **Resultados** (icone `Trophy` ou `ClipboardList`) linkando para `/tournaments/{id}/results`
 
-### 2. `src/pages/TournamentDetail.tsx`
-- Adicionar botao "Voltar" ao lado do logo no header, apontando para `/tournaments`
+A coluna de acoes passara de 3 para 5 botoes:
+1. Ver torneio (Eye) - ja existe
+2. Gerenciar (Settings) - ja existe
+3. **Chaveamento (GitBranch)** - novo
+4. **Resultados (Trophy)** - novo
+5. Excluir (Trash2) - ja existe
 
-### 3. `src/pages/Brackets.tsx`
-- Adicionar botao "Voltar" no header, apontando para `/tournaments/{id}/manage`
+### Detalhes tecnicos
 
-### 4. `src/pages/Results.tsx`
-- Adicionar botao "Voltar" no header, apontando para `/tournaments/{id}/manage`
-
-### 5. `src/pages/ManageTournament.tsx`
-- Adicionar botao "Voltar" no header, apontando para `/dashboard`
-
-### 6. `src/pages/CreateTournament.tsx`
-- Adicionar botao "Voltar" no header, apontando para `/dashboard`
-
-## Padrao visual
-Todas as paginas receberao um botao com icone de seta (ArrowLeft do lucide-react) ao lado do logo no header, seguindo o padrao consistente:
+No arquivo `src/pages/admin/AdminTournaments.tsx`:
+- Importar `GitBranch` e `Trophy` do lucide-react (linha 10)
+- Adicionar 2 botoes na div de acoes (entre o botao Settings e o Trash2, linhas 96-98):
 
 ```text
-[<- Voltar]   MOOD PLAY
+// Novo botao Chaveamento
+<Button variant="ghost" size="icon" asChild title="Chaveamento">
+  <Link to={`/tournaments/${t.id}/brackets`}><GitBranch className="h-4 w-4" /></Link>
+</Button>
+
+// Novo botao Resultados
+<Button variant="ghost" size="icon" asChild title="Resultados">
+  <Link to={`/tournaments/${t.id}/results`}><Trophy className="h-4 w-4" /></Link>
+</Button>
 ```
 
-## Detalhes tecnicos
-- Importar `ArrowLeft` do lucide-react em cada pagina
-- Adicionar `<Button variant="ghost" size="sm">` com `<Link>` dentro do header existente
-- Para paginas que nao tem header (Tournaments.tsx), criar o header padrao com border-b
+Isso permite ao admin acessar chaveamento e resultados diretamente da tabela, sem precisar navegar pela pagina de gerenciamento primeiro.
