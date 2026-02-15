@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import ProfileHeader from "@/components/profile/ProfileHeader";
@@ -10,6 +10,7 @@ import PostGrid from "@/components/profile/PostGrid";
 const UserProfile = () => {
   const { userId } = useParams<{ userId: string }>();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<PostData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +85,12 @@ const UserProfile = () => {
   }, [userId, user]);
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
+
+  useEffect(() => {
+    if (user && userId && user.id === userId) {
+      navigate("/profile", { replace: true });
+    }
+  }, [user, userId, navigate]);
 
   const handleFollowToggle = async () => {
     if (!user || !userId) return;
