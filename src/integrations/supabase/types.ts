@@ -1050,11 +1050,13 @@ export type Database = {
       }
       profiles: {
         Row: {
+          arena: string | null
           avatar_url: string | null
           bio: string | null
           city: string | null
           created_at: string
           full_name: string
+          gender: string | null
           id: string
           link: string | null
           mp_collector_id: string | null
@@ -1073,11 +1075,13 @@ export type Database = {
           whatsapp: string | null
         }
         Insert: {
+          arena?: string | null
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
           created_at?: string
           full_name?: string
+          gender?: string | null
           id?: string
           link?: string | null
           mp_collector_id?: string | null
@@ -1096,11 +1100,13 @@ export type Database = {
           whatsapp?: string | null
         }
         Update: {
+          arena?: string | null
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
           created_at?: string
           full_name?: string
+          gender?: string | null
           id?: string
           link?: string | null
           mp_collector_id?: string | null

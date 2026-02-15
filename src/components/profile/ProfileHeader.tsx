@@ -25,6 +25,7 @@ interface ProfileHeaderProps {
   state: string | null;
   bio: string | null;
   team: string | null;
+  arena?: string | null;
   titles: string | null;
   whatsapp: string | null;
   link?: string | null;
@@ -61,6 +62,7 @@ const ProfileHeader = ({
   state,
   bio,
   team,
+  arena,
   titles,
   whatsapp,
   link,
@@ -274,9 +276,9 @@ const ProfileHeader = ({
 
       {/* Extra info */}
       <div className="flex flex-wrap gap-3">
-        {team && (
+        {(team || arena) && (
           <span className="text-xs flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: "rgba(43,255,136,0.1)", color: "#2BFF88" }}>
-            <Users className="h-3 w-3" /> {team}
+            <Users className="h-3 w-3" /> {team && arena ? `${team} / ${arena}` : team || arena}
           </span>
         )}
         {titles && (
