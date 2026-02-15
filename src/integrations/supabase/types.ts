@@ -99,6 +99,74 @@ export type Database = {
           },
         ]
       }
+      follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      hashtag_searches: {
+        Row: {
+          created_at: string
+          hashtag_id: string | null
+          id: string
+          searched_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          hashtag_id?: string | null
+          id?: string
+          searched_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          hashtag_id?: string | null
+          id?: string
+          searched_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hashtag_searches_hashtag_id_fkey"
+            columns: ["hashtag_id"]
+            isOneToOne: false
+            referencedRelation: "hashtags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hashtags: {
+        Row: {
+          created_at: string
+          id: string
+          tag: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          tag: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          tag?: string
+        }
+        Relationships: []
+      }
       likes: {
         Row: {
           comment_id: string | null
@@ -232,6 +300,39 @@ export type Database = {
           },
         ]
       }
+      post_hashtags: {
+        Row: {
+          hashtag_id: string
+          id: string
+          post_id: string
+        }
+        Insert: {
+          hashtag_id: string
+          id?: string
+          post_id: string
+        }
+        Update: {
+          hashtag_id?: string
+          id?: string
+          post_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_hashtags_hashtag_id_fkey"
+            columns: ["hashtag_id"]
+            isOneToOne: false
+            referencedRelation: "hashtags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_hashtags_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_media: {
         Row: {
           created_at: string
@@ -334,36 +435,48 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          bio: string | null
           city: string | null
           created_at: string
           full_name: string
           id: string
           mp_collector_id: string | null
+          show_contact: boolean | null
           state: string | null
+          team: string | null
+          titles: string | null
           updated_at: string
           user_id: string
           whatsapp: string | null
         }
         Insert: {
           avatar_url?: string | null
+          bio?: string | null
           city?: string | null
           created_at?: string
           full_name?: string
           id?: string
           mp_collector_id?: string | null
+          show_contact?: boolean | null
           state?: string | null
+          team?: string | null
+          titles?: string | null
           updated_at?: string
           user_id: string
           whatsapp?: string | null
         }
         Update: {
           avatar_url?: string | null
+          bio?: string | null
           city?: string | null
           created_at?: string
           full_name?: string
           id?: string
           mp_collector_id?: string | null
+          show_contact?: boolean | null
           state?: string | null
+          team?: string | null
+          titles?: string | null
           updated_at?: string
           user_id?: string
           whatsapp?: string | null
