@@ -4,8 +4,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Heart, TrendingUp, Crown, Trophy } from "lucide-react";
 
+type FilterType = "all" | "victories" | "profiles" | "hashtags";
+
+const filters: { value: FilterType; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "victories", label: "Vitórias" },
+  { value: "profiles", label: "Perfis" },
+  { value: "hashtags", label: "Hashtags" },
+];
+
 const Ranking = () => {
   const navigate = useNavigate();
+  const [filter, setFilter] = useState<FilterType>("all");
   const [ranking, setRanking] = useState<any[]>([]);
   const [trendingHashtags, setTrendingHashtags] = useState<{ tag: string; count: number }[]>([]);
   const [topPost, setTopPost] = useState<any>(null);
@@ -80,12 +90,35 @@ const Ranking = () => {
   const medals = ["🥇", "🥈", "🥉"];
   const getInitials = (name: string) => name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 
+  const showHashtags = filter === "all" || filter === "hashtags";
+  const showTopPost = filter === "all";
+  const showProfiles = filter === "all" || filter === "profiles";
+  const showVictories = filter === "all" || filter === "victories";
+
   return (
     <main className="px-4 py-6 pb-20 max-w-2xl mx-auto space-y-8">
       <h1 className="text-3xl font-display text-white">RANKING</h1>
 
+      {/* Filter Chips */}
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {filters.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setFilter(f.value)}
+            className="px-4 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap transition-colors"
+            style={
+              filter === f.value
+                ? { background: "#2BFF88", color: "#050708" }
+                : { background: "rgba(43,255,136,0.1)", color: "#9CA3AF" }
+            }
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {/* Trending Hashtags */}
-      {trendingHashtags.length > 0 && (
+      {showHashtags && trendingHashtags.length > 0 && (
         <section>
           <h2 className="text-lg font-display text-white flex items-center gap-2 mb-3"><TrendingUp className="h-5 w-5" style={{ color: "#2BFF88" }} /> Em Alta</h2>
           <div className="flex flex-wrap gap-2">
@@ -104,7 +137,7 @@ const Ranking = () => {
       )}
 
       {/* Top Post of the Week */}
-      {topPost && (
+      {showTopPost && topPost && (
         <section>
           <h2 className="text-lg font-display text-white flex items-center gap-2 mb-3"><Heart className="h-5 w-5" style={{ color: "#ef4444" }} /> Post da Semana</h2>
           <Card className="overflow-hidden" style={{ background: "#0B0F12", border: "1px solid rgba(43,255,136,0.3)", boxShadow: "0 0 20px rgba(43,255,136,0.1)" }}>
@@ -131,7 +164,7 @@ const Ranking = () => {
       )}
 
       {/* Top Profiles */}
-      {topProfiles.length > 0 && (
+      {showProfiles && topProfiles.length > 0 && (
         <section>
           <h2 className="text-lg font-display text-white flex items-center gap-2 mb-3"><Crown className="h-5 w-5" style={{ color: "#FFD700" }} /> Top Perfis</h2>
           <div className="space-y-2">
@@ -158,31 +191,33 @@ const Ranking = () => {
       )}
 
       {/* Victory Ranking */}
-      <section>
-        <h2 className="text-lg font-display text-white flex items-center gap-2 mb-3"><Trophy className="h-5 w-5" style={{ color: "#2BFF88" }} /> Ranking de Vitórias</h2>
-        {ranking.length === 0 ? (
-          <Card className="p-8 text-center" style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}>
-            <p style={{ color: "#9CA3AF" }}>Nenhum resultado registrado ainda.</p>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {ranking.map((r, i) => (
-              <Card key={r.user_id} className="cursor-pointer transition-colors" onClick={() => navigate(`/profile/${r.user_id}`)} style={{ background: "#0B0F12", borderColor: i < 3 ? "rgba(43,255,136,0.3)" : "rgba(43,255,136,0.1)" }}>
-                <CardContent className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg w-8 text-center">{medals[i] || `#${i + 1}`}</span>
-                    <div>
-                      <p className="font-bold text-white">{r.profile?.full_name || "Atleta"}</p>
-                      {r.profile?.city && <p className="text-xs" style={{ color: "#9CA3AF" }}>{r.profile.city} - {r.profile.state}</p>}
+      {showVictories && (
+        <section>
+          <h2 className="text-lg font-display text-white flex items-center gap-2 mb-3"><Trophy className="h-5 w-5" style={{ color: "#2BFF88" }} /> Ranking de Vitórias</h2>
+          {ranking.length === 0 ? (
+            <Card className="p-8 text-center" style={{ background: "#0B0F12", borderColor: "rgba(43,255,136,0.1)" }}>
+              <p style={{ color: "#9CA3AF" }}>Nenhum resultado registrado ainda.</p>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {ranking.map((r, i) => (
+                <Card key={r.user_id} className="cursor-pointer transition-colors" onClick={() => navigate(`/profile/${r.user_id}`)} style={{ background: "#0B0F12", borderColor: i < 3 ? "rgba(43,255,136,0.3)" : "rgba(43,255,136,0.1)" }}>
+                  <CardContent className="flex items-center justify-between py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg w-8 text-center">{medals[i] || `#${i + 1}`}</span>
+                      <div>
+                        <p className="font-bold text-white">{r.profile?.full_name || "Atleta"}</p>
+                        {r.profile?.city && <p className="text-xs" style={{ color: "#9CA3AF" }}>{r.profile.city} - {r.profile.state}</p>}
+                      </div>
                     </div>
-                  </div>
-                  <span className="text-lg font-bold" style={{ color: "#2BFF88" }}>{r.points} pts</span>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </section>
+                    <span className="text-lg font-bold" style={{ color: "#2BFF88" }}>{r.points} pts</span>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </main>
   );
 };

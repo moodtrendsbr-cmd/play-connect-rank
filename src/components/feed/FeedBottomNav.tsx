@@ -18,7 +18,7 @@ const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around h-16 px-2"
+      className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around h-14 px-2"
       style={{
         background: "#050708",
         borderTop: "1px solid rgba(43, 255, 136, 0.1)",
@@ -30,13 +30,13 @@ const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
             <button
               key="create"
               onClick={() => onCreatePost?.()}
-              className="flex items-center justify-center rounded-full -mt-5 h-14 w-14 shadow-lg transition-transform active:scale-90"
+              className="flex items-center justify-center rounded-full -mt-4 h-11 w-11 shadow-lg transition-transform active:scale-90"
               style={{
                 background: "#2BFF88",
-                boxShadow: "0 0 20px rgba(43, 255, 136, 0.4)",
+                boxShadow: "0 0 16px rgba(43, 255, 136, 0.4)",
               }}
             >
-              <Plus className="h-7 w-7" style={{ color: "#050708" }} />
+              <Plus className="h-5 w-5" style={{ color: "#050708" }} />
             </button>
           );
         }
