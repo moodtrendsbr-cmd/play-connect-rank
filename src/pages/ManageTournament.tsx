@@ -5,11 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { AlertCircle, ArrowLeft, Plus, Trophy, Users, ChevronRight } from "lucide-react";
+import { AlertCircle, ArrowLeft } from "lucide-react";
 
 const MOOD_COMMISSION_PERCENT = 10;
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
@@ -36,11 +33,6 @@ const ManageTournament = () => {
   const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [hasMpAccount, setHasMpAccount] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
-  const [modalities, setModalities] = useState<any[]>([]);
-  const [addModalOpen, setAddModalOpen] = useState(false);
-  const [newModName, setNewModName] = useState("");
-  const [newModType, setNewModType] = useState("dupla");
-
   useEffect(() => {
     const fetchData = async () => {
       if (!id || !isValidUUID(id)) {
@@ -54,15 +46,13 @@ const ManageTournament = () => {
       if (!t) return;
 
       // Fetch enrollments, modalities, and MP account in parallel
-      const [enrollRes, modRes, profileRes] = await Promise.all([
+      const [enrollRes, profileRes] = await Promise.all([
         supabase.from("enrollments").select("*").eq("tournament_id", id!),
-        supabase.from("tournament_modalities").select("*, modality_entries(count)").eq("tournament_id", id!),
         supabase.from("profiles").select("mp_collector_id").eq("user_id", t.organizer_id).single(),
       ]);
 
       const enrollData = enrollRes.data || [];
       setEnrollments(enrollData);
-      setModalities(modRes.data || []);
       setHasMpAccount(!!(profileRes.data as any)?.mp_collector_id);
 
       const userIds = enrollData.map((en) => en.user_id).filter(Boolean);
@@ -79,24 +69,6 @@ const ManageTournament = () => {
     if (id && user) fetchData();
   }, [id, user]);
 
-  const addModality = async () => {
-    if (!newModName.trim() || !id) return;
-    const { error } = await supabase.from("tournament_modalities").insert({
-      tournament_id: id,
-      name: newModName.trim(),
-      type: newModType,
-    });
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Modalidade criada!" });
-      setNewModName("");
-      setAddModalOpen(false);
-      // Refresh modalities
-      const { data } = await supabase.from("tournament_modalities").select("*, modality_entries(count)").eq("tournament_id", id);
-      setModalities(data || []);
-    }
-  };
 
   const paid = enrollments.filter((e) => e.status === "paid");
   const pending = enrollments.filter((e) => e.status === "pending");
@@ -180,93 +152,6 @@ const ManageTournament = () => {
           </Card>
         )}
 
-        {/* Modalities Section */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-display text-foreground">🏐 MODALIDADES</h2>
-            <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-1">
-                  <Plus className="h-4 w-4" /> Adicionar
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Nova Modalidade</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-2">
-                  <div>
-                    <label className="text-sm text-muted-foreground">Nome</label>
-                    <Input
-                      placeholder="Ex: Dupla Mista, Trio Feminino..."
-                      value={newModName}
-                      onChange={(e) => setNewModName(e.target.value)}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm text-muted-foreground">Tipo</label>
-                    <Select value={newModType} onValueChange={setNewModType}>
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="individual">Individual</SelectItem>
-                        <SelectItem value="dupla">Dupla</SelectItem>
-                        <SelectItem value="trio">Trio</SelectItem>
-                        <SelectItem value="equipe">Equipe</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button onClick={addModality} className="w-full" disabled={!newModName.trim()}>
-                    Criar modalidade
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {modalities.length === 0 ? (
-            <Card className="p-6 text-center">
-              <p className="text-muted-foreground mb-3">Nenhuma modalidade criada ainda.</p>
-              <Button size="sm" variant="outline" onClick={() => setAddModalOpen(true)} className="gap-1">
-                <Plus className="h-4 w-4" /> Criar primeira modalidade
-              </Button>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {modalities.map((mod) => {
-                const status = statusConfig[mod.status] || statusConfig.open;
-                const entryCount = mod.modality_entries?.[0]?.count || 0;
-                return (
-                  <Link
-                    key={mod.id}
-                    to={`/tournaments/${id}/brackets`}
-                    className="block rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-colors group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <h3 className="text-lg font-display text-foreground">{mod.name}</h3>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground uppercase tracking-wider">
-                            {typeLabels[mod.type] || mod.type}
-                          </span>
-                          <Badge variant="outline" className={status.className}>{status.label}</Badge>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <Users className="h-3.5 w-3.5" />
-                          <span>{entryCount} inscritos</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Trophy className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                        <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
 
         {/* Paid */}
         <h2 className="text-2xl font-display text-foreground mb-4">✅ PAGOS</h2>
