@@ -122,19 +122,19 @@ const Index = () => {
         </div>
       </header>
 
-      <section className="relative flex min-h-screen items-start overflow-hidden pt-32 sm:pt-40">
+      <section className="relative flex min-h-screen items-center justify-center overflow-hidden pt-16">
         <div className="absolute inset-0">
-          <div className="absolute left-1/4 top-1/3 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[400px] rounded-full bg-primary/3 blur-[120px]" />
+          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[400px] rounded-full bg-primary/3 blur-[120px]" />
         </div>
-        <div className="container relative z-10 px-6 sm:px-8 max-w-2xl ml-auto mr-auto sm:ml-[8%] sm:mr-auto text-left">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-sans leading-relaxed">
+        <div className="container relative z-10 px-6 sm:px-8 text-center">
+          <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-sans leading-loose">
             <motion.span
               className="block font-bold text-foreground"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0 }}
             >
-              Onde <span className="text-primary">jogos</span> viram <span className="text-primary">ranking</span>.
+              Onde jogos viram ranking.
             </motion.span>
             <motion.span
               className="block font-medium text-foreground"
@@ -142,7 +142,7 @@ const Index = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.12 }}
             >
-              Atletas ganham <span className="text-primary">valor</span>.
+              Atletas ganham valor.
             </motion.span>
             <motion.span
               className="block font-medium text-foreground"
@@ -150,7 +150,7 @@ const Index = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.24 }}
             >
-              Torneios viram <span className="text-primary">ecossistema</span>.
+              Torneios viram ecossistema.
             </motion.span>
             <motion.span
               className="block font-medium text-foreground"
@@ -158,12 +158,12 @@ const Index = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.36 }}
             >
-              Empresas ganham <span className="text-primary">visibilidade</span>.
+              Empresas ganham visibilidade.
             </motion.span>
           </h1>
 
           <motion.p
-            className="mt-8 max-w-md text-sm sm:text-base text-muted-foreground"
+            className="mx-auto mt-8 max-w-md text-sm sm:text-base text-muted-foreground"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.55 }}
@@ -172,7 +172,7 @@ const Index = () => {
           </motion.p>
 
           <motion.div
-            className="mt-10 flex flex-col items-start gap-3"
+            className="mt-10 flex flex-col items-center gap-3"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.7 }}
@@ -186,7 +186,7 @@ const Index = () => {
             <Button variant="outline" size="sm" className="border-muted-foreground/30 text-muted-foreground hover:text-foreground hover:bg-muted/20" asChild>
               <Link to="/tournaments">Ver torneios disponíveis</Link>
             </Button>
-            <div className="flex flex-wrap gap-2 mt-3">
+            <div className="flex flex-wrap justify-center gap-2 mt-3">
               {[
                 { label: "Sou Atleta", target: "atletas" },
                 { label: "Sou Organizador", target: "organizadores" },
