@@ -1,107 +1,156 @@
 
 
-# Atualizar paginas de torneios para novo formato de modalidades + busca por cidade
+# Reformulacao da Pagina de Criar Torneio
 
 ## Resumo
 
-Atualizar as paginas de gerenciamento, listagem publica e resultados para usar o novo sistema de modalidades. Adicionar busca por cidade na listagem publica de torneios.
+Reestruturar completamente a pagina de criacao de torneio com novos campos, sistema de tags adicionaveis, busca de CEP automatica, upload de regulamento, vagas por combinacao de categoria/genero/modalidade, e checkbox de termos na inscricao.
 
 ---
 
-## 1. Pagina Publica de Torneios (`src/pages/Tournaments.tsx`)
+## Mudancas no Banco de Dados
 
-### Mudancas:
-- Adicionar campo de **busca por cidade** (Input com icone de busca)
-- Filtrar torneios apenas **em andamento** (data atual entre start_date e end_date) ou futuros
-- Adicionar filtro visual por status: "Todos", "Em andamento", "Proximos"
-- Adicionar badge de status em cada card (Em andamento / Inscricoes abertas)
-- Adicionar link para chaveamentos em cada card de torneio
-- Melhorar visual com skeleton loader durante carregamento
+Adicionar novas colunas na tabela `tournaments`:
 
-### Logica de filtro:
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| `modality` | text | "Volei de Praia" ou "Volei de Quadra" |
+| `gender` | text[] | Array de generos adicionados (Masculino, Feminino, Misto, custom) |
+| `categories` | text[] | Array de categorias (Iniciante, Intermediario, Open, custom) |
+| `types` | text[] | Array de tipos (Individual, Duplas, Trios, Quartetos, Equipes, custom) |
+| `arena` | text | Nome da arena |
+| `zip_code` | text | CEP |
+| `entry_fee_2` | numeric | Valor da segunda inscricao |
+| `entry_fee_3` | numeric | Valor da terceira inscricao |
+| `rules_file_url` | text | URL do arquivo de regulamento |
+| `slot_config` | jsonb | Vagas por combinacao (ex: `[{"type":"Dupla","category":"Iniciante","gender":"Masculino","slots":16}]`) |
+
+Criar bucket de storage `tournament-files` para upload de regulamentos.
+
+---
+
+## Sistema de Vagas por Combinacao
+
+O campo `max_slots` (vagas totais) atual sera substituido por um sistema onde o organizador define vagas **por combinacao** de Tipo + Categoria + Genero.
+
+### Como funciona:
+
+1. O organizador adiciona os valores de Tipo (ex: Dupla, Trio), Categoria (ex: Iniciante, Open) e Genero (ex: Masculino, Feminino)
+2. O sistema gera automaticamente todas as combinacoes possiveis
+3. Para cada combinacao, o organizador define a quantidade de vagas
+4. Exemplo visual:
+
 ```text
-- Busca por cidade: filtro local no state (case-insensitive)
-- Torneios visiveis: is_public = true E end_date >= hoje
-- Status: start_date <= hoje = "Em andamento", start_date > hoje = "Inscricoes abertas"
+VAGAS POR CATEGORIA
+
+Dupla | Iniciante | Masculino   [ 16 ] vagas
+Dupla | Iniciante | Feminino    [ 16 ] vagas
+Dupla | Open      | Masculino   [ 8  ] vagas
+Trio  | Misto     | Feminino    [ 12 ] vagas
+
+Total de vagas: 52
 ```
 
+5. O organizador pode remover combinacoes que nao deseja (ex: nao quer "Trio Iniciante Masculino")
+6. Os dados sao salvos como JSON no campo `slot_config`
+
 ---
 
-## 2. Pagina de Gerenciamento (`src/pages/ManageTournament.tsx`)
+## Estrutura do Formulario (ordem dos campos)
 
-### Mudancas:
-- Remover botoes antigos "Gerar Chaves" e "Lancar Resultados" (linhas 192-194) que apontam para o formato antigo
-- Substituir por **secao de Modalidades** que lista as modalidades do torneio
-- Cada modalidade mostra: nome, tipo, status, total de inscritos, botao "Gerenciar"
-- Botao "Gerenciar" leva para `/tournaments/:id/brackets` (que ja tem o novo sistema)
-- Adicionar botao "Adicionar Modalidade" inline (sem precisar ir para outra pagina)
-- Manter resumo financeiro e listagem de inscricoes como estao
+1. **Nome do Torneio** - texto (ja existe)
+2. **Modalidade** - Select: "Volei de Praia" / "Volei de Quadra"
+3. **Genero** - Tags adicionaveis (sugestoes: Masculino, Feminino, Misto + custom)
+4. **Tipo** - Tags adicionaveis (sugestoes: Individual, Duplas, Trios, Quartetos, Equipes + custom)
+5. **Categoria** - Tags adicionaveis (sugestoes: Iniciante, Intermediario, Open + custom)
+6. **Vagas por combinacao** - Tabela gerada automaticamente a partir das tags acima, com campo de vagas para cada linha
+7. **Arena** - texto livre
+8. **CEP** - com busca automatica via ViaCEP
+9. **Endereco** - auto-preenchido pelo CEP ou manual
+10. **Cidade / Estado** - auto-preenchido pelo CEP ou manual
+11. **Data inicio / Data fim**
+12. **Valor inscricao (R$)**
+13. **Valor 2a inscricao (R$)** e **Valor 3a inscricao (R$)**
+14. **Prazo pagamento (dias)**
+15. **Regulamento** - Textarea + botao upload de arquivo
+16. **Match** - Switch ativado por padrao
 
-### Secao adicionada (entre inscricoes e botoes):
-```text
-MODALIDADES
-[+ Adicionar Modalidade]
+---
 
-Card: Dupla Mista | 12 inscritos | Em andamento | [Gerenciar]
-Card: Trio Feminino | 8 inscritos | Inscricoes abertas | [Gerenciar]
+## Componente TagInput
+
+Componente reutilizavel que:
+- Mostra botoes com sugestoes pre-definidas
+- Permite digitar valor customizado e adicionar com Enter
+- Tags adicionadas aparecem como chips com botao X para remover
+- Usado para Genero, Tipo e Categoria
+
+---
+
+## Busca de CEP (ViaCEP)
+
+- Ao digitar 8 digitos, busca `https://viacep.com.br/ws/{cep}/json/`
+- Se encontrar, preenche cidade, estado e endereco automaticamente
+- Se nao encontrar, permite preenchimento manual
+- Feedback visual durante a busca (loading)
+
+---
+
+## Checkbox de Termos na Inscricao
+
+Na pagina `TournamentDetail.tsx`, antes do botao de inscricao:
+
+> "Declaro que li o regulamento e aceito os termos para divulgacao de minha imagem nos perfis de torneios e divulgacoes vinculados a Mood Play"
+
+Botao de inscricao so habilita quando marcado.
+
+---
+
+## Detalhes Tecnicos
+
+### Migration SQL
+
+```sql
+ALTER TABLE tournaments
+  ADD COLUMN IF NOT EXISTS modality text DEFAULT 'Vôlei de Praia',
+  ADD COLUMN IF NOT EXISTS gender text[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS categories text[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS types text[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS arena text,
+  ADD COLUMN IF NOT EXISTS zip_code text,
+  ADD COLUMN IF NOT EXISTS entry_fee_2 numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS entry_fee_3 numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS rules_file_url text,
+  ADD COLUMN IF NOT EXISTS slot_config jsonb DEFAULT '[]';
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('tournament-files', 'tournament-files', true)
+ON CONFLICT DO NOTHING;
+
+CREATE POLICY "Auth users upload tournament files"
+ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'tournament-files' AND auth.uid() IS NOT NULL);
+
+CREATE POLICY "Public view tournament files"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'tournament-files');
 ```
 
----
+### Formato do slot_config (JSONB)
 
-## 3. Pagina de Resultados (`src/pages/Results.tsx`)
+```json
+[
+  { "type": "Dupla", "category": "Iniciante", "gender": "Masculino", "slots": 16 },
+  { "type": "Dupla", "category": "Open", "gender": "Feminino", "slots": 8 }
+]
+```
 
-### Mudancas:
-- Atualizar para usar o novo sistema de modalidades em vez do antigo `match_results`
-- Listar modalidades do torneio com status
-- Para cada modalidade, mostrar resumo: total de jogos, jogos finalizados, top 4 (se finalizado)
-- Clicar em "Ver resultados" leva para `/tournaments/:id/brackets` com a modalidade pre-selecionada
-- Manter como pagina de visao geral dos resultados, redirecionando para o sistema principal de brackets
+### Arquivos a Criar/Modificar
 
-### Alternativa simplificada:
-- Redirecionar diretamente para `/tournaments/:id/brackets` ja que toda a funcionalidade de resultados ja existe la (aba "Jogos/Resultados" e "Top 4")
-- Manter a pagina Results como um wrapper que redireciona para Brackets
-
----
-
-## 4. Dashboard (`src/pages/Dashboard.tsx`)
-
-### Mudancas:
-- Nos cards de torneio do organizador, adicionar botao "Chaveamentos" ao lado de "Gerenciar"
-- Para atletas, adicionar link para ver chaveamentos do torneio inscrito
-
----
-
-## Detalhes tecnicos
-
-### `src/pages/Tournaments.tsx`
-- Adicionar state `search` e `filter` (all/active/upcoming)
-- Adicionar `Input` com placeholder "Buscar por cidade..." no topo
-- Filtrar `tournaments` localmente por `city` ou `state` contendo o texto de busca
-- Filtrar por data: `end_date >= today` para esconder encerrados
-- Badge de status: comparar `start_date` e `end_date` com data atual
-- Adicionar `Skeleton` loader durante carregamento
-
-### `src/pages/ManageTournament.tsx`
-- Importar `supabase` para buscar `tournament_modalities` e `modality_entries`
-- Adicionar state para modalidades
-- Renderizar secao "MODALIDADES" entre a listagem de inscritos e os botoes antigos
-- Remover botoes antigos de "Gerar Chaves" e "Lancar Resultados"
-- Cada modalidade card com Link para `/tournaments/:id/brackets`
-
-### `src/pages/Results.tsx`
-- Substituir query de `match_results` por `tournament_modalities` + `modality_matches`
-- Listar modalidades com contagem de jogos finalizados
-- Botao "Ver detalhes" leva para `/tournaments/:id/brackets`
-
-### `src/pages/Dashboard.tsx`
-- No card de torneio do organizador, adicionar segundo botao "Chaveamentos" linkando para `/tournaments/:id/brackets`
-
----
-
-## Arquivos modificados
-
-1. `src/pages/Tournaments.tsx` - busca por cidade + filtro de status + visual melhorado
-2. `src/pages/ManageTournament.tsx` - secao de modalidades + remover botoes antigos
-3. `src/pages/Results.tsx` - migrar para novo formato de modalidades
-4. `src/pages/Dashboard.tsx` - link para chaveamentos nos cards de torneio
+| Arquivo | Acao |
+|---------|------|
+| `src/components/ui/tag-input.tsx` | Criar - componente de tags adicionaveis |
+| `src/pages/CreateTournament.tsx` | Modificar - formulario completo reformulado |
+| `src/pages/TournamentDetail.tsx` | Modificar - checkbox de termos na inscricao |
+| Migration SQL | Executar - novas colunas + bucket de storage |
 
