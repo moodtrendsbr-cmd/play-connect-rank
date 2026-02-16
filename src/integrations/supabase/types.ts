@@ -1482,6 +1482,71 @@ export type Database = {
           },
         ]
       }
+      sponsorship_giveaways: {
+        Row: {
+          contact_email: string | null
+          contact_name: string | null
+          contact_whatsapp: string | null
+          created_at: string
+          delivery_address: string | null
+          delivery_deadline: string | null
+          id: string
+          item_type: string
+          needs_refrigeration: boolean | null
+          notes: string | null
+          pickup_address: string | null
+          quantity: number
+          rules: string | null
+          sponsorship_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_whatsapp?: string | null
+          created_at?: string
+          delivery_address?: string | null
+          delivery_deadline?: string | null
+          id?: string
+          item_type: string
+          needs_refrigeration?: boolean | null
+          notes?: string | null
+          pickup_address?: string | null
+          quantity?: number
+          rules?: string | null
+          sponsorship_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_whatsapp?: string | null
+          created_at?: string
+          delivery_address?: string | null
+          delivery_deadline?: string | null
+          id?: string
+          item_type?: string
+          needs_refrigeration?: boolean | null
+          notes?: string | null
+          pickup_address?: string | null
+          quantity?: number
+          rules?: string | null
+          sponsorship_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsorship_giveaways_sponsorship_id_fkey"
+            columns: ["sponsorship_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_sponsorships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           canceled_at: string | null
@@ -1710,6 +1775,7 @@ export type Database = {
       }
       tournament_sponsorships: {
         Row: {
+          clicks_count: number
           company_id: string
           created_at: string
           id: string
@@ -1721,8 +1787,10 @@ export type Database = {
           status: string
           tournament_id: string
           updated_at: string
+          views_count: number
         }
         Insert: {
+          clicks_count?: number
           company_id: string
           created_at?: string
           id?: string
@@ -1734,8 +1802,10 @@ export type Database = {
           status?: string
           tournament_id: string
           updated_at?: string
+          views_count?: number
         }
         Update: {
+          clicks_count?: number
           company_id?: string
           created_at?: string
           id?: string
@@ -1747,6 +1817,7 @@ export type Database = {
           status?: string
           tournament_id?: string
           updated_at?: string
+          views_count?: number
         }
         Relationships: [
           {
@@ -1949,6 +2020,10 @@ export type Database = {
       }
       is_pair_member: {
         Args: { _pair_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_sponsorship_company_owner: {
+        Args: { _sponsorship_id: string; _user_id: string }
         Returns: boolean
       }
       is_tournament_owner: {
