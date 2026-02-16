@@ -134,7 +134,7 @@ const AdminAnalytics = () => {
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <Card>
-              <CardHeader><CardTitle className="text-sm">Receita por Cidade</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm font-sans font-semibold">Receita por Cidade</CardTitle></CardHeader>
               <CardContent>
                 {revenueByCity.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">Sem dados</p>
@@ -153,7 +153,7 @@ const AdminAnalytics = () => {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-sm">Top Torneios por Views</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm font-sans font-semibold">Top Torneios por Views</CardTitle></CardHeader>
               <CardContent>
                 {topTournaments.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">Sem dados</p>
@@ -173,7 +173,7 @@ const AdminAnalytics = () => {
           </div>
 
           <Card>
-            <CardHeader><CardTitle className="text-sm">Top Empresas por Clicks</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-sm font-sans font-semibold">Top Empresas por Clicks</CardTitle></CardHeader>
             <CardContent>
               {topCompanies.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">Sem dados</p>
