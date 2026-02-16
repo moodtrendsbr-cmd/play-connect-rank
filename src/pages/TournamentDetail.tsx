@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
@@ -12,7 +13,7 @@ const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-
 
 const TournamentDetail = () => {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const navigate = useNavigate();
   const [tournament, setTournament] = useState<any>(null);
   const [enrollmentCount, setEnrollmentCount] = useState(0);
@@ -66,6 +67,7 @@ const TournamentDetail = () => {
 
   const available = tournament.max_slots - enrollmentCount;
   const isFinished = new Date(tournament.end_date) < new Date();
+  const isAthlete = !userRole || userRole === "athlete";
 
   return (
     <div className="min-h-screen bg-background">
@@ -99,13 +101,15 @@ const TournamentDetail = () => {
           </Card>
         )}
 
-        <div className="mt-6 rounded-lg border border-border bg-muted/50 p-4 text-sm text-muted-foreground">
-          Ao se inscrever, sua vaga fica reservada por {tournament.payment_deadline_days} dias.
-          A confirmação acontece automaticamente após pagamento.
-        </div>
+        {isAthlete && (
+          <div className="mt-6 rounded-lg border border-border bg-muted/50 p-4 text-sm text-muted-foreground">
+            Ao se inscrever, sua vaga fica reservada por {tournament.payment_deadline_days} dias.
+            A confirmação acontece automaticamente após pagamento.
+          </div>
+        )}
 
         {/* Terms checkbox */}
-        {!isFinished && !alreadyEnrolled && available > 0 && (
+        {isAthlete && !isFinished && !alreadyEnrolled && available > 0 && (
           <div className="mt-6 flex items-start gap-3 rounded-lg border border-border bg-card p-4">
             <Checkbox
               id="terms"
@@ -127,30 +131,32 @@ const TournamentDetail = () => {
                 <Link to={`/tournaments/${id}/brackets`}>🏆 Ver resultados</Link>
               </Button>
             </>
-          ) : alreadyEnrolled ? (
-            <Button className="w-full h-14 text-lg font-bold" asChild>
-              <Link to={`/payment/${id}`}>Continuar para pagamento</Link>
-            </Button>
-          ) : available <= 0 ? (
-            <Button disabled className="w-full h-14 text-lg">Vagas esgotadas</Button>
-          ) : tournament.match_enabled ? (
-            <>
+          ) : isAthlete ? (
+            alreadyEnrolled ? (
+              <Button className="w-full h-14 text-lg font-bold" asChild>
+                <Link to={`/payment/${id}`}>Continuar para pagamento</Link>
+              </Button>
+            ) : available <= 0 ? (
+              <Button disabled className="w-full h-14 text-lg">Vagas esgotadas</Button>
+            ) : tournament.match_enabled ? (
+              <>
+                <Button onClick={handleEnroll} disabled={!termsAccepted} className="w-full h-14 text-lg font-bold box-glow">
+                  👥 Tenho dupla/time
+                </Button>
+                <Button variant="outline" disabled={!termsAccepted} className="w-full h-14 text-lg font-bold border-primary text-primary" asChild={termsAccepted}>
+                  {termsAccepted ? (
+                    <Link to={`/tournaments/${id}/match`}>🔍 Procurar parceiros</Link>
+                  ) : (
+                    <span>🔍 Procurar parceiros</span>
+                  )}
+                </Button>
+              </>
+            ) : (
               <Button onClick={handleEnroll} disabled={!termsAccepted} className="w-full h-14 text-lg font-bold box-glow">
-                👥 Tenho dupla/time
+                🟢 Inscrever-se
               </Button>
-              <Button variant="outline" disabled={!termsAccepted} className="w-full h-14 text-lg font-bold border-primary text-primary" asChild={termsAccepted}>
-                {termsAccepted ? (
-                  <Link to={`/tournaments/${id}/match`}>🔍 Procurar parceiros</Link>
-                ) : (
-                  <span>🔍 Procurar parceiros</span>
-                )}
-              </Button>
-            </>
-          ) : (
-            <Button onClick={handleEnroll} disabled={!termsAccepted} className="w-full h-14 text-lg font-bold box-glow">
-              🟢 Inscrever-se
-            </Button>
-          )}
+            )
+          ) : null}
 
           {user?.id === tournament.organizer_id && (
             <Button variant="outline" className="w-full h-14 text-lg font-bold mt-3" asChild>
