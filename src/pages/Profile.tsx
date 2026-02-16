@@ -207,7 +207,7 @@ const Profile = () => {
     else await supabase.from("post_saves").insert({ user_id: user.id, post_id: postId });
   };
 
-  if (!profile) return <div className="flex min-h-screen items-center justify-center text-white">Carregando...</div>;
+  if (!user || !profile) return <div className="flex min-h-screen items-center justify-center text-white">Carregando...</div>;
 
   const statusColors: Record<string, string> = {
     pending: "bg-secondary/20 text-secondary",
