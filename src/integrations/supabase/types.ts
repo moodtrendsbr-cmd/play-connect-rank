@@ -1660,6 +1660,118 @@ export type Database = {
           },
         ]
       }
+      tournament_sponsor_plans: {
+        Row: {
+          active: boolean | null
+          created_at: string
+          description: string | null
+          display_name: string
+          feed_visibility: boolean | null
+          id: string
+          max_tournaments: number | null
+          name: string
+          physical_banner_allowed: boolean | null
+          price: number
+          signup_visibility: boolean | null
+          tournament_visibility: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string
+          description?: string | null
+          display_name: string
+          feed_visibility?: boolean | null
+          id?: string
+          max_tournaments?: number | null
+          name: string
+          physical_banner_allowed?: boolean | null
+          price?: number
+          signup_visibility?: boolean | null
+          tournament_visibility?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          feed_visibility?: boolean | null
+          id?: string
+          max_tournaments?: number | null
+          name?: string
+          physical_banner_allowed?: boolean | null
+          price?: number
+          signup_visibility?: boolean | null
+          tournament_visibility?: boolean | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tournament_sponsorships: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          link: string | null
+          logo_url: string | null
+          message: string | null
+          payment_id: string | null
+          plan_id: string
+          status: string
+          tournament_id: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          link?: string | null
+          logo_url?: string | null
+          message?: string | null
+          payment_id?: string | null
+          plan_id: string
+          status?: string
+          tournament_id: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          link?: string | null
+          logo_url?: string | null
+          message?: string | null
+          payment_id?: string | null
+          plan_id?: string
+          status?: string
+          tournament_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_sponsorships_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_sponsorships_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_sponsor_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_sponsorships_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournaments: {
         Row: {
           address: string | null
