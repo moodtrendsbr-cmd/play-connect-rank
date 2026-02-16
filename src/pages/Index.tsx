@@ -51,12 +51,20 @@ const Index = () => {
             <span className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</span>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="ghost" asChild>
-              <Link to="/login">Entrar</Link>
-            </Button>
-            <Button asChild>
-              <Link to="/register">Cadastrar</Link>
-            </Button>
+            {user && userRole === "admin" ? (
+              <Button asChild>
+                <Link to="/admin">Painel Admin</Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" asChild>
+                  <Link to="/login">Entrar</Link>
+                </Button>
+                <Button asChild>
+                  <Link to="/register">Cadastrar</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
