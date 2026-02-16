@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Search, Trophy, MapPin, Calendar, Ticket } from "lucide-react";
+import { ArrowLeft, Search, Trophy, MapPin, Calendar } from "lucide-react";
 
 type StatusFilter = "all" | "active" | "upcoming" | "finished";
 
@@ -123,12 +123,10 @@ const Tournaments = () => {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {filtered.map((t) => {
-              const enrolled = t.enrollments?.[0]?.count || 0;
-              const available = t.max_slots - enrolled;
               const status = getTournamentStatus(t);
               const statusInfo = statusConfig[status];
               return (
-                <Card key={t.id} className="overflow-hidden hover:border-primary/30 transition-colors">
+              <Card key={t.id} className="overflow-hidden hover:border-primary/30 transition-colors">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="font-sans text-lg">🏐 {t.name}</CardTitle>
@@ -136,29 +134,31 @@ const Tournaments = () => {
                         {statusInfo.label}
                       </Badge>
                     </div>
+                    {t.arena && (
+                      <p className="text-sm text-muted-foreground">🏟️ {t.arena}</p>
+                    )}
                     <p className="text-sm text-muted-foreground flex items-center gap-1">
                       <MapPin className="h-3.5 w-3.5" /> {t.city} - {t.state}
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Calendar className="h-3.5 w-3.5" /> {t.start_date}
+                      <Calendar className="h-3.5 w-3.5" /> {t.start_date} — {t.end_date}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       💰 R$ {Number(t.entry_fee).toFixed(2)}
-                    </p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Ticket className="h-3.5 w-3.5" /> Vagas: {available > 0 ? available : 0}
                     </p>
                     <div className="flex gap-2 mt-3">
                       <Button className="flex-1" asChild>
                         <Link to={`/tournaments/${t.id}`}>Ver detalhes</Link>
                       </Button>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to={`/tournaments/${t.id}/brackets`} className="gap-1">
-                          <Trophy className="h-3.5 w-3.5" /> Chaves
-                        </Link>
-                      </Button>
+                      {status === "active" || status === "finished" ? (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/tournaments/${t.id}/brackets`} className="gap-1">
+                            <Trophy className="h-3.5 w-3.5" /> Chaves
+                          </Link>
+                        </Button>
+                      ) : null}
                     </div>
                   </CardContent>
                 </Card>
