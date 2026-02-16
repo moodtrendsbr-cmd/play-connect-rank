@@ -134,7 +134,7 @@ const Index = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0 }}
             >
-              Onde jogos viram ranking.
+              Onde <span className="text-primary">jogos</span> viram ranking.
             </motion.span>
             <motion.span
               className="block font-bold text-foreground"
