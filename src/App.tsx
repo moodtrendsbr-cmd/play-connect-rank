@@ -46,6 +46,8 @@ import MarketplaceRegister from "./pages/MarketplaceRegister";
 import MyCompany from "./pages/MyCompany";
 import Cart from "./pages/Cart";
 import MarketplaceCheckout from "./pages/MarketplaceCheckout";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +63,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/tournaments/create" element={<CreateTournament />} />
             <Route element={<AppLayout />}>
