@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import PostSkeleton from "@/components/feed/PostSkeleton";
 import PostGrid from "@/components/profile/PostGrid";
 
 const Profile = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ full_name: "", city: "", state: "", whatsapp: "", bio: "", team: "", arena: "", titles: "", show_contact: false, link: "", gender: "", social_instagram: "", social_facebook: "", social_youtube: "", social_tiktok: "", social_linkedin: "", social_x: "" });
@@ -207,7 +208,15 @@ const Profile = () => {
     else await supabase.from("post_saves").insert({ user_id: user.id, post_id: postId });
   };
 
-  if (!user || !profile) return <div className="flex min-h-screen items-center justify-center text-white">Carregando...</div>;
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/login", { replace: true });
+    }
+  }, [authLoading, user, navigate]);
+
+  if (authLoading || !user || !profile) return <div className="flex min-h-screen items-center justify-center text-white">Carregando...</div>;
 
   const statusColors: Record<string, string> = {
     pending: "bg-secondary/20 text-secondary",
