@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { Trophy, Users, Zap, BarChart3, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const features = [
   {
@@ -27,6 +29,19 @@ const features = [
 ];
 
 const Index = () => {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && user) {
+      navigate("/feed", { replace: true });
+    }
+  }, [loading, user, navigate]);
+
+  if (loading || user) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
