@@ -17,7 +17,7 @@ const FeedTopBar = ({ searchQuery, onSearchChange }: FeedTopBarProps) => {
         boxShadow: "0 1px 20px rgba(43, 255, 136, 0.05)",
       }}
     >
-      <Link to="/" className="font-display text-xl tracking-wider" style={{ color: "#2BFF88" }}>
+      <Link to="/feed" className="font-display text-xl tracking-wider" style={{ color: "#2BFF88" }}>
         🏐 MOOD PLAY
       </Link>
 
