@@ -5,25 +5,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "@/hooks/use-toast";
-import { AlertCircle, ArrowLeft } from "lucide-react";
+import { AlertCircle, ArrowLeft, ChevronDown, Pencil } from "lucide-react";
+import EditTournamentForm from "@/components/tournament/EditTournamentForm";
 
 const MOOD_COMMISSION_PERCENT = 10;
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
-
-const statusConfig: Record<string, { label: string; className: string }> = {
-  open: { label: "Inscrições Abertas", className: "bg-primary/20 text-primary border-primary/30" },
-  closed: { label: "Inscrições Encerradas", className: "bg-secondary/20 text-secondary border-secondary/30" },
-  bracket_generated: { label: "Em Andamento", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-  finished: { label: "Finalizado", className: "bg-muted text-muted-foreground border-border" },
-};
-
-const typeLabels: Record<string, string> = {
-  individual: "Individual",
-  dupla: "Dupla",
-  trio: "Trio",
-  equipe: "Equipe",
-};
 
 const ManageTournament = () => {
   const { id } = useParams();
@@ -33,6 +21,8 @@ const ManageTournament = () => {
   const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [hasMpAccount, setHasMpAccount] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       if (!id || !isValidUUID(id)) {
@@ -45,7 +35,6 @@ const ManageTournament = () => {
       setDataLoaded(true);
       if (!t) return;
 
-      // Fetch enrollments, modalities, and MP account in parallel
       const [enrollRes, profileRes] = await Promise.all([
         supabase.from("enrollments").select("*").eq("tournament_id", id!),
         supabase.from("profiles").select("mp_collector_id").eq("user_id", t.organizer_id).single(),
@@ -68,7 +57,6 @@ const ManageTournament = () => {
     };
     if (id && user) fetchData();
   }, [id, user]);
-
 
   const paid = enrollments.filter((e) => e.status === "paid");
   const pending = enrollments.filter((e) => e.status === "pending");
@@ -152,6 +140,32 @@ const ManageTournament = () => {
           </Card>
         )}
 
+        {/* Edit Tournament */}
+        <Collapsible open={editOpen} onOpenChange={setEditOpen} className="mb-8">
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" className="w-full justify-between gap-2 h-12">
+              <span className="flex items-center gap-2">
+                <Pencil className="h-4 w-4" />
+                Editar Configurações do Torneio
+              </span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${editOpen ? "rotate-180" : ""}`} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-4">
+            <Card>
+              <CardContent className="pt-6">
+                <EditTournamentForm
+                  tournament={tournament}
+                  userId={user.id}
+                  onSaved={(updated) => {
+                    setTournament(updated);
+                    setEditOpen(false);
+                  }}
+                />
+              </CardContent>
+            </Card>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Paid */}
         <h2 className="text-2xl font-display text-foreground mb-4">✅ PAGOS</h2>
