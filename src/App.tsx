@@ -46,8 +46,10 @@ import MarketplaceRegister from "./pages/MarketplaceRegister";
 import MyCompany from "./pages/MyCompany";
 import Cart from "./pages/Cart";
 import MarketplaceCheckout from "./pages/MarketplaceCheckout";
+import MarketplaceTournaments from "./pages/MarketplaceTournaments";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import AdminSponsorships from "./pages/admin/AdminSponsorships";
 
 const queryClient = new QueryClient();
 
@@ -88,6 +90,7 @@ const App = () => (
               <Route path="/marketplace/product/:productId" element={<MarketplaceProduct />} />
               <Route path="/marketplace/cart" element={<Cart />} />
               <Route path="/marketplace/checkout" element={<MarketplaceCheckout />} />
+              <Route path="/marketplace/tournaments" element={<MarketplaceTournaments />} />
             </Route>
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />
@@ -102,6 +105,7 @@ const App = () => (
               <Route path="products" element={<AdminProducts />} />
               <Route path="ads" element={<AdminAds />} />
               <Route path="sponsors" element={<AdminSponsors />} />
+              <Route path="sponsorships" element={<AdminSponsorships />} />
               <Route path="monetization" element={<AdminMonetization />} />
             </Route>
             <Route path="*" element={<NotFound />} />

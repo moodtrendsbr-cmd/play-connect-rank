@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Store, Settings, ArrowLeft } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -169,13 +170,13 @@ const TournamentDetail = () => {
 
         {partners.length > 0 && (
           <div className="mt-8">
-            <h3 className="font-display text-lg text-foreground mb-3">PARCEIROS</h3>
+            <h3 className="font-display text-lg text-foreground mb-3">🤝 PARCEIROS OFICIAIS</h3>
             <div className="flex flex-wrap gap-3">
               {partners.map((p) => (
                 <Link
                   key={p.id}
                   to={`/marketplace/company/${p.companies?.id}`}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 transition-opacity hover:opacity-80"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 border border-primary/20 transition-all hover:border-primary/40 hover:shadow-[0_0_10px_hsl(110_100%_55%/0.1)]"
                   style={{ background: "#0B0F12" }}
                 >
                   {p.companies?.logo_url ? (
@@ -184,6 +185,7 @@ const TournamentDetail = () => {
                     <Store className="h-6 w-6 text-muted-foreground" />
                   )}
                   <span className="text-sm text-foreground">{p.companies?.name}</span>
+                  <Badge variant="outline" className="text-[10px] border-primary/30 text-primary ml-1">Parceiro</Badge>
                 </Link>
               ))}
             </div>

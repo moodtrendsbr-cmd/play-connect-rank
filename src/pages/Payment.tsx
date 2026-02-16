@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { CheckCircle, Plus, Trash2, CreditCard, QrCode, Search, UserPlus } from "lucide-react";
+import { CheckCircle, Plus, Trash2, CreditCard, QrCode, Search, UserPlus, Store } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface Athlete {
   id: string;
@@ -35,6 +36,7 @@ const Payment = () => {
   const [loading, setLoading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<any>(null);
   const [enrollmentIds, setEnrollmentIds] = useState<string[]>([]);
+  const [sponsors, setSponsors] = useState<any[]>([]);
 
   // Card fields
   const [cardForm, setCardForm] = useState({
@@ -72,6 +74,17 @@ const Payment = () => {
       if (keyData?.public_key) {
         setMpPublicKey(keyData.public_key);
       }
+
+      // Fetch active sponsors with signup_visibility
+      const { data: sponsorData } = await supabase
+        .from("tournament_sponsorships")
+        .select("*, companies(id, name, logo_url), tournament_sponsor_plans!inner(signup_visibility)")
+        .eq("tournament_id", id!)
+        .eq("status", "active");
+      const filtered = (sponsorData || []).filter(
+        (s: any) => s.tournament_sponsor_plans?.signup_visibility
+      );
+      setSponsors(filtered);
     };
     if (id) fetch();
   }, [id]);
@@ -557,6 +570,28 @@ const Payment = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Sponsors block */}
+        {sponsors.length > 0 && (
+          <Card className="mb-6 border-primary/20">
+            <CardContent className="pt-5">
+              <h4 className="font-display text-sm text-foreground mb-3">🤝 PARCEIROS OFICIAIS</h4>
+              <div className="flex flex-wrap gap-3">
+                {sponsors.map((s) => (
+                  <div key={s.id} className="flex items-center gap-2 rounded-lg px-3 py-2 bg-muted/50 border border-border">
+                    {(s as any).companies?.logo_url ? (
+                      <img src={(s as any).companies.logo_url} className="h-7 w-7 rounded object-cover" />
+                    ) : (
+                      <Store className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <span className="text-xs text-foreground">{(s as any).companies?.name}</span>
+                    <Badge variant="outline" className="text-[9px] border-primary/30 text-primary">Parceiro</Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Button
           onClick={handlePayment}
