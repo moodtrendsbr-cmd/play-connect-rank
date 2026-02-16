@@ -50,6 +50,9 @@ import MarketplaceTournaments from "./pages/MarketplaceTournaments";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import AdminSponsorships from "./pages/admin/AdminSponsorships";
+import AdminAnalytics from "./pages/admin/AdminAnalytics";
+import AdminGifts from "./pages/admin/AdminGifts";
+import AdminPlans from "./pages/admin/AdminPlans";
 import SponsorLayout from "./pages/sponsor/SponsorLayout";
 import SponsorDashboard from "./pages/sponsor/SponsorDashboard";
 import SponsorTournaments from "./pages/sponsor/SponsorTournaments";
@@ -115,6 +118,9 @@ const App = () => (
               <Route path="ads" element={<AdminAds />} />
               <Route path="sponsors" element={<AdminSponsors />} />
               <Route path="sponsorships" element={<AdminSponsorships />} />
+              <Route path="analytics" element={<AdminAnalytics />} />
+              <Route path="gifts" element={<AdminGifts />} />
+              <Route path="plans" element={<AdminPlans />} />
               <Route path="monetization" element={<AdminMonetization />} />
             </Route>
             <Route path="*" element={<NotFound />} />

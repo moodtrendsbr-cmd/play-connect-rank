@@ -1,0 +1,1 @@
+ALTER TABLE sponsorship_giveaways ADD COLUMN IF NOT EXISTS admin_notes text;
