@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import GenerateBracketDialog from "./GenerateBracketDialog";
+import { useEntryMembers } from "@/hooks/useEntryMembers";
+import AthleteAvatar from "./AthleteAvatar";
 
 interface TabBracketViewProps {
   modalityId: string;
@@ -12,7 +14,6 @@ interface TabBracketViewProps {
 
 const TabBracketView = ({ modalityId, isOrganizer }: TabBracketViewProps) => {
   const [matches, setMatches] = useState<any[]>([]);
-  const [entries, setEntries] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [showGenerate, setShowGenerate] = useState(false);
 
@@ -26,25 +27,19 @@ const TabBracketView = ({ modalityId, isOrganizer }: TabBracketViewProps) => {
       .order("round_number")
       .order("match_number");
 
-    const mList = matchData || [];
-    setMatches(mList);
-
-    const entryIds = [...new Set(mList.flatMap((m) => [m.entry_a_id, m.entry_b_id, m.winner_entry_id].filter(Boolean)))];
-    if (entryIds.length > 0) {
-      const { data: entryData } = await supabase
-        .from("modality_entries")
-        .select("*")
-        .in("id", entryIds);
-      const map: Record<string, any> = {};
-      (entryData || []).forEach((e) => { map[e.id] = e; });
-      setEntries(map);
-    }
+    setMatches(matchData || []);
     setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, [modalityId]);
 
-  if (loading) {
+  const allEntryIds = useMemo(() => {
+    return [...new Set(matches.flatMap((m) => [m.entry_a_id, m.entry_b_id, m.winner_entry_id].filter(Boolean)))];
+  }, [matches]);
+
+  const { entryMembers, membersLoading } = useEntryMembers(allEntryIds);
+
+  if (loading || membersLoading) {
     return (
       <div className="flex gap-8 overflow-x-auto pb-4">
         {[1, 2, 3].map((i) => (
@@ -80,7 +75,6 @@ const TabBracketView = ({ modalityId, isOrganizer }: TabBracketViewProps) => {
     );
   }
 
-  // Group by round
   const rounds: Record<number, any[]> = {};
   matches.forEach((m) => {
     if (!rounds[m.round_number]) rounds[m.round_number] = [];
@@ -89,9 +83,28 @@ const TabBracketView = ({ modalityId, isOrganizer }: TabBracketViewProps) => {
 
   const roundKeys = Object.keys(rounds).map(Number).sort((a, b) => a - b);
 
-  const getEntryName = (id: string | null) => {
-    if (!id) return "A definir";
-    return entries[id]?.name || "A definir";
+  const renderEntrySlot = (entryId: string | null, isWinner: boolean) => {
+    if (!entryId) {
+      return <span className="text-muted-foreground text-sm truncate">A definir</span>;
+    }
+    const em = entryMembers[entryId];
+    const members = em?.members || [];
+
+    if (members.length === 0) {
+      return (
+        <span className={`text-sm truncate ${isWinner ? "text-primary font-semibold" : "text-foreground"}`}>
+          {em?.entryName || "A definir"}
+        </span>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-1 min-w-0 overflow-hidden">
+        {members.map((m) => (
+          <AthleteAvatar key={m.memberId} member={m} showFullName={false} size="h-6 w-6" />
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -116,7 +129,7 @@ const TabBracketView = ({ modalityId, isOrganizer }: TabBracketViewProps) => {
           const isLast = roundIdx === roundKeys.length - 1;
 
           return (
-            <div key={round} className="flex flex-col min-w-[220px]">
+            <div key={round} className="flex flex-col min-w-[240px]">
               <h4 className="text-xs uppercase tracking-wider text-muted-foreground mb-3 text-center font-display">
                 {isLast && roundKeys.length > 1 ? "Final" : `Rodada ${round}`}
               </h4>
@@ -141,9 +154,7 @@ const TabBracketView = ({ modalityId, isOrganizer }: TabBracketViewProps) => {
                           aWon ? "bg-primary/10" : ""
                         }`}
                       >
-                        <span className={`truncate ${aWon ? "text-primary font-semibold" : "text-foreground"}`}>
-                          {getEntryName(m.entry_a_id)}
-                        </span>
+                        <div className="flex-1 min-w-0">{renderEntrySlot(m.entry_a_id, aWon)}</div>
                         {m.score_a !== null && (
                           <span className="text-muted-foreground font-mono ml-2">{m.score_a}</span>
                         )}
@@ -153,9 +164,7 @@ const TabBracketView = ({ modalityId, isOrganizer }: TabBracketViewProps) => {
                           bWon ? "bg-primary/10" : ""
                         }`}
                       >
-                        <span className={`truncate ${bWon ? "text-primary font-semibold" : "text-foreground"}`}>
-                          {getEntryName(m.entry_b_id)}
-                        </span>
+                        <div className="flex-1 min-w-0">{renderEntrySlot(m.entry_b_id, bWon)}</div>
                         {m.score_b !== null && (
                           <span className="text-muted-foreground font-mono ml-2">{m.score_b}</span>
                         )}

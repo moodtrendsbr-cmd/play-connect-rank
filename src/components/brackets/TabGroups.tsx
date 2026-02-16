@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Layers } from "lucide-react";
+import { useEntryMembers } from "@/hooks/useEntryMembers";
+import AthleteAvatar from "./AthleteAvatar";
 
 interface TabGroupsProps {
   modalityId: string;
@@ -42,7 +44,20 @@ const TabGroups = ({ modalityId }: TabGroupsProps) => {
     fetch();
   }, [modalityId]);
 
-  if (loading) {
+  // Collect all entry IDs from group members
+  const allEntryIds = useMemo(() => {
+    const ids: string[] = [];
+    groups.forEach((g) => {
+      g.members?.forEach((m: any) => {
+        if (m.entry_id) ids.push(m.entry_id);
+      });
+    });
+    return [...new Set(ids)];
+  }, [groups]);
+
+  const { entryMembers, membersLoading } = useEntryMembers(allEntryIds);
+
+  if (loading || membersLoading) {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
         {[1, 2].map((i) => (
@@ -68,12 +83,25 @@ const TabGroups = ({ modalityId }: TabGroupsProps) => {
           <h3 className="text-lg font-display text-primary mb-3">
             Grupo {group.group_name}
           </h3>
-          <div className="space-y-2">
-            {group.members.map((gm: any) => (
-              <div key={gm.id} className="flex items-center justify-between text-sm border-b border-border/50 pb-2 last:border-0">
-                <span className="text-foreground">{gm.modality_entries?.name || "—"}</span>
-              </div>
-            ))}
+          <div className="space-y-3">
+            {group.members.map((gm: any) => {
+              const em = entryMembers[gm.entry_id];
+              const members = em?.members || [];
+
+              return (
+                <div key={gm.id} className="border-b border-border/50 pb-2 last:border-0">
+                  {members.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {members.map((m) => (
+                        <AthleteAvatar key={m.memberId} member={m} showFullName={false} size="h-7 w-7" />
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-foreground">{gm.modality_entries?.name || "—"}</span>
+                  )}
+                </div>
+              );
+            })}
             {group.members.length === 0 && (
               <p className="text-xs text-muted-foreground">Sem participantes</p>
             )}

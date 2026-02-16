@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Trophy } from "lucide-react";
+import { useEntryMembers } from "@/hooks/useEntryMembers";
+import AthleteAvatar from "./AthleteAvatar";
 
 interface TabPlacementsProps {
   modalityId: string;
@@ -13,7 +15,6 @@ const bonusPoints = [80, 50, 30, 10];
 const TabPlacements = ({ modalityId }: TabPlacementsProps) => {
   const [placements, setPlacements] = useState<any[]>([]);
   const [prizes, setPrizes] = useState<any[]>([]);
-  const [entries, setEntries] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,27 +24,17 @@ const TabPlacements = ({ modalityId }: TabPlacementsProps) => {
         supabase.from("modality_placements").select("*").eq("modality_id", modalityId).order("position"),
         supabase.from("modality_prizes").select("*").eq("modality_id", modalityId).order("position"),
       ]);
-
-      const pl = plData || [];
-      setPlacements(pl);
+      setPlacements(plData || []);
       setPrizes(prData || []);
-
-      const entryIds = pl.map((p) => p.entry_id);
-      if (entryIds.length > 0) {
-        const { data: entryData } = await supabase
-          .from("modality_entries")
-          .select("*")
-          .in("id", entryIds);
-        const map: Record<string, any> = {};
-        (entryData || []).forEach((e) => { map[e.id] = e; });
-        setEntries(map);
-      }
       setLoading(false);
     };
     fetch();
   }, [modalityId]);
 
-  if (loading) {
+  const entryIds = useMemo(() => placements.map((p) => p.entry_id), [placements]);
+  const { entryMembers, membersLoading } = useEntryMembers(entryIds);
+
+  if (loading || membersLoading) {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
         {[1, 2, 3, 4].map((i) => (
@@ -66,7 +57,8 @@ const TabPlacements = ({ modalityId }: TabPlacementsProps) => {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
         {placements.map((pl) => {
-          const entry = entries[pl.entry_id];
+          const em = entryMembers[pl.entry_id];
+          const members = em?.members || [];
           const prize = prizes.find((p) => p.position === pl.position);
           const idx = pl.position - 1;
 
@@ -77,13 +69,21 @@ const TabPlacements = ({ modalityId }: TabPlacementsProps) => {
                 pl.position === 1 ? "border-primary/40 box-glow" : "border-border"
               }`}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-start gap-3">
                 <span className="text-3xl">{medalEmojis[idx] || "🏅"}</span>
-                <div>
-                  <p className="text-lg font-display text-foreground">
-                    {entry?.name || "—"}
-                  </p>
-                  <p className="text-xs text-primary">+{bonusPoints[idx] || 0} pts</p>
+                <div className="flex-1 min-w-0">
+                  {members.length > 0 ? (
+                    <div className="space-y-1">
+                      {members.map((m) => (
+                        <AthleteAvatar key={m.memberId} member={m} showFullName size="h-8 w-8" />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-lg font-display text-foreground">
+                      {em?.entryName || "—"}
+                    </p>
+                  )}
+                  <p className="text-xs text-primary mt-1">+{bonusPoints[idx] || 0} pts</p>
                   {prize && prize.amount > 0 && (
                     <p className="text-sm text-secondary mt-1">
                       R$ {Number(prize.amount).toFixed(2)}

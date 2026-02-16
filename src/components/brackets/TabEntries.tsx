@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useEntryMembers } from "@/hooks/useEntryMembers";
+import AthleteAvatar from "./AthleteAvatar";
 
 interface TabEntriesProps {
   modalityId: string;
@@ -11,7 +12,6 @@ interface TabEntriesProps {
 
 const TabEntries = ({ modalityId }: TabEntriesProps) => {
   const [entries, setEntries] = useState<any[]>([]);
-  const [profiles, setProfiles] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,41 +21,16 @@ const TabEntries = ({ modalityId }: TabEntriesProps) => {
         .from("modality_entries")
         .select("*")
         .eq("modality_id", modalityId);
-
-      const eList = entriesData || [];
-      const entryIds = eList.map((e) => e.id);
-
-      if (entryIds.length > 0) {
-        const { data: members } = await supabase
-          .from("modality_entry_members")
-          .select("*")
-          .in("entry_id", entryIds);
-
-        const userIds = (members || []).map((m) => m.user_id);
-        if (userIds.length > 0) {
-          const { data: profs } = await supabase
-            .from("profiles")
-            .select("user_id, full_name, avatar_url")
-            .in("user_id", userIds);
-          const map: Record<string, any> = {};
-          (profs || []).forEach((p) => { map[p.user_id] = p; });
-          setProfiles(map);
-        }
-
-        const entriesWithMembers = eList.map((e) => ({
-          ...e,
-          members: (members || []).filter((m) => m.entry_id === e.id),
-        }));
-        setEntries(entriesWithMembers);
-      } else {
-        setEntries([]);
-      }
+      setEntries(entriesData || []);
       setLoading(false);
     };
     fetch();
   }, [modalityId]);
 
-  if (loading) {
+  const entryIds = useMemo(() => entries.map((e) => e.id), [entries]);
+  const { entryMembers, membersLoading } = useEntryMembers(entryIds);
+
+  if (loading || membersLoading) {
     return (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -80,34 +55,30 @@ const TabEntries = ({ modalityId }: TabEntriesProps) => {
         {entries.length} {entries.length === 1 ? "inscrito" : "inscritos"}
       </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {entries.map((entry) => (
-          <div
-            key={entry.id}
-            className="flex items-center gap-3 rounded-xl border border-border bg-card p-4"
-          >
-            <div className="flex -space-x-2">
-              {entry.members.map((m: any) => {
-                const p = profiles[m.user_id];
-                return (
-                  <Avatar key={m.id} className="h-9 w-9 border-2 border-background">
-                    <AvatarImage src={p?.avatar_url} />
-                    <AvatarFallback className="text-xs bg-muted">
-                      {(p?.full_name || "?")[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                );
-              })}
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">
-                {entry.name || entry.members.map((m: any) => profiles[m.user_id]?.full_name || "—").join(" / ")}
-              </p>
+        {entries.map((entry) => {
+          const em = entryMembers[entry.id];
+          const members = em?.members || [];
+
+          return (
+            <div
+              key={entry.id}
+              className="rounded-xl border border-border bg-card p-4"
+            >
+              {members.length > 0 ? (
+                <div className="space-y-2">
+                  {members.map((m) => (
+                    <AthleteAvatar key={m.memberId} member={m} showFullName size="h-9 w-9" />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-foreground">{entry.name || "—"}</p>
+              )}
               {entry.seed && (
-                <span className="text-xs text-muted-foreground">Seed #{entry.seed}</span>
+                <span className="text-xs text-muted-foreground mt-2 block">Seed #{entry.seed}</span>
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
