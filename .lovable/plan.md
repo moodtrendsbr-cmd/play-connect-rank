@@ -1,150 +1,101 @@
 
-# Painel do Patrocinador - Plano de Implementacao
+# Admin Sponsorship Analytics, Gifts & Plans Management
 
-## Visao Geral
-
-Criar 3 novas rotas para empresas patrocinadoras (`/sponsor/dashboard`, `/sponsor/tournaments`, `/sponsor/sponsorships/:id`) com layout proprio, tema Kling, e funcionalidade de brindes. Reaproveitar a logica existente de `MarketplaceTournaments` e `SponsorTournamentDialog`, expandindo com dashboard de metricas, detalhe de patrocinio e sistema de brindes.
-
----
-
-## 1. Migracao de Banco de Dados
-
-### Nova tabela `sponsorship_giveaways`
-Armazena os brindes opcionais vinculados a um patrocinio:
-- `id` uuid PK
-- `sponsorship_id` uuid FK -> tournament_sponsorships
-- `item_type` text (tipo do brinde)
-- `quantity` integer
-- `rules` text (ex: "para os 50 primeiros")
-- `needs_refrigeration` boolean DEFAULT false
-- `delivery_deadline` date
-- `contact_name` text
-- `contact_whatsapp` text
-- `contact_email` text
-- `pickup_address` text (endereco de retirada)
-- `delivery_address` text (endereco de entrega)
-- `notes` text (observacoes logisticas)
-- `status` text DEFAULT 'pending' (pending, ready, delivered)
-- `created_at`, `updated_at`
-
-RLS:
-- SELECT: owner da company do sponsorship OU admin
-- INSERT: owner da company do sponsorship
-- UPDATE: owner da company do sponsorship OU admin
-- DELETE: admin
-
-### Novas colunas em `tournament_sponsorships`
-- `views_count` integer DEFAULT 0 (tracking de impressoes)
-- `clicks_count` integer DEFAULT 0 (tracking de cliques)
+## Overview
+Expand the admin panel with 3 new dedicated pages for sponsorship operations, plus enhance the existing sponsorships page. All pages use existing database tables -- only one small schema change needed.
 
 ---
 
-## 2. Novas Paginas
+## 1. Database Migration
 
-### 2.1 `/sponsor/dashboard` - Dashboard do Patrocinador
-- Busca a empresa do usuario logado
-- Cards de metricas: plano atual, cidades ativas (distinct cities dos torneios patrocinados), total patrocinios, views e cliques agregados
-- Secao "Acoes rapidas" com 4 botoes: Patrocinar torneio, Ver brindes, Ver patrocinios, Atualizar marca
-- Lista dos patrocinios recentes com status
-
-### 2.2 `/sponsor/tournaments` - Catalogo de Torneios
-- Reutiliza a logica existente de `MarketplaceTournaments` mas com layout expandido
-- Filtros: cidade, status (aberto/em andamento/finalizado)
-- Cards com dados reais: nome, arena, cidade, datas, inscritos/vagas, modalidades
-- Botao "Patrocinar" abre dialog com fluxo de 4 passos (pacote -> identidade -> brindes -> confirmacao)
-
-### 2.3 `/sponsor/sponsorships/:id` - Detalhe do Patrocinio
-- Dados do torneio e cidade
-- Onde aparece (placements baseado no plano)
-- Status do patrocinio
-- Bloco de brindes com status logistico
-- Metricas: views, cliques
-- Botoes: Atualizar logo, Editar brindes, Falar com suporte
-
----
-
-## 3. Componentes
-
-### 3.1 `SponsorLayout` - Layout compartilhado das rotas /sponsor/*
-- Header com logo Mood Play e nome da empresa
-- Navegacao simples: Dashboard | Torneios | Meus Patrocinios
-- Sem bottom nav (experiencia dedicada para empresa)
-
-### 3.2 `SponsorTournamentDialog` (atualizar existente)
-- Adicionar Passo 3: Toggle "Quero oferecer brindes" com campos de logistica
-- Ao confirmar, insere tanto `tournament_sponsorships` quanto `sponsorship_giveaways` (se habilitado)
-
----
-
-## 4. Rotas no App.tsx
-
-Adicionar dentro de `Routes` (fora do AppLayout, layout proprio):
-```text
-/sponsor/dashboard -> SponsorDashboard
-/sponsor/tournaments -> SponsorTournaments
-/sponsor/sponsorships/:id -> SponsorshipDetail
-```
-
----
-
-## 5. Arquivos
-
-### Novos:
-- `src/pages/sponsor/SponsorLayout.tsx` - layout com nav do patrocinador
-- `src/pages/sponsor/SponsorDashboard.tsx` - dashboard principal
-- `src/pages/sponsor/SponsorTournaments.tsx` - catalogo de torneios
-- `src/pages/sponsor/SponsorshipDetail.tsx` - detalhe de um patrocinio
-
-### Modificados:
-- `src/components/sponsorship/SponsorTournamentDialog.tsx` - adicionar passo de brindes
-- `src/App.tsx` - novas rotas /sponsor/*
-- Migracao SQL para tabela `sponsorship_giveaways` e colunas extras
-
----
-
-## Detalhes Tecnicos
-
-### Migracao SQL:
+Add `admin_notes` column to `sponsorship_giveaways` table (currently missing from schema):
 
 ```text
-sponsorship_giveaways
-  id uuid PK DEFAULT gen_random_uuid()
-  sponsorship_id uuid FK -> tournament_sponsorships NOT NULL
-  item_type text NOT NULL
-  quantity integer NOT NULL DEFAULT 1
-  rules text
-  needs_refrigeration boolean DEFAULT false
-  delivery_deadline date
-  contact_name text
-  contact_whatsapp text
-  contact_email text
-  pickup_address text
-  delivery_address text
-  notes text
-  status text DEFAULT 'pending'
-  created_at timestamptz DEFAULT now()
-  updated_at timestamptz DEFAULT now()
-
-ALTER TABLE tournament_sponsorships
-  ADD COLUMN views_count integer DEFAULT 0,
-  ADD COLUMN clicks_count integer DEFAULT 0;
+ALTER TABLE sponsorship_giveaways ADD COLUMN admin_notes text;
 ```
 
-### RLS para sponsorship_giveaways:
-- Funcao helper `is_sponsorship_company_owner(sponsorship_id, user_id)` para verificar ownership
-- SELECT/INSERT/UPDATE: owner da company vinculada ao sponsorship
-- SELECT/UPDATE/DELETE: admin
+This enables admins to attach internal notes to giveaway items.
 
-### Fluxo de dados:
+---
 
+## 2. New Admin Pages
+
+### 2.1 `/admin/analytics` - Sponsorship Analytics Dashboard
+- Cards: Sponsorship revenue (sum of plan prices for active sponsorships), active sponsorships count, active companies count, total views, total clicks, CTR
+- Revenue by city (aggregated from tournament_sponsorships joined with tournaments)
+- Top tournaments by views
+- Top companies by performance (clicks)
+- Simple bar charts using Recharts (already installed)
+- Filters: period (this month / last 30 days / all time)
+
+### 2.2 `/admin/gifts` - Giveaway Operations Queue
+- List all `sponsorship_giveaways` with joins to `tournament_sponsorships -> tournaments, companies`
+- Status filter tabs: all / pending / contact_needed / in_transit / delivered / closed
+- Each card shows: company name, tournament, item type, quantity, deadline, contact info, addresses
+- Actions: Update status dropdown, Add admin note (textarea), Mark as contacted
+- Color-coded status badges
+
+### 2.3 `/admin/plans` - Dedicated Plans Management
+- Extract the Plans tab from AdminSponsorships into its own full page
+- Same CRUD functionality but with more space for editing
+- Real-time save with immediate feedback
+
+---
+
+## 3. Enhanced Existing Page
+
+### `/admin/sponsorships` - Remove Plans Tab
+- Keep only the sponsorships list (remove the plans tab since it moves to `/admin/plans`)
+- Add views/clicks columns to each sponsorship card
+- Add placement indicators (which placements are active based on plan)
+
+---
+
+## 4. Routes & Navigation
+
+### New routes in App.tsx:
 ```text
-Empresa -> /sponsor/dashboard (visao geral)
-  -> /sponsor/tournaments (escolhe torneio)
-    -> Dialog: pacote + logo + brindes (opcional)
-      -> INSERT tournament_sponsorships + INSERT sponsorship_giveaways
-  -> /sponsor/sponsorships/:id (acompanha metricas e status)
+/admin/analytics -> AdminAnalytics
+/admin/gifts -> AdminGifts  
+/admin/plans -> AdminPlans
 ```
 
-### Acesso:
-- Todas as rotas /sponsor/* verificam se o usuario tem uma empresa aprovada
-- Se nao tiver, redireciona para /marketplace/register
+### Updated AdminLayout sidebar:
+Add new items to the navigation groups:
+- "Analytics" under main nav (with BarChart3 icon)
+- "Brindes" under Marketplace group (with Gift icon)
+- "Planos" under Marketplace group (with Layers icon)
+
+---
+
+## 5. Files
+
+### New:
+- `src/pages/admin/AdminAnalytics.tsx` -- analytics dashboard with charts
+- `src/pages/admin/AdminGifts.tsx` -- giveaway operations queue
+- `src/pages/admin/AdminPlans.tsx` -- dedicated plans management
+
+### Modified:
+- `src/App.tsx` -- 3 new admin routes
+- `src/pages/admin/AdminLayout.tsx` -- 3 new sidebar items
+- `src/pages/admin/AdminSponsorships.tsx` -- remove plans tab, add metrics columns
+- SQL migration for `admin_notes` column
+
+---
+
+## Technical Details
+
+### Analytics Data Queries:
+- Revenue: `tournament_sponsorships` (status=active) joined with `tournament_sponsor_plans` (price)
+- Views/Clicks: aggregated from `tournament_sponsorships.views_count` and `clicks_count`
+- By city: join with `tournaments` table for city grouping
+- Charts: Recharts BarChart and PieChart components
+
+### Gifts Queue Flow:
+```text
+pending -> contact_needed -> in_transit -> delivered -> closed
+```
+Each transition is an UPDATE on `sponsorship_giveaways.status` with optional `admin_notes` append.
+
+### Plans Page:
+Extracted from existing AdminSponsorships plans tab -- same form, same CRUD logic, just in its own dedicated page with full width.
