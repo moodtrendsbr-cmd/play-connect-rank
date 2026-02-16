@@ -29,16 +29,16 @@ const features = [
 ];
 
 const Index = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, userRole } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && user) {
+    if (!loading && user && userRole !== "admin") {
       navigate("/feed", { replace: true });
     }
-  }, [loading, user, navigate]);
+  }, [loading, user, userRole, navigate]);
 
-  if (loading || user) {
+  if (loading || (user && userRole !== "admin")) {
     return null;
   }
 
