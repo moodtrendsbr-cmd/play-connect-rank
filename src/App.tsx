@@ -50,6 +50,10 @@ import MarketplaceTournaments from "./pages/MarketplaceTournaments";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import AdminSponsorships from "./pages/admin/AdminSponsorships";
+import SponsorLayout from "./pages/sponsor/SponsorLayout";
+import SponsorDashboard from "./pages/sponsor/SponsorDashboard";
+import SponsorTournaments from "./pages/sponsor/SponsorTournaments";
+import SponsorshipDetail from "./pages/sponsor/SponsorshipDetail";
 
 const queryClient = new QueryClient();
 
@@ -95,6 +99,11 @@ const App = () => (
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />
             <Route path="/tournaments/:id/results" element={<Results />} />
+            <Route path="/sponsor" element={<SponsorLayout />}>
+              <Route path="dashboard" element={<SponsorDashboard />} />
+              <Route path="tournaments" element={<SponsorTournaments />} />
+              <Route path="sponsorships/:id" element={<SponsorshipDetail />} />
+            </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
               <Route path="users" element={<AdminUsers />} />
