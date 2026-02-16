@@ -361,11 +361,11 @@ const Profile = () => {
               {!mpCollectorId && (
                 <div className="flex items-start gap-2 rounded-md p-3 text-sm" style={{ background: "rgba(43,255,136,0.05)", color: "#9CA3AF" }}>
                   <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <p>Vincule sua conta MP para receber pagamentos automaticamente.</p>
+                  <p>Vincule sua conta Mercado Pago para receber pagamentos automaticamente. Caso não tenha conta, você pode solicitar saque via PIX.</p>
                 </div>
               )}
               <div><Label className="text-xs" style={{ color: "#9CA3AF" }}>Collector ID</Label><Input value={mpCollectorId} onChange={(e) => setMpCollectorId(e.target.value)} placeholder="Ex: 123456789" className="mt-1" /></div>
-              <Button size="sm" onClick={handleSaveMp} disabled={savingMp}>{savingMp ? "Salvando..." : "Salvar conta MP"}</Button>
+              <Button size="sm" onClick={handleSaveMp} disabled={savingMp}>{savingMp ? "Salvando..." : "Salvar conta Mercado Pago"}</Button>
             </CardContent>
           </Card>
 
@@ -373,10 +373,16 @@ const Profile = () => {
             <CardHeader><CardTitle className="font-sans text-base text-white">Saldo disponível</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <p className="text-3xl font-bold" style={{ color: "#2BFF88" }}>R$ {balance.toFixed(2)}</p>
+              {!mpCollectorId && balance > 0 && (
+                <div className="flex items-start gap-2 rounded-md p-3 text-sm" style={{ background: "rgba(255,193,7,0.08)", color: "#FFC107" }}>
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <p>Sem conta Mercado Pago vinculada. Solicite saque via PIX abaixo.</p>
+                </div>
+              )}
               {balance > 0 && (
                 <Dialog open={withdrawDialog} onOpenChange={setWithdrawDialog}>
                   <DialogTrigger asChild><Button>Solicitar Saque via PIX</Button></DialogTrigger>
-                  <DialogContent><DialogHeader><DialogTitle>Solicitar Saque</DialogTitle></DialogHeader>
+                  <DialogContent><DialogHeader><DialogTitle>Solicitar Saque via PIX</DialogTitle></DialogHeader>
                     <div className="space-y-4">
                       <div><Label>Valor (máx R$ {balance.toFixed(2)})</Label><Input type="number" max={balance} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="0.00" className="mt-1" /></div>
                       <div><Label>Chave PIX</Label><Input value={withdrawPixKey} onChange={(e) => setWithdrawPixKey(e.target.value)} placeholder="CPF, email, telefone ou chave aleatória" className="mt-1" /></div>
