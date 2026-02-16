@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ClipboardList } from "lucide-react";
 import ScoreEntryDialog from "./ScoreEntryDialog";
+import { useEntryMembers } from "@/hooks/useEntryMembers";
+import AthleteAvatar from "./AthleteAvatar";
 
 interface TabMatchesProps {
   modalityId: string;
@@ -13,7 +15,6 @@ interface TabMatchesProps {
 
 const TabMatches = ({ modalityId, isOrganizer }: TabMatchesProps) => {
   const [matches, setMatches] = useState<any[]>([]);
-  const [entries, setEntries] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [editingMatch, setEditingMatch] = useState<any>(null);
 
@@ -26,25 +27,19 @@ const TabMatches = ({ modalityId, isOrganizer }: TabMatchesProps) => {
       .order("round_number")
       .order("match_number");
 
-    const mList = matchData || [];
-    setMatches(mList);
-
-    const entryIds = [...new Set(mList.flatMap((m) => [m.entry_a_id, m.entry_b_id].filter(Boolean)))];
-    if (entryIds.length > 0) {
-      const { data: entryData } = await supabase
-        .from("modality_entries")
-        .select("*")
-        .in("id", entryIds);
-      const map: Record<string, any> = {};
-      (entryData || []).forEach((e) => { map[e.id] = e; });
-      setEntries(map);
-    }
+    setMatches(matchData || []);
     setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, [modalityId]);
 
-  if (loading) {
+  const allEntryIds = useMemo(() => {
+    return [...new Set(matches.flatMap((m) => [m.entry_a_id, m.entry_b_id].filter(Boolean)))];
+  }, [matches]);
+
+  const { entryMembers, membersLoading } = useEntryMembers(allEntryIds);
+
+  if (loading || membersLoading) {
     return (
       <div className="space-y-3">
         {[1, 2, 3, 4].map((i) => (
@@ -63,9 +58,32 @@ const TabMatches = ({ modalityId, isOrganizer }: TabMatchesProps) => {
     );
   }
 
-  const getEntryName = (id: string | null) => {
-    if (!id) return "A definir";
-    return entries[id]?.name || "A definir";
+  const renderEntryName = (entryId: string | null, isWinner: boolean) => {
+    if (!entryId) return <span className="text-muted-foreground text-sm">A definir</span>;
+    const em = entryMembers[entryId];
+    const members = em?.members || [];
+
+    if (members.length === 0) {
+      return (
+        <span className={`text-sm font-medium ${isWinner ? "text-primary" : "text-foreground"}`}>
+          {em?.entryName || "A definir"}
+        </span>
+      );
+    }
+
+    return (
+      <div className="flex flex-wrap gap-2">
+        {members.map((m) => (
+          <AthleteAvatar key={m.memberId} member={m} showFullName={false} size="h-7 w-7" />
+        ))}
+      </div>
+    );
+  };
+
+  const getEntryLabel = (entryId: string | null) => {
+    if (!entryId) return "A definir";
+    const em = entryMembers[entryId];
+    return em?.members?.map((m) => m.firstName).join(" / ") || em?.entryName || "A definir";
   };
 
   const statusBadge = (status: string) => {
@@ -89,14 +107,10 @@ const TabMatches = ({ modalityId, isOrganizer }: TabMatchesProps) => {
             {statusBadge(m.status)}
           </div>
           <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className={`text-sm font-medium ${m.winner_entry_id === m.entry_a_id ? "text-primary" : "text-foreground"}`}>
-                {getEntryName(m.entry_a_id)}
-              </p>
-              <p className="text-xs text-muted-foreground my-1">vs</p>
-              <p className={`text-sm font-medium ${m.winner_entry_id === m.entry_b_id ? "text-primary" : "text-foreground"}`}>
-                {getEntryName(m.entry_b_id)}
-              </p>
+            <div className="flex-1 space-y-1">
+              {renderEntryName(m.entry_a_id, m.winner_entry_id === m.entry_a_id)}
+              <p className="text-xs text-muted-foreground">vs</p>
+              {renderEntryName(m.entry_b_id, m.winner_entry_id === m.entry_b_id)}
             </div>
             <div className="text-right">
               {m.score_a !== null && m.score_b !== null && (
@@ -119,8 +133,8 @@ const TabMatches = ({ modalityId, isOrganizer }: TabMatchesProps) => {
           open={!!editingMatch}
           onOpenChange={(v) => !v && setEditingMatch(null)}
           match={editingMatch}
-          entryAName={getEntryName(editingMatch.entry_a_id)}
-          entryBName={getEntryName(editingMatch.entry_b_id)}
+          entryAName={getEntryLabel(editingMatch.entry_a_id)}
+          entryBName={getEntryLabel(editingMatch.entry_b_id)}
           onSaved={fetchData}
         />
       )}
