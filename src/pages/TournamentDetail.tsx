@@ -63,6 +63,7 @@ const TournamentDetail = () => {
   if (!tournament) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
 
   const available = tournament.max_slots - enrollmentCount;
+  const isFinished = new Date(tournament.end_date) < new Date();
 
   return (
     <div className="min-h-screen bg-background">
@@ -102,7 +103,14 @@ const TournamentDetail = () => {
         </div>
 
         <div className="mt-8 space-y-3">
-          {alreadyEnrolled ? (
+          {isFinished ? (
+            <>
+              <Button disabled className="w-full h-14 text-lg">🏁 Torneio encerrado</Button>
+              <Button variant="outline" className="w-full h-14 text-lg font-bold" asChild>
+                <Link to={`/tournaments/${id}/brackets`}>🏆 Ver resultados</Link>
+              </Button>
+            </>
+          ) : alreadyEnrolled ? (
             <Button className="w-full h-14 text-lg font-bold" asChild>
               <Link to={`/payment/${id}`}>Continuar para pagamento</Link>
             </Button>
