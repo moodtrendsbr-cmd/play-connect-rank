@@ -122,71 +122,71 @@ const Index = () => {
         </div>
       </header>
 
-      <section className="relative flex min-h-screen items-center justify-center overflow-hidden pt-16">
+      <section className="relative flex min-h-screen items-start overflow-hidden pt-32 sm:pt-40">
         <div className="absolute inset-0">
-          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 h-[500px] w-[500px] rounded-full bg-primary/5 blur-[120px]" />
+          <div className="absolute left-1/4 top-1/3 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[400px] rounded-full bg-primary/3 blur-[120px]" />
         </div>
-        <div className="container relative z-10 text-center">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-sans leading-snug">
+        <div className="container relative z-10 px-6 sm:px-8 max-w-2xl ml-auto mr-auto sm:ml-[8%] sm:mr-auto text-left">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-sans leading-relaxed">
             <motion.span
               className="block font-bold text-foreground"
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0 }}
+              transition={{ duration: 0.5, delay: 0 }}
             >
-              Onde <span className="text-primary">jogos</span> viram ranking.
+              Onde <span className="text-primary">jogos</span> viram <span className="text-primary">ranking</span>.
             </motion.span>
             <motion.span
-              className="block font-bold text-foreground"
-              initial={{ opacity: 0, y: 20 }}
+              className="block font-medium text-foreground"
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.15 }}
+              transition={{ duration: 0.5, delay: 0.12 }}
             >
-              <span className="text-primary">Atletas</span> ganham valor.
+              Atletas ganham <span className="text-primary">valor</span>.
             </motion.span>
             <motion.span
-              className="block font-bold text-foreground"
-              initial={{ opacity: 0, y: 20 }}
+              className="block font-medium text-foreground"
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
+              transition={{ duration: 0.5, delay: 0.24 }}
             >
-              <span className="text-primary">Torneios</span> viram ecossistema.
+              Torneios viram <span className="text-primary">ecossistema</span>.
             </motion.span>
             <motion.span
-              className="block font-bold text-foreground"
-              initial={{ opacity: 0, y: 20 }}
+              className="block font-medium text-foreground"
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.45 }}
+              transition={{ duration: 0.5, delay: 0.36 }}
             >
               Empresas ganham <span className="text-primary">visibilidade</span>.
             </motion.span>
           </h1>
 
           <motion.p
-            className="mx-auto mt-8 max-w-lg text-base sm:text-lg text-muted-foreground"
-            initial={{ opacity: 0, y: 20 }}
+            className="mt-8 max-w-md text-sm sm:text-base text-muted-foreground"
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.7 }}
+            transition={{ duration: 0.5, delay: 0.55 }}
           >
             Conectamos atletas, organizadores, arenas e empresas em um único ecossistema esportivo.
           </motion.p>
 
           <motion.div
-            className="mt-12 flex flex-col items-center gap-4"
-            initial={{ opacity: 0, y: 20 }}
+            className="mt-10 flex flex-col items-start gap-3"
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.9 }}
+            transition={{ duration: 0.5, delay: 0.7 }}
           >
-            <Button size="lg" className="h-14 px-8 text-lg font-bold box-glow" asChild>
+            <Button size="lg" className="h-12 px-7 text-base font-bold" asChild>
               <Link to="/register">
                 Quero Participar
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            <Button variant="outline" size="sm" className="border-foreground/30 text-foreground hover:bg-foreground/10" asChild>
+            <Button variant="outline" size="sm" className="border-muted-foreground/30 text-muted-foreground hover:text-foreground hover:bg-muted/20" asChild>
               <Link to="/tournaments">Ver torneios disponíveis</Link>
             </Button>
-            <div className="flex flex-wrap justify-center gap-3 mt-4">
+            <div className="flex flex-wrap gap-2 mt-3">
               {[
                 { label: "Sou Atleta", target: "atletas" },
                 { label: "Sou Organizador", target: "organizadores" },
@@ -197,7 +197,7 @@ const Index = () => {
                   key={btn.target}
                   variant="outline"
                   size="sm"
-                  className="border-muted-foreground/30"
+                  className="border-muted-foreground/20 text-muted-foreground hover:text-foreground text-xs"
                   onClick={() => scrollTo(btn.target)}
                 >
                   {btn.label}
