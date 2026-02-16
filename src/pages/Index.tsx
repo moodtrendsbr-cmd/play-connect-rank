@@ -89,12 +89,7 @@ const socialProof = [
   { value: "25+", label: "Cidades ativas" },
 ];
 
-const headlineLines = [
-  { text: "Onde jogos viram ranking.", green: false },
-  { text: "Atletas ganham valor.", green: true },
-  { text: "Torneios viram ecossistema.", green: false },
-  { text: "Empresas ganham visibilidade.", green: true },
-];
+
 
 const Index = () => {
   const { user, loading, userRole } = useAuth();
@@ -113,7 +108,7 @@ const Index = () => {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="container flex h-16 items-center justify-between">
-          <span className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</span>
+          <span className="text-2xl font-display text-primary">🏐 Mood Play</span>
           <div className="flex items-center gap-3">
             {user && userRole === "admin" ? (
               <Button asChild><Link to="/admin">Painel Admin</Link></Button>
@@ -127,28 +122,48 @@ const Index = () => {
         </div>
       </header>
 
-      {/* Hero */}
       <section className="relative flex min-h-screen items-center justify-center overflow-hidden pt-16">
         <div className="absolute inset-0">
           <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 h-[500px] w-[500px] rounded-full bg-primary/5 blur-[120px]" />
         </div>
         <div className="container relative z-10 text-center">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-display leading-tight">
-            {headlineLines.map((line, i) => (
-              <motion.span
-                key={i}
-                className={`block ${line.green ? "text-primary text-glow" : "text-foreground"}`}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: i * 0.15 }}
-              >
-                {line.text}
-              </motion.span>
-            ))}
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-display leading-relaxed">
+            <motion.span
+              className="block font-bold text-foreground"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0 }}
+            >
+              Onde jogos viram ranking.
+            </motion.span>
+            <motion.span
+              className="block font-medium text-foreground"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.15 }}
+            >
+              <span className="text-primary">Atletas</span> ganham valor.
+            </motion.span>
+            <motion.span
+              className="block font-medium text-foreground"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+            >
+              <span className="text-primary">Torneios</span> viram ecossistema.
+            </motion.span>
+            <motion.span
+              className="block font-medium text-foreground"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.45 }}
+            >
+              Empresas ganham <span className="text-primary">visibilidade</span>.
+            </motion.span>
           </h1>
 
           <motion.p
-            className="mx-auto mt-6 max-w-lg text-base sm:text-lg text-muted-foreground"
+            className="mx-auto mt-8 max-w-lg text-base sm:text-lg text-muted-foreground"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.7 }}
@@ -157,18 +172,21 @@ const Index = () => {
           </motion.p>
 
           <motion.div
-            className="mt-10 flex flex-col items-center gap-4"
+            className="mt-12 flex flex-col items-center gap-4"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.9 }}
           >
             <Button size="lg" className="h-14 px-8 text-lg font-bold box-glow" asChild>
-              <Link to="/tournaments">
-                Participar de Torneio
+              <Link to="/register">
+                Quero Participar
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>
-            <div className="flex flex-wrap justify-center gap-3 mt-2">
+            <Button variant="outline" size="sm" className="border-foreground/30 text-foreground hover:bg-foreground/10" asChild>
+              <Link to="/tournaments">Ver torneios disponíveis</Link>
+            </Button>
+            <div className="flex flex-wrap justify-center gap-3 mt-4">
               {[
                 { label: "Sou Atleta", target: "atletas" },
                 { label: "Sou Organizador", target: "organizadores" },
@@ -199,7 +217,7 @@ const Index = () => {
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
           >
-            UM ECOSSISTEMA ONDE TODOS <span className="text-primary text-glow">CRESCEM JUNTOS.</span>
+            Um ecossistema onde todos <span className="text-primary">crescem juntos.</span>
           </motion.h2>
 
           <div className="mt-14 grid gap-5 sm:grid-cols-2 max-w-3xl mx-auto">
@@ -241,7 +259,7 @@ const Index = () => {
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
           >
-            TUDO QUE VOCÊ PRECISA
+            Tudo que você precisa
           </motion.h2>
           <p className="mx-auto mt-4 max-w-md text-center text-muted-foreground">
             Para competir e crescer.
@@ -277,7 +295,7 @@ const Index = () => {
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
           >
-            SIMPLES. RÁPIDO. <span className="text-primary text-glow">PROFISSIONAL.</span>
+            Simples. Rápido. <span className="text-primary">Profissional.</span>
           </motion.h2>
 
           <div className="mt-14 grid gap-8 sm:grid-cols-3 max-w-3xl mx-auto">
@@ -290,7 +308,7 @@ const Index = () => {
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.15 }}
               >
-                <span className="text-5xl font-display text-primary text-glow">{s.num}</span>
+                <span className="text-5xl font-display text-primary">{s.num}</span>
                 <h3 className="mt-3 font-sans text-lg font-bold text-foreground">{s.title}</h3>
                 <p className="mt-1.5 text-sm text-muted-foreground">{s.desc}</p>
               </motion.div>
@@ -348,7 +366,7 @@ const Index = () => {
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
           >
-            O ESPORTE DA SUA CIDADE JÁ ESTÁ <span className="text-primary text-glow">ENTRANDO NA ARENA.</span>
+            O esporte da sua cidade já está <span className="text-primary">entrando na arena.</span>
           </motion.h2>
 
           <div className="mt-14 grid grid-cols-3 gap-6 max-w-xl mx-auto">
@@ -361,7 +379,7 @@ const Index = () => {
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
               >
-                <span className="text-3xl sm:text-4xl font-display text-primary text-glow">{s.value}</span>
+                <span className="text-3xl sm:text-4xl font-display text-primary">{s.value}</span>
                 <p className="mt-1 text-xs sm:text-sm text-muted-foreground">{s.label}</p>
               </motion.div>
             ))}
@@ -373,7 +391,7 @@ const Index = () => {
       <section className="border-t border-border py-20 sm:py-28">
         <div className="container text-center">
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-display text-foreground">
-            PRONTO PARA <span className="text-primary text-glow">ENTRAR NA ARENA?</span>
+            Pronto para <span className="text-primary">entrar na arena?</span>
           </h2>
           <p className="mx-auto mt-4 max-w-md text-muted-foreground">
             Faça parte do ecossistema esportivo que está conectando cidades.
@@ -394,7 +412,7 @@ const Index = () => {
         <div className="container">
           <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-between">
             <div>
-              <span className="font-display text-xl text-foreground/80">🏐 MOOD PLAY</span>
+              <span className="font-display text-xl text-foreground/80">🏐 Mood Play</span>
               <p className="mt-1 text-sm text-muted-foreground">Onde jogos viram ranking.</p>
             </div>
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
