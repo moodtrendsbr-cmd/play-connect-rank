@@ -1,49 +1,92 @@
 
+# Refinamento da Hero Section - Visual Premium e Formal
 
-# Landing Page Oficial Mood Play - Redesign Completo
+## Objetivo
+Transformar a hero section de um visual "gamer/esportivo agressivo" para uma plataforma esportiva profissional e premium.
 
-## Visao Geral
+## Mudancas no `src/pages/Index.tsx`
 
-Reescrever completamente o `src/pages/Index.tsx` com todas as secoes solicitadas, mantendo a logica existente de redirect para usuarios autenticados e botao admin.
+### 1. Headline - Reformulacao completa
+
+Substituir o array `headlineLines` para aplicar verde apenas nas palavras-chave especificas (nao linhas inteiras):
+
+```text
+Linha 1 (bold): "Onde jogos viram ranking."
+Linha 2 (medium): "[Atletas] ganham valor."        -> "Atletas" em verde
+Linha 3 (medium): "[Torneios] viram ecossistema."   -> "Torneios" em verde
+Linha 4 (medium): "Empresas ganham [visibilidade]." -> "visibilidade" em verde
+```
+
+- Remover CAPS LOCK (Bebas Neue ja da impacto sem caps)
+- Remover `text-glow` forte, usar glow minimo ou nenhum
+- Primeira linha: `font-bold`, demais: `font-medium`
+- Reduzir tamanho em ~15%: de `text-4xl sm:text-5xl md:text-6xl lg:text-7xl` para `text-3xl sm:text-4xl md:text-5xl lg:text-6xl`
+- Aumentar `leading` (line-height) para `leading-relaxed` ou `leading-loose`
+
+### 2. Header Logo
+- Remover CAPS de "MOOD PLAY" -> "Mood Play"
+- Remover `text-glow` do logo
+
+### 3. Subtitulo
+- Manter texto atual, garantir cor `text-muted-foreground` (cinza claro)
+- Adicionar mais espacamento vertical (`mt-8` em vez de `mt-6`)
+
+### 4. CTAs - Reestruturacao
+
+**Novo CTA primario** (logo abaixo do subtitulo):
+- Texto: "Quero Participar"
+- Botao verde primario, tamanho grande
+- Com seta
+
+**CTA secundario** (abaixo):
+- Texto: "Ver torneios disponiveis"
+- Botao branco/outline, tamanho menor
+- Link para `/tournaments`
+
+**Botoes de perfil** (mantidos abaixo):
+- Sou Atleta, Sou Organizador, Sou Arena, Sou Empresa
+
+### 5. Mais respiro vertical
+- Aumentar padding vertical da hero section
+- Mais espaco entre headline e subtitulo
+- Mais espaco entre subtitulo e CTAs
+
+### 6. Secoes abaixo - Remover CAPS dos titulos
+- "UM ECOSSISTEMA ONDE TODOS CRESCEM JUNTOS." -> "Um ecossistema onde todos crescem juntos."
+- "TUDO QUE VOCÊ PRECISA" -> "Tudo que voce precisa"
+- "SIMPLES. RÁPIDO. PROFISSIONAL." -> "Simples. Rapido. Profissional."
+- "O ESPORTE DA SUA CIDADE..." -> sentenca normal
+- "PRONTO PARA ENTRAR NA ARENA?" -> sentenca normal
 
 ---
 
-## Arquivo Modificado
+## Detalhes Tecnicos
 
-### `src/pages/Index.tsx` - Reescrita completa
+Renderizacao da headline com palavras-chave verdes inline (nao linhas inteiras):
 
-### Estrutura das Secoes
+```tsx
+// Cada linha renderiza com spans internos para palavras verdes
+<motion.span className="block font-bold ...">
+  Onde jogos viram ranking.
+</motion.span>
+<motion.span className="block font-medium ...">
+  <span className="text-primary">Atletas</span> ganham valor.
+</motion.span>
+```
 
-1. **Header fixo** (mantido) - Logo + Entrar/Cadastrar ou Painel Admin para admins
-2. **Hero** - 4 linhas de headline com alternancia de cor verde, subtitulo, CTA primario + 4 botoes secundarios com scroll
-3. **Secao Ecossistema** (id="ecosystem") - 4 cards conectados (Atletas, Organizadores, Arenas, Empresas)
-4. **Secao Funcionalidades** (id="features") - 4 cards (Torneios, Rede Social, Ranking, Pagamentos)
-5. **Secao Como Funciona** - 3 passos numerados (Crie conta, Participe, Evolua)
-6. **Secao Para Cada Perfil** - 4 blocos com bullets e CTAs dedicados (id="atletas", "organizadores", "arenas", "empresas")
-7. **Secao Prova Social** - 3 metricas (atletas cadastrados, torneios, cidades)
-8. **CTA Final** - Titulo grande + botao
-9. **Footer** - Logo, tagline, links organizados
+Botao "Ver torneios disponiveis":
+```tsx
+<Button variant="outline" className="border-white/30 text-white hover:bg-white/10" asChild>
+  <Link to="/tournaments">Ver torneios disponiveis</Link>
+</Button>
+```
 
-### Detalhes Tecnicos
+Botao "Quero Participar":
+```tsx
+<Button size="lg" className="h-14 px-8 text-lg font-bold box-glow" asChild>
+  <Link to="/register">Quero Participar <ArrowRight /></Link>
+</Button>
+```
 
-- Todas as animacoes usam `framer-motion` (`motion.div` com `whileInView`, stagger delays)
-- Hero: cada linha anima com delay incremental (0, 0.15, 0.3, 0.45s)
-- Linhas 2 e 4 do hero recebem classes `text-primary text-glow`
-- Botoes secundarios do hero usam `onClick` com `document.getElementById('atletas')?.scrollIntoView({ behavior: 'smooth' })`
-- Cards do ecossistema: layout grid 2x2 com borda `border-border hover:border-primary/40`
-- Secao perfis: cada bloco alterna layout (texto + bullets) com CTA que linka para `/register` com query params adequados
-- Prova social: numeros estaticos placeholder (ex: "1.200+ Atletas") com animacao de fade-in
-- Footer com grid de links: Atletas, Organizadores, Arenas, Empresas, Termos, Privacidade
-- Manter toda a logica existente de auth redirect e condicional admin no header
-- Nenhuma nova dependencia necessaria (framer-motion, lucide-react, react-router-dom ja instalados)
-
-### Icones utilizados (lucide-react)
-
-- Trophy, Users, Zap, BarChart3, ArrowRight (ja importados)
-- Building2 (arenas), Briefcase (empresas), UserPlus, Medal, Target
-- CheckCircle2 (bullets dos perfis)
-
-### Sem alteracoes em outros arquivos
-
-Apenas `src/pages/Index.tsx` sera modificado.
-
+## Arquivo modificado
+- `src/pages/Index.tsx` - unico arquivo alterado
