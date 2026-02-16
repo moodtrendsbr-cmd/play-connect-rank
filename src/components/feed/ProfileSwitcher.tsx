@@ -15,6 +15,7 @@ interface SavedAccount {
   full_name: string;
   avatar_url: string | null;
   user_id: string;
+  pwd?: string;
 }
 
 const STORAGE_KEY = "mood_saved_accounts";
@@ -61,17 +62,18 @@ const ProfileSwitcher = () => {
         };
         setCurrentProfile(current);
 
-        // Auto-save current account
+        // Auto-save current account (preserve pwd if already stored)
         const existing = getSavedAccounts();
-        const alreadySaved = existing.some((a) => a.user_id === user.id);
-        if (!alreadySaved) {
-          const updated = [...existing, current];
+        const existingAccount = existing.find((a) => a.user_id === user.id);
+        const currentWithPwd: SavedAccount = { ...current, pwd: existingAccount?.pwd };
+        
+        if (!existingAccount) {
+          const updated = [...existing, currentWithPwd];
           saveAccounts(updated);
           setAccounts(updated);
         } else {
-          // Update name/avatar if changed
           const updated = existing.map((a) =>
-            a.user_id === user.id ? current : a
+            a.user_id === user.id ? { ...currentWithPwd, pwd: a.pwd } : a
           );
           saveAccounts(updated);
           setAccounts(updated);
@@ -87,7 +89,30 @@ const ProfileSwitcher = () => {
       navigate("/profile");
       return;
     }
-    // Sign out current, then show login form pre-filled
+    // Auto-switch if we have stored credentials
+    if (account.pwd) {
+      setLoading(true);
+      try {
+        await signOut();
+        const { error } = await supabase.auth.signInWithPassword({
+          email: account.email,
+          password: account.pwd,
+        });
+        if (error) throw error;
+        toast({ title: "Conta alternada!" });
+        setOpen(false);
+        navigate("/feed");
+      } catch (err: any) {
+        // If auto-login fails, fall back to manual form
+        setLoginEmail(account.email);
+        setLoginPassword("");
+        setShowAddForm(true);
+        toast({ title: "Sessão expirada", description: "Digite a senha novamente.", variant: "destructive" });
+      }
+      setLoading(false);
+      return;
+    }
+    // Fallback: show login form
     setLoginEmail(account.email);
     setLoginPassword("");
     setShowAddForm(true);
@@ -104,11 +129,26 @@ const ProfileSwitcher = () => {
     setLoading(true);
     try {
       await signOut();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: loginEmail,
         password: loginPassword,
       });
       if (error) throw error;
+      // Save credentials for future auto-switch
+      if (authData.user) {
+        const existing = getSavedAccounts();
+        const updated = existing.map((a) =>
+          a.email === loginEmail ? { ...a, pwd: loginPassword } : a
+        );
+        // If not found, it'll be auto-added by useEffect with pwd missing,
+        // so also set a temp store
+        const found = updated.some((a) => a.email === loginEmail);
+        if (!found) {
+          updated.push({ email: loginEmail, full_name: "", avatar_url: null, user_id: authData.user.id, pwd: loginPassword });
+        }
+        saveAccounts(updated);
+        setAccounts(updated);
+      }
       toast({ title: "Conta alternada!" });
       setShowAddForm(false);
       setOpen(false);
