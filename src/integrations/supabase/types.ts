@@ -1663,6 +1663,8 @@ export type Database = {
       tournaments: {
         Row: {
           address: string | null
+          address_complement: string | null
+          address_number: string | null
           arena: string | null
           categories: string[] | null
           category: Database["public"]["Enums"]["tournament_category"]
@@ -1694,6 +1696,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
           arena?: string | null
           categories?: string[] | null
           category?: Database["public"]["Enums"]["tournament_category"]
@@ -1725,6 +1729,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
           arena?: string | null
           categories?: string[] | null
           category?: Database["public"]["Enums"]["tournament_category"]

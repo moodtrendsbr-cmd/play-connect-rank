@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,14 +11,35 @@ import { Switch } from "@/components/ui/switch";
 import { TagInput } from "@/components/ui/tag-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, Loader2, X } from "lucide-react";
+import { ArrowLeft, Upload, Loader2, X, Plus } from "lucide-react";
 
 interface SlotConfig {
   type: string;
   category: string;
   gender: string;
   slots: number;
+  datetime: string;
 }
+
+const abbreviate = (text: string) => {
+  const map: Record<string, string> = {
+    'Masculino': 'Masc', 'Feminino': 'Fem', 'Misto': 'Misto',
+    'Iniciante': 'Inic', 'Intermediário': 'Inter', 'Open': 'Open',
+    'Duplas': 'Duplas', 'Trios': 'Trios', 'Quartetos': 'Quart',
+    'Individual': 'Indiv', 'Equipes': 'Equip',
+  };
+  return map[text] || text.substring(0, 5);
+};
+
+const formatDateShort = (iso: string) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}/${mm} ${hh}:${min}`;
+};
 
 const CreateTournament = () => {
   const { user } = useAuth();
@@ -30,12 +51,11 @@ const CreateTournament = () => {
   const [form, setForm] = useState({
     name: "",
     modality: "Vôlei de Praia",
-    gender: [] as string[],
-    types: [] as string[],
-    categories: [] as string[],
     arena: "",
     zip_code: "",
     address: "",
+    address_number: "",
+    address_complement: "",
     city: "",
     state: "",
     start_date: "",
@@ -49,43 +69,73 @@ const CreateTournament = () => {
     match_enabled: true,
   });
 
+  // Builder state (sequential per-gender)
+  const [builder, setBuilder] = useState({
+    gender: '',
+    types: [] as string[],
+    categories: [] as string[],
+    slots: 16,
+    datetime: '',
+  });
+
   const [slotConfig, setSlotConfig] = useState<SlotConfig[]>([]);
 
-  // Generate combinations whenever tags change
-  const allCombinations = useMemo(() => {
-    const combos: SlotConfig[] = [];
-    if (form.types.length === 0 || form.categories.length === 0 || form.gender.length === 0) return combos;
-    for (const type of form.types) {
-      for (const category of form.categories) {
-        for (const gender of form.gender) {
-          combos.push({ type, category, gender, slots: 16 });
+  const totalSlots = slotConfig.reduce((sum, s) => sum + s.slots, 0);
+
+  // Builder actions
+  const addCombinations = () => {
+    if (!builder.gender) {
+      toast({ title: "Selecione o gênero", variant: "destructive" });
+      return;
+    }
+    if (builder.types.length === 0) {
+      toast({ title: "Adicione pelo menos 1 tipo", variant: "destructive" });
+      return;
+    }
+    if (builder.categories.length === 0) {
+      toast({ title: "Adicione pelo menos 1 categoria", variant: "destructive" });
+      return;
+    }
+
+    const newSlots: SlotConfig[] = [];
+    for (const type of builder.types) {
+      for (const category of builder.categories) {
+        const exists = slotConfig.some(
+          (s) => s.type === type && s.category === category && s.gender === builder.gender
+        );
+        if (!exists) {
+          newSlots.push({
+            type,
+            category,
+            gender: builder.gender,
+            slots: builder.slots,
+            datetime: builder.datetime,
+          });
         }
       }
     }
-    return combos;
-  }, [form.types, form.categories, form.gender]);
 
-  // Sync slotConfig when combinations change
-  useEffect(() => {
-    setSlotConfig((prev) => {
-      return allCombinations.map((combo) => {
-        const existing = prev.find(
-          (p) => p.type === combo.type && p.category === combo.category && p.gender === combo.gender
-        );
-        return existing || combo;
-      });
-    });
-  }, [allCombinations]);
+    if (newSlots.length === 0) {
+      toast({ title: "Todas as combinações já foram adicionadas", variant: "destructive" });
+      return;
+    }
+
+    setSlotConfig((prev) => [...prev, ...newSlots]);
+    setBuilder({ gender: '', types: [], categories: [], slots: 16, datetime: '' });
+    toast({ title: `${newSlots.length} combinação(ões) adicionada(s)!` });
+  };
 
   const updateSlotCount = (index: number, slots: number) => {
     setSlotConfig((prev) => prev.map((item, i) => (i === index ? { ...item, slots } : item)));
   };
 
+  const updateSlotDatetime = (index: number, datetime: string) => {
+    setSlotConfig((prev) => prev.map((item, i) => (i === index ? { ...item, datetime } : item)));
+  };
+
   const removeSlot = (index: number) => {
     setSlotConfig((prev) => prev.filter((_, i) => i !== index));
   };
-
-  const totalSlots = slotConfig.reduce((sum, s) => sum + s.slots, 0);
 
   // CEP lookup
   const handleCepChange = async (cep: string) => {
@@ -138,13 +188,18 @@ const CreateTournament = () => {
     if (!user) return;
     setLoading(true);
 
+    // Derive unique arrays from slotConfig
+    const genderArr = [...new Set(slotConfig.map((s) => s.gender))];
+    const typesArr = [...new Set(slotConfig.map((s) => s.type))];
+    const categoriesArr = [...new Set(slotConfig.map((s) => s.category))];
+
     const { error } = await supabase.from("tournaments").insert({
       organizer_id: user.id,
       name: form.name,
       modality: form.modality,
-      gender: form.gender,
-      categories: form.categories,
-      types: form.types,
+      gender: genderArr,
+      categories: categoriesArr,
+      types: typesArr,
       category: "misto",
       type: "duplas",
       arena: form.arena,
@@ -152,6 +207,8 @@ const CreateTournament = () => {
       city: form.city,
       state: form.state,
       address: form.address,
+      address_number: form.address_number,
+      address_complement: form.address_complement,
       start_date: form.start_date,
       end_date: form.end_date,
       entry_fee: parseFloat(form.entry_fee) || 0,
@@ -212,46 +269,79 @@ const CreateTournament = () => {
             </Select>
           </div>
 
-          {/* 3. Gênero */}
-          <div>
-            <Label>Gênero</Label>
-            <div className="mt-1">
-              <TagInput
-                label="gênero"
-                suggestions={["Masculino", "Feminino", "Misto"]}
-                value={form.gender}
-                onChange={(v) => setForm((f) => ({ ...f, gender: v }))}
-              />
+          {/* 3. Builder Sequencial de Categorias */}
+          <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+            <Label className="text-base font-semibold">Configurar Categorias por Gênero</Label>
+            <p className="text-sm text-muted-foreground">Selecione um gênero, defina tipos e categorias, depois clique em Adicionar.</p>
+
+            {/* Gênero */}
+            <div>
+              <Label className="text-sm">Gênero</Label>
+              <Select value={builder.gender} onValueChange={(v) => setBuilder((b) => ({ ...b, gender: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o gênero" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Masculino">Masculino</SelectItem>
+                  <SelectItem value="Feminino">Feminino</SelectItem>
+                  <SelectItem value="Misto">Misto</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Tipos */}
+            <div>
+              <Label className="text-sm">Tipos</Label>
+              <div className="mt-1">
+                <TagInput
+                  label="tipo"
+                  suggestions={["Individual", "Duplas", "Trios", "Quartetos", "Equipes"]}
+                  value={builder.types}
+                  onChange={(v) => setBuilder((b) => ({ ...b, types: v }))}
+                />
+              </div>
+            </div>
+
+            {/* Categorias */}
+            <div>
+              <Label className="text-sm">Categorias</Label>
+              <div className="mt-1">
+                <TagInput
+                  label="categoria"
+                  suggestions={["Iniciante", "Intermediário", "Open"]}
+                  value={builder.categories}
+                  onChange={(v) => setBuilder((b) => ({ ...b, categories: v }))}
+                />
+              </div>
+            </div>
+
+            {/* Vagas e Data/Hora */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label className="text-sm">Vagas</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={builder.slots}
+                  onChange={(e) => setBuilder((b) => ({ ...b, slots: parseInt(e.target.value) || 1 }))}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-sm">Data/Hora</Label>
+                <Input
+                  type="datetime-local"
+                  value={builder.datetime}
+                  onChange={(e) => setBuilder((b) => ({ ...b, datetime: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <Button type="button" variant="secondary" onClick={addCombinations} className="w-full gap-2">
+              <Plus className="h-4 w-4" /> Adicionar Categorias
+            </Button>
           </div>
 
-          {/* 4. Tipo */}
-          <div>
-            <Label>Tipo</Label>
-            <div className="mt-1">
-              <TagInput
-                label="tipo"
-                suggestions={["Individual", "Duplas", "Trios", "Quartetos", "Equipes"]}
-                value={form.types}
-                onChange={(v) => setForm((f) => ({ ...f, types: v }))}
-              />
-            </div>
-          </div>
-
-          {/* 5. Categoria */}
-          <div>
-            <Label>Categoria</Label>
-            <div className="mt-1">
-              <TagInput
-                label="categoria"
-                suggestions={["Iniciante", "Intermediário", "Open"]}
-                value={form.categories}
-                onChange={(v) => setForm((f) => ({ ...f, categories: v }))}
-              />
-            </div>
-          </div>
-
-          {/* 6. Vagas por combinação */}
+          {/* 4. Tabela de Vagas */}
           {slotConfig.length > 0 && (
             <div>
               <Label>Vagas por Categoria</Label>
@@ -259,29 +349,38 @@ const CreateTournament = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead>Gênero</TableHead>
-                      <TableHead className="w-24">Vagas</TableHead>
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="px-2">Tipo</TableHead>
+                      <TableHead className="px-2">Gen.</TableHead>
+                      <TableHead className="px-2">Cat.</TableHead>
+                      <TableHead className="px-2 w-16">Vagas</TableHead>
+                      <TableHead className="px-2">Data/Hora</TableHead>
+                      <TableHead className="px-1 w-8"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {slotConfig.map((slot, i) => (
-                      <TableRow key={`${slot.type}-${slot.category}-${slot.gender}`}>
-                        <TableCell className="text-sm">{slot.type}</TableCell>
-                        <TableCell className="text-sm">{slot.category}</TableCell>
-                        <TableCell className="text-sm">{slot.gender}</TableCell>
-                        <TableCell>
+                      <TableRow key={`${slot.type}-${slot.category}-${slot.gender}-${i}`}>
+                        <TableCell className="text-xs px-2">{abbreviate(slot.type)}</TableCell>
+                        <TableCell className="text-xs px-2">{abbreviate(slot.gender)}</TableCell>
+                        <TableCell className="text-xs px-2">{abbreviate(slot.category)}</TableCell>
+                        <TableCell className="px-2">
                           <Input
                             type="number"
                             min={0}
                             value={slot.slots}
                             onChange={(e) => updateSlotCount(i, parseInt(e.target.value) || 0)}
-                            className="h-8 w-20"
+                            className="h-7 w-14 text-xs px-1"
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-2">
+                          <Input
+                            type="datetime-local"
+                            value={slot.datetime}
+                            onChange={(e) => updateSlotDatetime(i, e.target.value)}
+                            className="h-7 text-xs px-1"
+                          />
+                        </TableCell>
+                        <TableCell className="px-1">
                           <button type="button" onClick={() => removeSlot(i)} className="text-muted-foreground hover:text-destructive">
                             <X className="h-4 w-4" />
                           </button>
@@ -295,13 +394,13 @@ const CreateTournament = () => {
             </div>
           )}
 
-          {/* 7. Arena */}
+          {/* 5. Arena */}
           <div>
             <Label>Arena</Label>
             <Input value={form.arena} onChange={(e) => update("arena", e.target.value)} placeholder="Nome da arena" className="mt-1" />
           </div>
 
-          {/* 8. CEP */}
+          {/* 6. CEP */}
           <div>
             <Label>CEP</Label>
             <div className="relative mt-1">
@@ -315,13 +414,23 @@ const CreateTournament = () => {
             </div>
           </div>
 
-          {/* 9. Endereço */}
-          <div>
-            <Label>Endereço</Label>
-            <Input value={form.address} onChange={(e) => update("address", e.target.value)} className="mt-1" />
+          {/* 7. Endereço + Número + Complemento */}
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-[1fr_100px_1fr]">
+            <div>
+              <Label>Endereço</Label>
+              <Input value={form.address} onChange={(e) => update("address", e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label>Nº</Label>
+              <Input value={form.address_number} onChange={(e) => update("address_number", e.target.value)} placeholder="123" className="mt-1" />
+            </div>
+            <div>
+              <Label>Complemento</Label>
+              <Input value={form.address_complement} onChange={(e) => update("address_complement", e.target.value)} placeholder="Bloco A" className="mt-1" />
+            </div>
           </div>
 
-          {/* 10. Cidade / Estado */}
+          {/* 8. Cidade / Estado */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Cidade</Label>
@@ -333,7 +442,7 @@ const CreateTournament = () => {
             </div>
           </div>
 
-          {/* 11. Datas */}
+          {/* 9. Datas */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Data início</Label>
@@ -345,7 +454,7 @@ const CreateTournament = () => {
             </div>
           </div>
 
-          {/* 12-13. Valores */}
+          {/* 10. Valores */}
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
               <Label>Valor inscrição (R$)</Label>
@@ -361,13 +470,13 @@ const CreateTournament = () => {
             </div>
           </div>
 
-          {/* 14. Prazo pagamento */}
+          {/* 11. Prazo pagamento */}
           <div>
             <Label>Prazo pagamento (dias)</Label>
             <Input type="number" value={form.payment_deadline_days} onChange={(e) => update("payment_deadline_days", e.target.value)} required className="mt-1" />
           </div>
 
-          {/* 15. Regulamento */}
+          {/* 12. Regulamento */}
           <div>
             <Label>Regulamento</Label>
             <Textarea value={form.rules} onChange={(e) => update("rules", e.target.value)} rows={5} className="mt-1" />
@@ -390,7 +499,7 @@ const CreateTournament = () => {
             </div>
           </div>
 
-          {/* 16. Match */}
+          {/* 13. Match */}
           <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
             <div>
               <Label className="text-base">Match (Procurar parceiros)</Label>
