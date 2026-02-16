@@ -1,141 +1,151 @@
 
-# Fluxo Sequencial por Genero + Data/Hora por Categoria + Campos de Endereco
+# Modulo "Patrocinar Torneio" - Plano de Implementacao
 
-## Resumo
+## Visao Geral
 
-Transformar o sistema de categorias para um fluxo sequencial onde o organizador configura **um genero por vez**, escolhendo tipos, categorias, vagas e agora tambem **data e horario** de cada combinacao. Adicionar campos de Numero e Complemento no endereco. Reorganizar a tabela de vagas para o formato: **Tipo - Gen. - Cat. - Vagas - Data/Hora** com abreviacoes para responsividade mobile.
-
----
-
-## Mudancas no Banco de Dados
-
-Migration SQL para adicionar colunas de endereco:
-
-```sql
-ALTER TABLE tournaments
-  ADD COLUMN IF NOT EXISTS address_number text,
-  ADD COLUMN IF NOT EXISTS address_complement text;
-```
-
-O campo `slot_config` (jsonb, ja existe) passara a incluir `datetime` em cada item:
-```json
-[
-  { "type": "Duplas", "category": "Iniciante", "gender": "Masculino", "slots": 16, "datetime": "2026-03-15T08:00" },
-  { "type": "Duplas", "category": "Open", "gender": "Feminino", "slots": 8, "datetime": "2026-03-15T14:00" }
-]
-```
+Criar um sistema completo de patrocinio de torneios onde empresas aprovadas podem escolher torneios, selecionar um pacote (definido pelo admin), enviar logo e pagar para ter visibilidade automatica em multiplos pontos do app.
 
 ---
 
-## Novo Fluxo de Categorias (Builder Sequencial)
+## 1. Migracao de Banco de Dados
 
-### Como funciona
+### Tabela `tournament_sponsor_plans`
+Pacotes de patrocinio definidos pelo admin:
+- `id`, `name`, `display_name`, `price` (numeric)
+- `max_tournaments` (integer)
+- `feed_visibility` (boolean)
+- `signup_visibility` (boolean) -- aparece na tela de inscricao/pagamento
+- `tournament_visibility` (boolean) -- aparece na pagina do torneio
+- `physical_banner_allowed` (boolean)
+- `description` (text)
+- `active` (boolean, default true)
+- `created_at`, `updated_at`
 
-1. Organizador seleciona **1 Genero** (Select: Masculino, Feminino, Misto ou digitar custom)
-2. Seleciona os **Tipos** para esse genero (TagInput: Duplas, Trios, etc.)
-3. Seleciona as **Categorias** para esse genero (TagInput: Iniciante, Open, etc.)
-4. Define **Vagas** (numero padrao, ex: 16)
-5. Define **Data e Horario** (input datetime-local)
-6. Clica **"+ Adicionar"** - gera combinacoes de tipo x categoria para o genero selecionado, cada uma com as vagas e datetime informados
-7. As combinacoes aparecem na tabela abaixo
-8. O builder limpa para o proximo genero
-9. Na tabela, cada linha pode ter vagas e data/hora editados individualmente, ou ser removida
+RLS: leitura publica, CRUD restrito a admin.
 
-### Exemplo visual do builder
+### Tabela `tournament_sponsorships`
+Registro de cada patrocinio contratado:
+- `id`, `tournament_id` (FK tournaments), `company_id` (FK companies), `plan_id` (FK tournament_sponsor_plans)
+- `logo_url` (text), `link` (text), `message` (text, opcional)
+- `status` (text: pending, active, paused, expired)
+- `payment_id` (text)
+- `created_at`, `updated_at`
 
-```text
-[Genero: Masculino v]
-[Tipos: + Duplas  + Trios]
-[Categorias: + Iniciante  + Open]
-[Vagas: 16]  [Data/Hora: 15/03/2026 08:00]
-[ + Adicionar ]
-```
+RLS:
+- SELECT publico (para exibir logos)
+- INSERT por owner da company
+- UPDATE por owner da company OU admin
+- Admin SELECT/UPDATE/DELETE completo
 
----
-
-## Tabela de Vagas (responsiva)
-
-Colunas abreviadas para caber em mobile:
-
-| Tipo | Gen. | Cat. | Vagas | Data/Hora |   |
-|------|------|------|-------|-----------|---|
-| Duplas | Masc | Inic | 16 | 15/03 08:00 | X |
-| Duplas | Masc | Open | 16 | 15/03 08:00 | X |
-| Trios | Fem | Open | 8 | 15/03 14:00 | X |
-
-- Headers abreviados: "Gen." para Genero, "Cat." para Categoria
-- Valores abreviados na celula: "Masc" em vez de "Masculino", "Fem", "Inic", etc.
-- Data formatada como "DD/MM HH:mm" (sem ano para economizar espaco)
-- Total de vagas exibido abaixo da tabela
+### Seed de pacotes default
+Inserir 3 pacotes: Basic (R$99), Pro (R$249), Elite (R$499) com visibilidades progressivas.
 
 ---
 
-## Campos de Endereco
+## 2. Paginas Frontend
 
-Apos o campo Endereco, adicionar na mesma linha:
-- **Numero** (campo curto)
-- **Complemento** (campo texto)
+### 2.1 `/marketplace/tournaments` - Vitrine de Torneios para Empresas
+- Listagem de torneios futuros/ativos com filtros (cidade, modalidade)
+- Cards com: nome, arena, cidade, datas, valor inscricao, atletas inscritos/vagas
+- Botao "Patrocinar este torneio" em cada card
+- Acessivel via menu do Marketplace (somente para donos de empresa)
 
-Layout: `[Endereco (largo)] [N° (curto)] [Complemento (medio)]` ou em 2 linhas no mobile.
+### 2.2 Dialog/Modal de Patrocinio
+- Selecao de pacote (cards com nome, preco e lista de beneficios)
+- Upload de logo (bucket `company-images`)
+- Campo de link da empresa e mensagem opcional
+- Botao confirmar -> cria registro com status `pending`
+- Integracao futura com pagamento (por ora, admin aprova manualmente)
+
+### 2.3 `/admin/sponsorships` - Painel Admin de Patrocinios de Torneio
+- Gerenciar pacotes (CRUD em `tournament_sponsor_plans`)
+- Listar todos os patrocinios (`tournament_sponsorships`) com filtros
+- Acoes: aprovar (status -> active), pausar, bloquear
+- Ao aprovar: sistema insere automaticamente em `tournament_partners` e gera `sponsored_post` se o plano permitir feed_visibility
+- Metricas basicas (total patrocinios, receita, por torneio)
+
+---
+
+## 3. Automacao Pos-Ativacao
+
+Quando admin muda status para `active`:
+1. Insere registro em `tournament_partners` (logo aparece na pagina do torneio)
+2. Se `feed_visibility = true`, cria `sponsored_post` com template: "Parceiro oficial de {torneio} em {cidade}"
+3. A pagina de pagamento (`Payment.tsx`) e `TournamentDetail.tsx` ja exibem parceiros -- basta ter o dado em `tournament_partners`
+
+### Exibicao na tela de inscricao/pagamento
+- Adicionar bloco "Parceiros Oficiais" em `Payment.tsx` quando houver patrocinios com `signup_visibility = true`
+
+---
+
+## 4. Navegacao e Rotas
+
+- Adicionar rota `/marketplace/tournaments` no `App.tsx` dentro do `AppLayout`
+- Adicionar link na sidebar do Admin: "Patrocinios Torneio" em `/admin/sponsorships`
+- Rota admin `/admin/sponsorships` no `AdminLayout`
+
+---
+
+## 5. Arquivos a Criar/Modificar
+
+### Novos:
+- `src/pages/MarketplaceTournaments.tsx` -- vitrine de torneios para empresas
+- `src/components/sponsorship/SponsorTournamentDialog.tsx` -- modal de contratacao
+- `src/pages/admin/AdminSponsorships.tsx` -- painel admin
+
+### Modificados:
+- `src/App.tsx` -- novas rotas
+- `src/pages/admin/AdminLayout.tsx` -- novo item na sidebar
+- `src/pages/TournamentDetail.tsx` -- badge "Parceiro Oficial" nos logos
+- `src/pages/Payment.tsx` -- bloco "Parceiros Oficiais" para patrocinios com signup_visibility
+- Migracao SQL para as 2 novas tabelas + seed de pacotes
 
 ---
 
 ## Detalhes Tecnicos
 
-### Interface SlotConfig atualizada
+### Migracao SQL resumida:
 
-```typescript
-interface SlotConfig {
-  type: string;
-  category: string;
-  gender: string;
-  slots: number;
-  datetime: string; // formato ISO "YYYY-MM-DDTHH:mm"
-}
+```text
+tournament_sponsor_plans
+  id uuid PK
+  name text NOT NULL
+  display_name text NOT NULL
+  price numeric NOT NULL DEFAULT 0
+  max_tournaments int DEFAULT 1
+  feed_visibility bool DEFAULT false
+  signup_visibility bool DEFAULT false
+  tournament_visibility bool DEFAULT true
+  physical_banner_allowed bool DEFAULT false
+  description text
+  active bool DEFAULT true
+  created_at timestamptz DEFAULT now()
+  updated_at timestamptz DEFAULT now()
+
+tournament_sponsorships
+  id uuid PK
+  tournament_id uuid FK -> tournaments
+  company_id uuid FK -> companies
+  plan_id uuid FK -> tournament_sponsor_plans
+  logo_url text
+  link text
+  message text
+  status text DEFAULT 'pending'
+  payment_id text
+  created_at timestamptz DEFAULT now()
+  updated_at timestamptz DEFAULT now()
 ```
 
-### Estado do Builder
+### Fluxo de dados:
 
-```typescript
-const [builder, setBuilder] = useState({
-  gender: '',
-  types: [] as string[],
-  categories: [] as string[],
-  slots: 16,
-  datetime: ''
-});
+```text
+Empresa -> Escolhe torneio -> Seleciona pacote -> Upload logo -> Confirma
+  -> INSERT tournament_sponsorships (status=pending)
+  -> Admin aprova (status=active)
+    -> INSERT tournament_partners (automatico)
+    -> INSERT sponsored_posts (se feed_visibility=true)
 ```
 
-### Logica "Adicionar"
-
-Ao clicar "Adicionar":
-- Valida que genero, pelo menos 1 tipo e 1 categoria estao preenchidos
-- Gera combinacoes: `builder.types x builder.categories`, todas com o `builder.gender`, `builder.slots` e `builder.datetime`
-- Evita duplicatas (mesma combinacao tipo+categoria+genero)
-- Adiciona ao `slotConfig`
-- Limpa o builder
-
-### Funcao de abreviacao
-
-```typescript
-const abbreviate = (text: string) => {
-  const map: Record<string, string> = {
-    'Masculino': 'Masc', 'Feminino': 'Fem', 'Misto': 'Misto',
-    'Iniciante': 'Inic', 'Intermediário': 'Inter', 'Open': 'Open',
-    'Duplas': 'Duplas', 'Trios': 'Trios', 'Quartetos': 'Quart',
-    'Individual': 'Indiv', 'Equipes': 'Equip'
-  };
-  return map[text] || text.substring(0, 5);
-};
-```
-
-### Submit
-
-Na hora do submit, derivar os arrays `gender`, `types` e `categories` unicos a partir do `slotConfig` para salvar tambem nos campos de array do banco.
-
-### Arquivos a Modificar
-
-| Arquivo | Acao |
-|---------|------|
-| `src/pages/CreateTournament.tsx` | Modificar - builder sequencial, datetime, tabela responsiva, campos endereco |
-| Migration SQL | Executar - colunas address_number e address_complement |
+### RLS Policies:
+- `tournament_sponsor_plans`: SELECT publico, INSERT/UPDATE/DELETE admin
+- `tournament_sponsorships`: SELECT publico, INSERT owner da company, UPDATE owner+admin, DELETE admin
