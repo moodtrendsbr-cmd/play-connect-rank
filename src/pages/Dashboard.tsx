@@ -162,10 +162,13 @@ const Dashboard = () => {
               <Card key={t.id} className="overflow-hidden hover:border-primary/40 transition-colors">
                 <CardHeader>
                   <CardTitle className="font-sans text-lg">{t.name}</CardTitle>
+                  {t.arena && (
+                    <p className="text-sm text-muted-foreground">🏟️ {t.arena}</p>
+                  )}
                   <p className="text-sm text-muted-foreground">📍 {t.city} - {t.state}</p>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <p className="text-sm">📅 {t.start_date}</p>
+                  <p className="text-sm">📅 {t.start_date} — {t.end_date}</p>
                   <p className="text-sm">💰 R$ {Number(t.entry_fee).toFixed(2)}</p>
                   <div className="flex gap-2 mt-2">
                     <Button className="flex-1" variant="outline" asChild>
@@ -173,11 +176,19 @@ const Dashboard = () => {
                         {userRole === "organizer" ? "Gerenciar" : "Ver detalhes"}
                       </Link>
                     </Button>
-                    <Button variant="outline" size="icon" asChild title="Chaveamentos">
-                      <Link to={`/tournaments/${t.id}/brackets`}>
-                        <GitBranch className="h-4 w-4" />
-                      </Link>
-                    </Button>
+                    {(() => {
+                      const now = new Date();
+                      const end = new Date(t.end_date);
+                      const start = new Date(t.start_date);
+                      const isActiveOrFinished = now >= start;
+                      return isActiveOrFinished ? (
+                        <Button variant="outline" size="icon" asChild title="Chaveamentos">
+                          <Link to={`/tournaments/${t.id}/brackets`}>
+                            <GitBranch className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      ) : null;
+                    })()}
                   </div>
                 </CardContent>
               </Card>
