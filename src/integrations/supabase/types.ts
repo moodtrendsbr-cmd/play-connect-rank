@@ -1484,6 +1484,7 @@ export type Database = {
       }
       sponsorship_giveaways: {
         Row: {
+          admin_notes: string | null
           contact_email: string | null
           contact_name: string | null
           contact_whatsapp: string | null
@@ -1502,6 +1503,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          admin_notes?: string | null
           contact_email?: string | null
           contact_name?: string | null
           contact_whatsapp?: string | null
@@ -1520,6 +1522,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          admin_notes?: string | null
           contact_email?: string | null
           contact_name?: string | null
           contact_whatsapp?: string | null

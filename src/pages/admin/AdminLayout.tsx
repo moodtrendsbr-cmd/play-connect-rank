@@ -14,10 +14,11 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag, Handshake } from "lucide-react";
+import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag, Handshake, BarChart3, Gift, Layers } from "lucide-react";
 
 const navItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
+  { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
   { title: "Usuários", url: "/admin/users", icon: Users },
   { title: "Torneios", url: "/admin/tournaments", icon: Trophy },
   { title: "Inscrições", url: "/admin/enrollments", icon: ClipboardList },
@@ -30,6 +31,8 @@ const marketplaceNavItems = [
   { title: "Publicidade", url: "/admin/ads", icon: Megaphone },
   { title: "Patrocínios Atleta", url: "/admin/sponsors", icon: Heart },
   { title: "Patrocínios Torneio", url: "/admin/sponsorships", icon: Handshake },
+  { title: "Planos", url: "/admin/plans", icon: Layers },
+  { title: "Brindes", url: "/admin/gifts", icon: Gift },
   { title: "Monetização", url: "/admin/monetization", icon: CreditCard },
 ];
 
