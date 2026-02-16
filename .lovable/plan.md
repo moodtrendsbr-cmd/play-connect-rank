@@ -1,151 +1,150 @@
 
-# Modulo "Patrocinar Torneio" - Plano de Implementacao
+# Painel do Patrocinador - Plano de Implementacao
 
 ## Visao Geral
 
-Criar um sistema completo de patrocinio de torneios onde empresas aprovadas podem escolher torneios, selecionar um pacote (definido pelo admin), enviar logo e pagar para ter visibilidade automatica em multiplos pontos do app.
+Criar 3 novas rotas para empresas patrocinadoras (`/sponsor/dashboard`, `/sponsor/tournaments`, `/sponsor/sponsorships/:id`) com layout proprio, tema Kling, e funcionalidade de brindes. Reaproveitar a logica existente de `MarketplaceTournaments` e `SponsorTournamentDialog`, expandindo com dashboard de metricas, detalhe de patrocinio e sistema de brindes.
 
 ---
 
 ## 1. Migracao de Banco de Dados
 
-### Tabela `tournament_sponsor_plans`
-Pacotes de patrocinio definidos pelo admin:
-- `id`, `name`, `display_name`, `price` (numeric)
-- `max_tournaments` (integer)
-- `feed_visibility` (boolean)
-- `signup_visibility` (boolean) -- aparece na tela de inscricao/pagamento
-- `tournament_visibility` (boolean) -- aparece na pagina do torneio
-- `physical_banner_allowed` (boolean)
-- `description` (text)
-- `active` (boolean, default true)
-- `created_at`, `updated_at`
-
-RLS: leitura publica, CRUD restrito a admin.
-
-### Tabela `tournament_sponsorships`
-Registro de cada patrocinio contratado:
-- `id`, `tournament_id` (FK tournaments), `company_id` (FK companies), `plan_id` (FK tournament_sponsor_plans)
-- `logo_url` (text), `link` (text), `message` (text, opcional)
-- `status` (text: pending, active, paused, expired)
-- `payment_id` (text)
+### Nova tabela `sponsorship_giveaways`
+Armazena os brindes opcionais vinculados a um patrocinio:
+- `id` uuid PK
+- `sponsorship_id` uuid FK -> tournament_sponsorships
+- `item_type` text (tipo do brinde)
+- `quantity` integer
+- `rules` text (ex: "para os 50 primeiros")
+- `needs_refrigeration` boolean DEFAULT false
+- `delivery_deadline` date
+- `contact_name` text
+- `contact_whatsapp` text
+- `contact_email` text
+- `pickup_address` text (endereco de retirada)
+- `delivery_address` text (endereco de entrega)
+- `notes` text (observacoes logisticas)
+- `status` text DEFAULT 'pending' (pending, ready, delivered)
 - `created_at`, `updated_at`
 
 RLS:
-- SELECT publico (para exibir logos)
-- INSERT por owner da company
-- UPDATE por owner da company OU admin
-- Admin SELECT/UPDATE/DELETE completo
+- SELECT: owner da company do sponsorship OU admin
+- INSERT: owner da company do sponsorship
+- UPDATE: owner da company do sponsorship OU admin
+- DELETE: admin
 
-### Seed de pacotes default
-Inserir 3 pacotes: Basic (R$99), Pro (R$249), Elite (R$499) com visibilidades progressivas.
-
----
-
-## 2. Paginas Frontend
-
-### 2.1 `/marketplace/tournaments` - Vitrine de Torneios para Empresas
-- Listagem de torneios futuros/ativos com filtros (cidade, modalidade)
-- Cards com: nome, arena, cidade, datas, valor inscricao, atletas inscritos/vagas
-- Botao "Patrocinar este torneio" em cada card
-- Acessivel via menu do Marketplace (somente para donos de empresa)
-
-### 2.2 Dialog/Modal de Patrocinio
-- Selecao de pacote (cards com nome, preco e lista de beneficios)
-- Upload de logo (bucket `company-images`)
-- Campo de link da empresa e mensagem opcional
-- Botao confirmar -> cria registro com status `pending`
-- Integracao futura com pagamento (por ora, admin aprova manualmente)
-
-### 2.3 `/admin/sponsorships` - Painel Admin de Patrocinios de Torneio
-- Gerenciar pacotes (CRUD em `tournament_sponsor_plans`)
-- Listar todos os patrocinios (`tournament_sponsorships`) com filtros
-- Acoes: aprovar (status -> active), pausar, bloquear
-- Ao aprovar: sistema insere automaticamente em `tournament_partners` e gera `sponsored_post` se o plano permitir feed_visibility
-- Metricas basicas (total patrocinios, receita, por torneio)
+### Novas colunas em `tournament_sponsorships`
+- `views_count` integer DEFAULT 0 (tracking de impressoes)
+- `clicks_count` integer DEFAULT 0 (tracking de cliques)
 
 ---
 
-## 3. Automacao Pos-Ativacao
+## 2. Novas Paginas
 
-Quando admin muda status para `active`:
-1. Insere registro em `tournament_partners` (logo aparece na pagina do torneio)
-2. Se `feed_visibility = true`, cria `sponsored_post` com template: "Parceiro oficial de {torneio} em {cidade}"
-3. A pagina de pagamento (`Payment.tsx`) e `TournamentDetail.tsx` ja exibem parceiros -- basta ter o dado em `tournament_partners`
+### 2.1 `/sponsor/dashboard` - Dashboard do Patrocinador
+- Busca a empresa do usuario logado
+- Cards de metricas: plano atual, cidades ativas (distinct cities dos torneios patrocinados), total patrocinios, views e cliques agregados
+- Secao "Acoes rapidas" com 4 botoes: Patrocinar torneio, Ver brindes, Ver patrocinios, Atualizar marca
+- Lista dos patrocinios recentes com status
 
-### Exibicao na tela de inscricao/pagamento
-- Adicionar bloco "Parceiros Oficiais" em `Payment.tsx` quando houver patrocinios com `signup_visibility = true`
+### 2.2 `/sponsor/tournaments` - Catalogo de Torneios
+- Reutiliza a logica existente de `MarketplaceTournaments` mas com layout expandido
+- Filtros: cidade, status (aberto/em andamento/finalizado)
+- Cards com dados reais: nome, arena, cidade, datas, inscritos/vagas, modalidades
+- Botao "Patrocinar" abre dialog com fluxo de 4 passos (pacote -> identidade -> brindes -> confirmacao)
+
+### 2.3 `/sponsor/sponsorships/:id` - Detalhe do Patrocinio
+- Dados do torneio e cidade
+- Onde aparece (placements baseado no plano)
+- Status do patrocinio
+- Bloco de brindes com status logistico
+- Metricas: views, cliques
+- Botoes: Atualizar logo, Editar brindes, Falar com suporte
 
 ---
 
-## 4. Navegacao e Rotas
+## 3. Componentes
 
-- Adicionar rota `/marketplace/tournaments` no `App.tsx` dentro do `AppLayout`
-- Adicionar link na sidebar do Admin: "Patrocinios Torneio" em `/admin/sponsorships`
-- Rota admin `/admin/sponsorships` no `AdminLayout`
+### 3.1 `SponsorLayout` - Layout compartilhado das rotas /sponsor/*
+- Header com logo Mood Play e nome da empresa
+- Navegacao simples: Dashboard | Torneios | Meus Patrocinios
+- Sem bottom nav (experiencia dedicada para empresa)
+
+### 3.2 `SponsorTournamentDialog` (atualizar existente)
+- Adicionar Passo 3: Toggle "Quero oferecer brindes" com campos de logistica
+- Ao confirmar, insere tanto `tournament_sponsorships` quanto `sponsorship_giveaways` (se habilitado)
 
 ---
 
-## 5. Arquivos a Criar/Modificar
+## 4. Rotas no App.tsx
+
+Adicionar dentro de `Routes` (fora do AppLayout, layout proprio):
+```text
+/sponsor/dashboard -> SponsorDashboard
+/sponsor/tournaments -> SponsorTournaments
+/sponsor/sponsorships/:id -> SponsorshipDetail
+```
+
+---
+
+## 5. Arquivos
 
 ### Novos:
-- `src/pages/MarketplaceTournaments.tsx` -- vitrine de torneios para empresas
-- `src/components/sponsorship/SponsorTournamentDialog.tsx` -- modal de contratacao
-- `src/pages/admin/AdminSponsorships.tsx` -- painel admin
+- `src/pages/sponsor/SponsorLayout.tsx` - layout com nav do patrocinador
+- `src/pages/sponsor/SponsorDashboard.tsx` - dashboard principal
+- `src/pages/sponsor/SponsorTournaments.tsx` - catalogo de torneios
+- `src/pages/sponsor/SponsorshipDetail.tsx` - detalhe de um patrocinio
 
 ### Modificados:
-- `src/App.tsx` -- novas rotas
-- `src/pages/admin/AdminLayout.tsx` -- novo item na sidebar
-- `src/pages/TournamentDetail.tsx` -- badge "Parceiro Oficial" nos logos
-- `src/pages/Payment.tsx` -- bloco "Parceiros Oficiais" para patrocinios com signup_visibility
-- Migracao SQL para as 2 novas tabelas + seed de pacotes
+- `src/components/sponsorship/SponsorTournamentDialog.tsx` - adicionar passo de brindes
+- `src/App.tsx` - novas rotas /sponsor/*
+- Migracao SQL para tabela `sponsorship_giveaways` e colunas extras
 
 ---
 
 ## Detalhes Tecnicos
 
-### Migracao SQL resumida:
+### Migracao SQL:
 
 ```text
-tournament_sponsor_plans
-  id uuid PK
-  name text NOT NULL
-  display_name text NOT NULL
-  price numeric NOT NULL DEFAULT 0
-  max_tournaments int DEFAULT 1
-  feed_visibility bool DEFAULT false
-  signup_visibility bool DEFAULT false
-  tournament_visibility bool DEFAULT true
-  physical_banner_allowed bool DEFAULT false
-  description text
-  active bool DEFAULT true
+sponsorship_giveaways
+  id uuid PK DEFAULT gen_random_uuid()
+  sponsorship_id uuid FK -> tournament_sponsorships NOT NULL
+  item_type text NOT NULL
+  quantity integer NOT NULL DEFAULT 1
+  rules text
+  needs_refrigeration boolean DEFAULT false
+  delivery_deadline date
+  contact_name text
+  contact_whatsapp text
+  contact_email text
+  pickup_address text
+  delivery_address text
+  notes text
+  status text DEFAULT 'pending'
   created_at timestamptz DEFAULT now()
   updated_at timestamptz DEFAULT now()
 
-tournament_sponsorships
-  id uuid PK
-  tournament_id uuid FK -> tournaments
-  company_id uuid FK -> companies
-  plan_id uuid FK -> tournament_sponsor_plans
-  logo_url text
-  link text
-  message text
-  status text DEFAULT 'pending'
-  payment_id text
-  created_at timestamptz DEFAULT now()
-  updated_at timestamptz DEFAULT now()
+ALTER TABLE tournament_sponsorships
+  ADD COLUMN views_count integer DEFAULT 0,
+  ADD COLUMN clicks_count integer DEFAULT 0;
 ```
+
+### RLS para sponsorship_giveaways:
+- Funcao helper `is_sponsorship_company_owner(sponsorship_id, user_id)` para verificar ownership
+- SELECT/INSERT/UPDATE: owner da company vinculada ao sponsorship
+- SELECT/UPDATE/DELETE: admin
 
 ### Fluxo de dados:
 
 ```text
-Empresa -> Escolhe torneio -> Seleciona pacote -> Upload logo -> Confirma
-  -> INSERT tournament_sponsorships (status=pending)
-  -> Admin aprova (status=active)
-    -> INSERT tournament_partners (automatico)
-    -> INSERT sponsored_posts (se feed_visibility=true)
+Empresa -> /sponsor/dashboard (visao geral)
+  -> /sponsor/tournaments (escolhe torneio)
+    -> Dialog: pacote + logo + brindes (opcional)
+      -> INSERT tournament_sponsorships + INSERT sponsorship_giveaways
+  -> /sponsor/sponsorships/:id (acompanha metricas e status)
 ```
 
-### RLS Policies:
-- `tournament_sponsor_plans`: SELECT publico, INSERT/UPDATE/DELETE admin
-- `tournament_sponsorships`: SELECT publico, INSERT owner da company, UPDATE owner+admin, DELETE admin
+### Acesso:
+- Todas as rotas /sponsor/* verificam se o usuario tem uma empresa aprovada
+- Se nao tiver, redireciona para /marketplace/register
