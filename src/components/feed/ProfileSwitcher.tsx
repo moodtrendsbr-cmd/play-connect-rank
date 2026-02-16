@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { CircleUserRound, Plus, LogOut, Check, Trash2 } from "lucide-react";
+import { CircleUserRound, Plus, LogOut, Check, Trash2, LayoutDashboard, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -32,7 +32,7 @@ const saveAccounts = (accounts: SavedAccount[]) => {
 };
 
 const ProfileSwitcher = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, userRole } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [accounts, setAccounts] = useState<SavedAccount[]>(getSavedAccounts());
@@ -222,6 +222,28 @@ const ProfileSwitcher = () => {
 
             {/* Actions */}
             <div className="border-t" style={{ borderColor: "rgba(43,255,136,0.1)" }}>
+              {(userRole === "organizer" || userRole === "admin") && (
+                <button
+                  onClick={() => { setOpen(false); navigate("/dashboard"); }}
+                  className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-white/5 transition-colors"
+                >
+                  <div className="h-8 w-8 rounded-full flex items-center justify-center" style={{ background: "rgba(43,255,136,0.1)" }}>
+                    <LayoutDashboard className="h-4 w-4" style={{ color: "#2BFF88" }} />
+                  </div>
+                  <span className="text-sm" style={{ color: "#2BFF88" }}>Dashboard</span>
+                </button>
+              )}
+              {userRole === "admin" && (
+                <button
+                  onClick={() => { setOpen(false); navigate("/admin"); }}
+                  className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-white/5 transition-colors"
+                >
+                  <div className="h-8 w-8 rounded-full flex items-center justify-center" style={{ background: "rgba(43,255,136,0.1)" }}>
+                    <Shield className="h-4 w-4" style={{ color: "#2BFF88" }} />
+                  </div>
+                  <span className="text-sm" style={{ color: "#2BFF88" }}>Painel Admin</span>
+                </button>
+              )}
               <button
                 onClick={handleAddAccount}
                 className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-white/5 transition-colors"
