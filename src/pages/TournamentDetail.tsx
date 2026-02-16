@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import { Store, Settings, ArrowLeft } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 
@@ -18,6 +19,7 @@ const TournamentDetail = () => {
   const [alreadyEnrolled, setAlreadyEnrolled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [partners, setPartners] = useState<any[]>([]);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
     const fetch = async () => {
@@ -102,7 +104,22 @@ const TournamentDetail = () => {
           A confirmação acontece automaticamente após pagamento.
         </div>
 
-        <div className="mt-8 space-y-3">
+        {/* Terms checkbox */}
+        {!isFinished && !alreadyEnrolled && available > 0 && (
+          <div className="mt-6 flex items-start gap-3 rounded-lg border border-border bg-card p-4">
+            <Checkbox
+              id="terms"
+              checked={termsAccepted}
+              onCheckedChange={(v) => setTermsAccepted(v === true)}
+              className="mt-0.5"
+            />
+            <label htmlFor="terms" className="text-sm text-muted-foreground cursor-pointer leading-snug">
+              Declaro que li o regulamento e aceito os termos para divulgação de minha imagem nos perfis de torneios e divulgações vinculados a Mood Play
+            </label>
+          </div>
+        )}
+
+        <div className="mt-4 space-y-3">
           {isFinished ? (
             <>
               <Button disabled className="w-full h-14 text-lg">🏁 Torneio encerrado</Button>
@@ -118,15 +135,19 @@ const TournamentDetail = () => {
             <Button disabled className="w-full h-14 text-lg">Vagas esgotadas</Button>
           ) : tournament.match_enabled ? (
             <>
-              <Button onClick={handleEnroll} className="w-full h-14 text-lg font-bold box-glow">
+              <Button onClick={handleEnroll} disabled={!termsAccepted} className="w-full h-14 text-lg font-bold box-glow">
                 👥 Tenho dupla/time
               </Button>
-              <Button variant="outline" className="w-full h-14 text-lg font-bold border-primary text-primary" asChild>
-                <Link to={`/tournaments/${id}/match`}>🔍 Procurar parceiros</Link>
+              <Button variant="outline" disabled={!termsAccepted} className="w-full h-14 text-lg font-bold border-primary text-primary" asChild={termsAccepted}>
+                {termsAccepted ? (
+                  <Link to={`/tournaments/${id}/match`}>🔍 Procurar parceiros</Link>
+                ) : (
+                  <span>🔍 Procurar parceiros</span>
+                )}
               </Button>
             </>
           ) : (
-            <Button onClick={handleEnroll} className="w-full h-14 text-lg font-bold box-glow">
+            <Button onClick={handleEnroll} disabled={!termsAccepted} className="w-full h-14 text-lg font-bold box-glow">
               🟢 Inscrever-se
             </Button>
           )}

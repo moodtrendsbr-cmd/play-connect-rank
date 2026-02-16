@@ -1663,66 +1663,96 @@ export type Database = {
       tournaments: {
         Row: {
           address: string | null
+          arena: string | null
+          categories: string[] | null
           category: Database["public"]["Enums"]["tournament_category"]
           city: string
           created_at: string
           end_date: string
           entry_fee: number
+          entry_fee_2: number | null
+          entry_fee_3: number | null
+          gender: string[] | null
           id: string
           image_url: string | null
           is_public: boolean
           match_enabled: boolean
           max_slots: number
+          modality: string | null
           name: string
           organizer_id: string
           payment_deadline_days: number
           rules: string | null
+          rules_file_url: string | null
+          slot_config: Json | null
           start_date: string
           state: string
           type: Database["public"]["Enums"]["tournament_type"]
+          types: string[] | null
           updated_at: string
+          zip_code: string | null
         }
         Insert: {
           address?: string | null
+          arena?: string | null
+          categories?: string[] | null
           category?: Database["public"]["Enums"]["tournament_category"]
           city?: string
           created_at?: string
           end_date: string
           entry_fee?: number
+          entry_fee_2?: number | null
+          entry_fee_3?: number | null
+          gender?: string[] | null
           id?: string
           image_url?: string | null
           is_public?: boolean
           match_enabled?: boolean
           max_slots?: number
+          modality?: string | null
           name: string
           organizer_id: string
           payment_deadline_days?: number
           rules?: string | null
+          rules_file_url?: string | null
+          slot_config?: Json | null
           start_date: string
           state?: string
           type?: Database["public"]["Enums"]["tournament_type"]
+          types?: string[] | null
           updated_at?: string
+          zip_code?: string | null
         }
         Update: {
           address?: string | null
+          arena?: string | null
+          categories?: string[] | null
           category?: Database["public"]["Enums"]["tournament_category"]
           city?: string
           created_at?: string
           end_date?: string
           entry_fee?: number
+          entry_fee_2?: number | null
+          entry_fee_3?: number | null
+          gender?: string[] | null
           id?: string
           image_url?: string | null
           is_public?: boolean
           match_enabled?: boolean
           max_slots?: number
+          modality?: string | null
           name?: string
           organizer_id?: string
           payment_deadline_days?: number
           rules?: string | null
+          rules_file_url?: string | null
+          slot_config?: Json | null
           start_date?: string
           state?: string
           type?: Database["public"]["Enums"]["tournament_type"]
+          types?: string[] | null
           updated_at?: string
+          zip_code?: string | null
         }
         Relationships: []
       }
