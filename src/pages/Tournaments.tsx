@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Search, Trophy, MapPin, Calendar, Ticket } from "lucide-react";
 
-type StatusFilter = "all" | "active" | "upcoming";
+type StatusFilter = "all" | "active" | "upcoming" | "finished";
 
 const getTournamentStatus = (t: any) => {
   const now = new Date();
@@ -33,13 +33,11 @@ const Tournaments = () => {
 
   useEffect(() => {
     const fetch = async () => {
-      const today = new Date().toISOString().split("T")[0];
       const { data } = await supabase
         .from("tournaments")
         .select("*, enrollments(count)")
         .eq("is_public", true)
-        .gte("end_date", today)
-        .order("start_date", { ascending: true });
+        .order("start_date", { ascending: false });
       setTournaments(data || []);
       setLoading(false);
     };
@@ -89,6 +87,7 @@ const Tournaments = () => {
             { key: "all", label: "Todos" },
             { key: "active", label: "Em andamento" },
             { key: "upcoming", label: "Próximos" },
+            { key: "finished", label: "Finalizados" },
           ] as { key: StatusFilter; label: string }[]).map((f) => (
             <Button
               key={f.key}
