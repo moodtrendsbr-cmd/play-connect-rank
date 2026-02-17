@@ -13,14 +13,6 @@ const ESTADOS_BR = [
   "PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"
 ];
 
-const CATEGORIES = [
-  { label: "Vestuário esportivo", value: "vestuario" },
-  { label: "Acessórios", value: "acessorios" },
-  { label: "Suplementos", value: "suplementos" },
-  { label: "Fotografia", value: "fotografia" },
-  { label: "Serviços esportivos", value: "servicos" },
-  { label: "Locação de quadras", value: "locacao" },
-];
 
 type RoleOption = "athlete" | "organizer" | "arena" | "company";
 
@@ -229,13 +221,8 @@ const Register = () => {
                       <Input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} className="mt-1" placeholder="00.000.000/0000-00" />
                     </div>
                     <div>
-                      <Label>Categoria *</Label>
-                      <Select value={form.category} onValueChange={(v) => set("category", v)} required>
-                        <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          {CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <Label>Ramo de Atuação *</Label>
+                      <Input value={form.category} onChange={(e) => set("category", e.target.value)} required className="mt-1" placeholder="Ex: Vestuário esportivo, Suplementos..." />
                     </div>
                   </>
                 )}
