@@ -107,7 +107,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="container flex h-16 items-center justify-between">
+        <div className="container flex h-12 items-center justify-between">
           <span className="text-2xl font-display text-primary">🏐 Mood Play</span>
           <div className="flex items-center gap-3">
             {user && userRole === "admin" ? (
@@ -127,7 +127,7 @@ const Index = () => {
           <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[400px] rounded-full bg-primary/3 blur-[120px]" />
         </div>
         <div className="container relative z-10 px-6 sm:px-8 flex flex-col items-center">
-          <h1 className="text-[clamp(1.8rem,5.5vw,4.5rem)] font-display leading-tight text-center whitespace-nowrap">
+          <h1 className="text-[clamp(1.6rem,5vw,4rem)] font-display leading-[1.15] text-center whitespace-nowrap">
             <motion.span
               className="block font-normal text-foreground"
               initial={{ opacity: 0, y: 16 }}
