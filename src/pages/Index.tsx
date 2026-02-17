@@ -134,7 +134,7 @@ const Index = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0 }}
             >
-              Onde jogos viram ranking.
+              Onde <span className="text-primary">jogos</span> viram ranking.
             </motion.span>
             <motion.span
               className="block font-normal text-foreground"
@@ -142,7 +142,7 @@ const Index = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.12 }}
             >
-              Atletas ganham valor.
+              <span className="text-primary">Atletas</span> ganham valor.
             </motion.span>
             <motion.span
               className="block font-normal text-foreground"
@@ -150,7 +150,7 @@ const Index = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.24 }}
             >
-              Torneios viram ecossistema.
+              <span className="text-primary">Torneios</span> viram ecossistema.
             </motion.span>
             <motion.span
               className="block font-normal text-foreground"
@@ -158,7 +158,7 @@ const Index = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.36 }}
             >
-              Empresas ganham visibilidade.
+              <span className="text-primary">Empresas</span> ganham visibilidade.
             </motion.span>
           </h1>
 
