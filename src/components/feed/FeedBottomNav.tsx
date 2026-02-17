@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Home, Medal, Plus, Trophy, ShoppingBag, Building2 } from "lucide-react";
+import { Home, Plus, Trophy, ShoppingBag, Building2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,14 +7,6 @@ import { useAuth } from "@/contexts/AuthContext";
 interface FeedBottomNavProps {
   onCreatePost?: () => void;
 }
-
-const navItems = [
-  { icon: Home, label: "Feed", path: "/feed" },
-  { icon: Trophy, label: "Torneios", path: "/tournaments" },
-  { icon: null, label: "Criar", path: "" },
-  { icon: ShoppingBag, label: "Loja", path: "/marketplace" },
-  { icon: Building2, label: "Arenas", path: "/arenas" },
-];
 
 const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
   const location = useLocation();
@@ -39,6 +31,21 @@ const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user]);
+
+  const isTorneios = location.pathname === "/tournaments" || location.pathname.startsWith("/tournaments/");
+  const isRanking = location.pathname === "/ranking";
+  const isTorneiosRankingActive = isTorneios || isRanking;
+
+  // Toggle between tournaments and ranking
+  const torneiosRankingPath = isTorneios ? "/ranking" : "/tournaments";
+
+  const navItems = [
+    { icon: Home, label: "Feed", path: "/feed" },
+    { icon: Trophy, label: isTorneios ? "Ranking" : isRanking ? "Torneios" : "Torneios", path: torneiosRankingPath, sublabel: isTorneios ? "Torneios" : isRanking ? "Ranking" : "Ranking", isCombo: true },
+    { icon: null, label: "Criar", path: "" },
+    { icon: Building2, label: "Arenas", path: "/arenas" },
+    { icon: ShoppingBag, label: "Loja", path: "/marketplace" },
+  ];
 
   return (
     <nav
@@ -65,7 +72,9 @@ const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
           );
         }
 
-        const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + "/");
+        const isActive = item.isCombo
+          ? isTorneiosRankingActive
+          : location.pathname === item.path || location.pathname.startsWith(item.path + "/");
         const Icon = item.icon!;
 
         const handleClick = (e: React.MouseEvent) => {
@@ -77,18 +86,35 @@ const FeedBottomNav = ({ onCreatePost }: FeedBottomNavProps) => {
 
         return (
           <Link
-            key={item.path}
+            key={item.path + item.label}
             to={item.path}
             onClick={handleClick}
             className="flex flex-col items-center gap-0.5 py-1 px-3 relative"
           >
             <Icon className="h-5 w-5" style={{ color: isActive ? "#2BFF88" : "#9CA3AF" }} />
-            <span
-              className="text-[10px] font-medium"
-              style={{ color: isActive ? "#2BFF88" : "#9CA3AF" }}
-            >
-              {item.label}
-            </span>
+            {item.isCombo ? (
+              <div className="flex flex-col items-center leading-none">
+                <span
+                  className="text-[10px] font-medium"
+                  style={{ color: isActive ? "#2BFF88" : "#9CA3AF" }}
+                >
+                  {isTorneiosRankingActive ? (isTorneios ? "Torneios" : "Ranking") : "Torneios"}
+                </span>
+                <span
+                  className="text-[7px]"
+                  style={{ color: isActive ? "rgba(43,255,136,0.6)" : "rgba(156,163,175,0.6)" }}
+                >
+                  {isTorneiosRankingActive ? (isTorneios ? "► Ranking" : "► Torneios") : "/ Ranking"}
+                </span>
+              </div>
+            ) : (
+              <span
+                className="text-[10px] font-medium"
+                style={{ color: isActive ? "#2BFF88" : "#9CA3AF" }}
+              >
+                {item.label}
+              </span>
+            )}
           </Link>
         );
       })}
