@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, EyeOff, Users, Trophy, Building2, Briefcase, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Users, Trophy, Building2, Briefcase, Loader2, ArrowLeft } from "lucide-react";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA",
@@ -142,6 +142,9 @@ const Register = () => {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
       <div className="w-full max-w-md space-y-6">
+        <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-4 w-4" /> Voltar
+        </Link>
         <div className="text-center">
           <Link to="/" className="text-3xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
           <h2 className="mt-4 text-2xl font-display text-foreground">CRIAR CONTA</h2>
