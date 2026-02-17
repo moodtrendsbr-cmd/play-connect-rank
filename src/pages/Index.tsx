@@ -127,7 +127,7 @@ const Index = () => {
           <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[400px] rounded-full bg-primary/3 blur-[120px]" />
         </div>
         <div className="container relative z-10 px-6 sm:px-8 flex flex-col items-center">
-          <h1 className="text-[clamp(1.4rem,4.5vw,3.5rem)] font-display leading-tight text-left whitespace-nowrap">
+          <h1 className="text-[clamp(1.8rem,5.5vw,4.5rem)] font-display leading-tight text-left whitespace-nowrap">
             <motion.span
               className="block font-normal text-foreground"
               initial={{ opacity: 0, y: 16 }}
