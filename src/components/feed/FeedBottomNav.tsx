@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Home, Medal, Plus, Trophy, Building2 } from "lucide-react";
+import { Home, Medal, Plus, Trophy, ShoppingBag, Building2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,9 +10,9 @@ interface FeedBottomNavProps {
 
 const navItems = [
   { icon: Home, label: "Feed", path: "/feed" },
-  { icon: Medal, label: "Ranking", path: "/ranking" },
-  { icon: null, label: "Criar", path: "" },
   { icon: Trophy, label: "Torneios", path: "/tournaments" },
+  { icon: null, label: "Criar", path: "" },
+  { icon: ShoppingBag, label: "Loja", path: "/marketplace" },
   { icon: Building2, label: "Arenas", path: "/arenas" },
 ];
 
