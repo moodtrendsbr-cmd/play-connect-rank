@@ -43,7 +43,7 @@ const profiles = [
       "Perfil esportivo valorizado",
     ],
     cta: "Criar conta como Atleta",
-    link: "/register?role=athlete",
+    link: "/register",
   },
   {
     id: "organizadores",
@@ -55,7 +55,7 @@ const profiles = [
       "Monetização integrada",
     ],
     cta: "Quero organizar torneios",
-    link: "/register?role=organizer",
+    link: "/register",
   },
   {
     id: "arenas",
@@ -67,7 +67,7 @@ const profiles = [
       "Visibilidade local",
     ],
     cta: "Cadastrar minha Arena",
-    link: "/register?role=arena",
+    link: "/register",
   },
   {
     id: "empresas",
@@ -79,7 +79,7 @@ const profiles = [
       "Métricas de impacto",
     ],
     cta: "Ser parceiro Mood Play",
-    link: "/register?role=company",
+    link: "/register",
   },
 ];
 

@@ -1,205 +1,326 @@
 import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Users, Trophy, Building2, Briefcase, Loader2 } from "lucide-react";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA",
   "PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"
 ];
 
+const CATEGORIES = [
+  { label: "Vestuário esportivo", value: "vestuario" },
+  { label: "Acessórios", value: "acessorios" },
+  { label: "Suplementos", value: "suplementos" },
+  { label: "Fotografia", value: "fotografia" },
+  { label: "Serviços esportivos", value: "servicos" },
+  { label: "Locação de quadras", value: "locacao" },
+];
+
+type RoleOption = "athlete" | "organizer" | "arena" | "company";
+
+const ROLE_OPTIONS: { value: RoleOption; label: string; icon: typeof Users; desc: string }[] = [
+  { value: "athlete", label: "Atleta", icon: Users, desc: "Competir e evoluir" },
+  { value: "organizer", label: "Organizador", icon: Trophy, desc: "Criar torneios" },
+  { value: "arena", label: "Arena", icon: Building2, desc: "Receber campeonatos" },
+  { value: "company", label: "Empresa", icon: Briefcase, desc: "Apoiar o esporte" },
+];
+
 const Register = () => {
-  const [searchParams] = useSearchParams();
-  const isOrganizer = searchParams.get("role") === "organizer";
   const navigate = useNavigate();
+  const [selectedRole, setSelectedRole] = useState<RoleOption | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loadingCep, setLoadingCep] = useState(false);
+
   const [form, setForm] = useState({
-    fullName: "",
-    email: "",
-    password: "",
-    city: "",
-    state: "",
-    gender: "",
-    whatsapp: "",
+    fullName: "", email: "", password: "", city: "", state: "", gender: "", whatsapp: "",
+    // Arena fields
+    arenaName: "", address: "", zipCode: "",
+    // Company fields
+    companyName: "", cnpj: "", category: "", companyEmail: "", companyWhatsapp: "",
   });
+
+  const set = (key: string, value: string) => setForm((f) => ({ ...f, [key]: value }));
+
+  const handleCepSearch = async () => {
+    const cleaned = form.zipCode.replace(/\D/g, "");
+    if (cleaned.length !== 8) {
+      toast({ title: "CEP inválido", variant: "destructive" });
+      return;
+    }
+    setLoadingCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cleaned}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setForm((f) => ({
+          ...f,
+          city: data.localidade || f.city,
+          state: data.uf || f.state,
+          address: [data.logradouro, data.bairro].filter(Boolean).join(", ") || f.address,
+        }));
+      } else {
+        toast({ title: "CEP não encontrado", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Erro ao buscar CEP", variant: "destructive" });
+    }
+    setLoadingCep(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedRole) return;
     setLoading(true);
 
-    const { data: signUpData, error } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: {
-          full_name: form.fullName,
-          role: isOrganizer ? "organizer" : "athlete",
+    try {
+      const { data: signUpData, error } = await supabase.auth.signUp({
+        email: form.email,
+        password: form.password,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: {
+            full_name: form.fullName,
+            role: selectedRole === "athlete" ? "athlete" : selectedRole === "organizer" ? "organizer" : selectedRole === "arena" ? "arena" : "company",
+          },
         },
-      },
-    });
+      });
 
-    if (error) {
-      toast({ title: "Erro ao cadastrar", description: error.message, variant: "destructive" });
-      setLoading(false);
-      return;
-    }
+      if (error) {
+        toast({ title: "Erro ao cadastrar", description: error.message, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
 
-    if (signUpData.user) {
-      await supabase.from("profiles").update({
-        city: form.city,
-        state: form.state,
-        gender: form.gender,
-        whatsapp: form.whatsapp,
-      } as any).eq("user_id", signUpData.user.id);
+      if (signUpData.user) {
+        const userId = signUpData.user.id;
+
+        // Update profile
+        await supabase.from("profiles").update({
+          city: form.city,
+          state: form.state,
+          gender: selectedRole === "athlete" || selectedRole === "organizer" ? form.gender : null,
+          whatsapp: form.whatsapp,
+          arena: selectedRole === "arena" ? form.arenaName : null,
+        } as any).eq("user_id", userId);
+
+        // Create company record if empresa
+        if (selectedRole === "company") {
+          await supabase.from("companies").insert({
+            owner_user_id: userId,
+            name: form.companyName,
+            cnpj: form.cnpj || null,
+            category: form.category,
+            email: form.companyEmail || form.email,
+            whatsapp: form.companyWhatsapp || form.whatsapp,
+            city: form.city,
+            state: form.state,
+            address: form.address,
+            zip_code: form.zipCode.replace(/\D/g, ""),
+          } as any);
+        }
+      }
+
+      toast({ title: "Conta criada!", description: "Verifique seu email para confirmar o cadastro." });
+      navigate("/feed");
+    } catch (err: any) {
+      toast({ title: "Erro inesperado", description: err.message, variant: "destructive" });
     }
 
     setLoading(false);
-    toast({ title: "Conta criada!", description: "Verifique seu email para confirmar o cadastro." });
-    navigate("/login");
+  };
+
+  const needsCep = selectedRole === "arena" || selectedRole === "company";
+  const needsGender = selectedRole === "athlete" || selectedRole === "organizer";
+
+  const isFormValid = () => {
+    if (!selectedRole || !form.fullName || !form.email || !form.password || !form.city || !form.state || !form.whatsapp) return false;
+    if (needsGender && !form.gender) return false;
+    if (selectedRole === "arena" && !form.arenaName) return false;
+    if (selectedRole === "company" && (!form.companyName || !form.category)) return false;
+    return true;
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md space-y-8">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
+      <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <Link to="/" className="text-3xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
-          <h2 className="mt-6 text-3xl font-display text-foreground">
-            {isOrganizer ? "CADASTRO ORGANIZADOR" : "CADASTRO ATLETA"}
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Crie sua conta para {isOrganizer ? "organizar torneios" : "competir"}
-          </p>
+          <h2 className="mt-4 text-2xl font-display text-foreground">CRIAR CONTA</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Escolha seu perfil e preencha os dados</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="fullName">Nome completo *</Label>
-            <Input
-              id="fullName"
-              value={form.fullName}
-              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-              required
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label htmlFor="email">Email *</Label>
-            <Input
-              id="email"
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label htmlFor="password">Senha *</Label>
-            <div className="relative mt-1">
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                required
-                minLength={6}
-                className="pr-10"
-              />
+        {/* Role Selector */}
+        <div className="grid grid-cols-2 gap-3">
+          {ROLE_OPTIONS.map((role) => {
+            const Icon = role.icon;
+            const isSelected = selectedRole === role.value;
+            return (
               <button
+                key={role.value}
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setSelectedRole(role.value)}
+                className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-4 transition-all ${
+                  isSelected
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                }`}
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                <Icon className="h-6 w-6" />
+                <span className="text-sm font-bold">{role.label}</span>
+                <span className="text-[11px] opacity-70">{role.desc}</span>
               </button>
-            </div>
-          </div>
+            );
+          })}
+        </div>
 
-          <div className="grid grid-cols-2 gap-4">
+        {selectedRole && (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Common Fields */}
             <div>
-              <Label htmlFor="city">Cidade *</Label>
-              <Input
-                id="city"
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-                required
-                className="mt-1"
-              />
+              <Label htmlFor="fullName">Nome completo *</Label>
+              <Input id="fullName" value={form.fullName} onChange={(e) => set("fullName", e.target.value)} required className="mt-1" />
             </div>
             <div>
-              <Label htmlFor="state">Estado *</Label>
-              <Select value={form.state} onValueChange={(v) => setForm({ ...form, state: v })} required>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="UF" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ESTADOS_BR.map((uf) => (
-                    <SelectItem key={uf} value={uf}>{uf}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="email">Email *</Label>
+              <Input id="email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} required className="mt-1" />
             </div>
-          </div>
+            <div>
+              <Label htmlFor="password">Senha *</Label>
+              <div className="relative mt-1">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={form.password}
+                  onChange={(e) => set("password", e.target.value)}
+                  required
+                  minLength={6}
+                  className="pr-10"
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
 
-          <div>
-            <Label htmlFor="gender">Gênero *</Label>
-            <Select value={form.gender} onValueChange={(v) => setForm({ ...form, gender: v })} required>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="masculino">Masculino</SelectItem>
-                <SelectItem value="feminino">Feminino</SelectItem>
-                <SelectItem value="outro">Outro</SelectItem>
-                <SelectItem value="prefiro_nao_informar">Prefiro não informar</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            {/* CEP + Address for Arena/Company */}
+            {needsCep && (
+              <>
+                {selectedRole === "arena" && (
+                  <div>
+                    <Label>Nome da Arena *</Label>
+                    <Input value={form.arenaName} onChange={(e) => set("arenaName", e.target.value)} required className="mt-1" placeholder="Nome da arena" />
+                  </div>
+                )}
+                {selectedRole === "company" && (
+                  <>
+                    <div>
+                      <Label>Nome da Empresa *</Label>
+                      <Input value={form.companyName} onChange={(e) => set("companyName", e.target.value)} required className="mt-1" placeholder="Nome da empresa" />
+                    </div>
+                    <div>
+                      <Label>CNPJ (caso possua)</Label>
+                      <Input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} className="mt-1" placeholder="00.000.000/0000-00" />
+                    </div>
+                    <div>
+                      <Label>Categoria *</Label>
+                      <Select value={form.category} onValueChange={(v) => set("category", v)} required>
+                        <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+                <div>
+                  <Label>CEP</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      value={form.zipCode}
+                      onChange={(e) => set("zipCode", e.target.value.replace(/\D/g, "").substring(0, 8))}
+                      placeholder="00000000"
+                    />
+                    <Button type="button" onClick={handleCepSearch} disabled={loadingCep} variant="outline" size="sm">
+                      {loadingCep ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <Label>Endereço</Label>
+                  <Input value={form.address} onChange={(e) => set("address", e.target.value)} className="mt-1" placeholder="Rua, nº, bairro" />
+                </div>
+              </>
+            )}
 
-          <div>
-            <Label htmlFor="whatsapp">WhatsApp *</Label>
-            <Input
-              id="whatsapp"
-              value={form.whatsapp}
-              onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-              required
-              className="mt-1"
-              placeholder="(11) 99999-9999"
-            />
-          </div>
+            {/* City / State */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="city">Cidade *</Label>
+                <Input id="city" value={form.city} onChange={(e) => set("city", e.target.value)} required className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="state">Estado *</Label>
+                <Select value={form.state} onValueChange={(v) => set("state", v)} required>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="UF" /></SelectTrigger>
+                  <SelectContent>
+                    {ESTADOS_BR.map((uf) => <SelectItem key={uf} value={uf}>{uf}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-          <Button
-            type="submit"
-            className="w-full h-12 text-lg font-bold"
-            disabled={loading || !form.state || !form.gender}
-          >
-            {loading ? "Criando conta..." : "Criar conta"}
-          </Button>
-        </form>
+            {/* Gender for Athlete/Organizer */}
+            {needsGender && (
+              <div>
+                <Label htmlFor="gender">Gênero *</Label>
+                <Select value={form.gender} onValueChange={(v) => set("gender", v)} required>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="masculino">Masculino</SelectItem>
+                    <SelectItem value="feminino">Feminino</SelectItem>
+                    <SelectItem value="outro">Outro</SelectItem>
+                    <SelectItem value="prefiro_nao_informar">Prefiro não informar</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div>
+              <Label htmlFor="whatsapp">WhatsApp *</Label>
+              <Input id="whatsapp" value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} required className="mt-1" placeholder="(11) 99999-9999" />
+            </div>
+
+            {/* Company extra contacts */}
+            {selectedRole === "company" && (
+              <>
+                <div>
+                  <Label>Email da empresa</Label>
+                  <Input type="email" value={form.companyEmail} onChange={(e) => set("companyEmail", e.target.value)} className="mt-1" placeholder="contato@empresa.com" />
+                </div>
+                <div>
+                  <Label>WhatsApp da empresa</Label>
+                  <Input value={form.companyWhatsapp} onChange={(e) => set("companyWhatsapp", e.target.value)} className="mt-1" placeholder="(11) 99999-9999" />
+                </div>
+              </>
+            )}
+
+            <Button type="submit" className="w-full h-12 text-lg font-bold" disabled={loading || !isFormValid()}>
+              {loading ? "Criando conta..." : "Criar conta"}
+            </Button>
+          </form>
+        )}
 
         <p className="text-center text-sm text-muted-foreground">
           Já tem conta?{" "}
           <Link to="/login" className="text-primary hover:underline">Entrar</Link>
         </p>
-
-        {isOrganizer ? (
-          <p className="text-center text-sm text-muted-foreground">
-            Quer competir como atleta?{" "}
-            <Link to="/register" className="text-primary hover:underline">Cadastrar como atleta</Link>
-          </p>
-        ) : (
-          <p className="text-center text-sm text-muted-foreground">
-            Quer organizar torneios?{" "}
-            <Link to="/register?role=organizer" className="text-secondary hover:underline">Cadastrar como organizador</Link>
-          </p>
-        )}
       </div>
     </div>
   );
