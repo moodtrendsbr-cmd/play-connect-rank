@@ -102,6 +102,28 @@ const Register = () => {
           arena: selectedRole === "arena" ? form.arenaName : null,
         } as any).eq("user_id", userId);
 
+        // Create arena record
+        if (selectedRole === "arena") {
+          const slug = form.arenaName
+            .toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/(^-|-$)/g, "")
+            + "-" + Date.now().toString(36);
+
+          await supabase.from("arenas").insert({
+            owner_user_id: userId,
+            name: form.arenaName,
+            slug,
+            city: form.city,
+            state: form.state,
+            address: form.address || null,
+            zip_code: form.zipCode ? form.zipCode.replace(/\D/g, "") : null,
+            contact_email: form.email,
+            contact_whatsapp: form.whatsapp,
+          } as any);
+        }
+
         // Create company record if empresa
         if (selectedRole === "company") {
           await supabase.from("companies").insert({

@@ -53,10 +53,20 @@ import AdminSponsorships from "./pages/admin/AdminSponsorships";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminGifts from "./pages/admin/AdminGifts";
 import AdminPlans from "./pages/admin/AdminPlans";
+import AdminArenas from "./pages/admin/AdminArenas";
 import SponsorLayout from "./pages/sponsor/SponsorLayout";
 import SponsorDashboard from "./pages/sponsor/SponsorDashboard";
 import SponsorTournaments from "./pages/sponsor/SponsorTournaments";
 import SponsorshipDetail from "./pages/sponsor/SponsorshipDetail";
+import ArenaLayout from "./pages/arena-dashboard/ArenaLayout";
+import ArenaDashboard from "./pages/arena-dashboard/ArenaDashboard";
+import ArenaCourts from "./pages/arena-dashboard/ArenaCourts";
+import ArenaSchedule from "./pages/arena-dashboard/ArenaSchedule";
+import ArenaBookings from "./pages/arena-dashboard/ArenaBookings";
+import ArenaSponsors from "./pages/arena-dashboard/ArenaSponsors";
+import ArenasList from "./pages/arenas/ArenasList";
+import ArenaPublic from "./pages/arenas/ArenaPublic";
+import ArenaBooking from "./pages/arenas/ArenaBooking";
 
 const queryClient = new QueryClient();
 
@@ -98,6 +108,9 @@ const App = () => (
               <Route path="/marketplace/cart" element={<Cart />} />
               <Route path="/marketplace/checkout" element={<MarketplaceCheckout />} />
               <Route path="/marketplace/tournaments" element={<MarketplaceTournaments />} />
+              <Route path="/arenas" element={<ArenasList />} />
+              <Route path="/arenas/:arenaSlug" element={<ArenaPublic />} />
+              <Route path="/arenas/:arenaSlug/reservar" element={<ArenaBooking />} />
             </Route>
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />
@@ -106,6 +119,13 @@ const App = () => (
               <Route path="dashboard" element={<SponsorDashboard />} />
               <Route path="tournaments" element={<SponsorTournaments />} />
               <Route path="sponsorships/:id" element={<SponsorshipDetail />} />
+            </Route>
+            <Route path="/arena/dashboard" element={<ArenaLayout />}>
+              <Route index element={<ArenaDashboard />} />
+              <Route path="quadras" element={<ArenaCourts />} />
+              <Route path="horarios" element={<ArenaSchedule />} />
+              <Route path="reservas" element={<ArenaBookings />} />
+              <Route path="patrocinios" element={<ArenaSponsors />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
@@ -122,6 +142,7 @@ const App = () => (
               <Route path="gifts" element={<AdminGifts />} />
               <Route path="plans" element={<AdminPlans />} />
               <Route path="monetization" element={<AdminMonetization />} />
+              <Route path="arenas" element={<AdminArenas />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

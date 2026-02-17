@@ -14,6 +14,205 @@ export type Database = {
   }
   public: {
     Tables: {
+      arena_links: {
+        Row: {
+          arena_id: string
+          created_at: string
+          icon_type: string
+          id: string
+          is_active: boolean
+          position_order: number
+          title: string
+          url: string
+        }
+        Insert: {
+          arena_id: string
+          created_at?: string
+          icon_type?: string
+          id?: string
+          is_active?: boolean
+          position_order?: number
+          title: string
+          url: string
+        }
+        Update: {
+          arena_id?: string
+          created_at?: string
+          icon_type?: string
+          id?: string
+          is_active?: boolean
+          position_order?: number
+          title?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arena_links_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arena_partners: {
+        Row: {
+          arena_id: string
+          company_id: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          link_url: string | null
+          logo_url: string | null
+          name: string
+          physical_space_included: boolean
+          position_order: number
+          tier: string
+        }
+        Insert: {
+          arena_id: string
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          link_url?: string | null
+          logo_url?: string | null
+          name: string
+          physical_space_included?: boolean
+          position_order?: number
+          tier?: string
+        }
+        Update: {
+          arena_id?: string
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          link_url?: string | null
+          logo_url?: string | null
+          name?: string
+          physical_space_included?: boolean
+          position_order?: number
+          tier?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arena_partners_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_partners_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arena_physical_inventory: {
+        Row: {
+          arena_id: string
+          created_at: string
+          description: string | null
+          id: string
+          is_available: boolean
+          price_monthly: number | null
+          space_type: string
+        }
+        Insert: {
+          arena_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_available?: boolean
+          price_monthly?: number | null
+          space_type?: string
+        }
+        Update: {
+          arena_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_available?: boolean
+          price_monthly?: number | null
+          space_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arena_physical_inventory_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arenas: {
+        Row: {
+          address: string | null
+          city: string
+          contact_email: string | null
+          contact_whatsapp: string | null
+          cover_image_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          mp_collector_id: string | null
+          mp_connected: boolean
+          name: string
+          owner_user_id: string
+          rules: string | null
+          slug: string
+          state: string
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string
+          contact_email?: string | null
+          contact_whatsapp?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          mp_collector_id?: string | null
+          mp_connected?: boolean
+          name: string
+          owner_user_id: string
+          rules?: string | null
+          slug: string
+          state?: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string
+          contact_email?: string | null
+          contact_whatsapp?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          mp_collector_id?: string | null
+          mp_connected?: boolean
+          name?: string
+          owner_user_id?: string
+          rules?: string | null
+          slug?: string
+          state?: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
       athlete_sponsors: {
         Row: {
           amount: number
@@ -48,6 +247,75 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bookings: {
+        Row: {
+          amount: number
+          arena_id: string
+          booking_date: string
+          court_id: string
+          created_at: string
+          customer_email: string
+          customer_name: string
+          customer_whatsapp: string
+          end_time: string
+          id: string
+          payment_provider: string | null
+          payment_ref: string | null
+          start_time: string
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          amount?: number
+          arena_id: string
+          booking_date: string
+          court_id: string
+          created_at?: string
+          customer_email?: string
+          customer_name?: string
+          customer_whatsapp?: string
+          end_time: string
+          id?: string
+          payment_provider?: string | null
+          payment_ref?: string | null
+          start_time: string
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number
+          arena_id?: string
+          booking_date?: string
+          court_id?: string
+          created_at?: string
+          customer_email?: string
+          customer_name?: string
+          customer_whatsapp?: string
+          end_time?: string
+          id?: string
+          payment_provider?: string | null
+          payment_ref?: string | null
+          start_time?: string
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
             referencedColumns: ["id"]
           },
         ]
@@ -250,6 +518,120 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      court_availability: {
+        Row: {
+          court_id: string
+          created_at: string
+          end_time: string
+          id: string
+          slot_duration_minutes: number
+          start_time: string
+          weekday: number
+        }
+        Insert: {
+          court_id: string
+          created_at?: string
+          end_time: string
+          id?: string
+          slot_duration_minutes?: number
+          start_time: string
+          weekday: number
+        }
+        Update: {
+          court_id?: string
+          created_at?: string
+          end_time?: string
+          id?: string
+          slot_duration_minutes?: number
+          start_time?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "court_availability_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      court_blocks: {
+        Row: {
+          block_date: string
+          court_id: string
+          created_at: string
+          end_time: string | null
+          id: string
+          reason: string | null
+          start_time: string | null
+        }
+        Insert: {
+          block_date: string
+          court_id: string
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          reason?: string | null
+          start_time?: string | null
+        }
+        Update: {
+          block_date?: string
+          court_id?: string
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          reason?: string | null
+          start_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "court_blocks_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      courts: {
+        Row: {
+          arena_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          modalities: string[]
+          name: string
+          price_per_hour: number | null
+        }
+        Insert: {
+          arena_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          modalities?: string[]
+          name?: string
+          price_per_hour?: number | null
+        }
+        Update: {
+          arena_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          modalities?: string[]
+          name?: string
+          price_per_hour?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "courts_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       enrollments: {
         Row: {
@@ -2004,6 +2386,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_arena_id_from_court: { Args: { _court_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2012,6 +2395,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_arena_owner: {
+        Args: { _arena_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_company_owner: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
