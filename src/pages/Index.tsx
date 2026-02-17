@@ -127,9 +127,9 @@ const Index = () => {
           <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[400px] rounded-full bg-primary/3 blur-[120px]" />
         </div>
         <div className="container relative z-10 px-6 sm:px-8 flex flex-col items-center">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-display leading-relaxed text-left">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-display leading-tight text-left">
             <motion.span
-              className="block font-bold text-foreground"
+              className="block font-normal text-foreground"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0 }}
@@ -137,7 +137,7 @@ const Index = () => {
               Onde jogos viram ranking.
             </motion.span>
             <motion.span
-              className="block font-medium text-foreground"
+              className="block font-normal text-foreground"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.12 }}
@@ -145,7 +145,7 @@ const Index = () => {
               Atletas ganham valor.
             </motion.span>
             <motion.span
-              className="block font-medium text-foreground"
+              className="block font-normal text-foreground"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.24 }}
@@ -153,7 +153,7 @@ const Index = () => {
               Torneios viram ecossistema.
             </motion.span>
             <motion.span
-              className="block font-medium text-foreground"
+              className="block font-normal text-foreground"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.36 }}
