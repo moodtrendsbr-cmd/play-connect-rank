@@ -120,6 +120,7 @@ export type Database = {
           billing_status: string
           category: string | null
           city: string | null
+          cnpj: string | null
           commission_rate: number
           created_at: string
           description: string | null
@@ -145,6 +146,7 @@ export type Database = {
           billing_status?: string
           category?: string | null
           city?: string | null
+          cnpj?: string | null
           commission_rate?: number
           created_at?: string
           description?: string | null
@@ -170,6 +172,7 @@ export type Database = {
           billing_status?: string
           category?: string | null
           city?: string | null
+          cnpj?: string | null
           commission_rate?: number
           created_at?: string
           description?: string | null
@@ -2035,7 +2038,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "organizer" | "athlete" | "admin"
+      app_role: "organizer" | "athlete" | "admin" | "arena" | "company"
       enrollment_status: "pending" | "paid" | "expired"
       tournament_category: "masculino" | "feminino" | "misto"
       tournament_type: "individual" | "duplas" | "equipes"
@@ -2166,7 +2169,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["organizer", "athlete", "admin"],
+      app_role: ["organizer", "athlete", "admin", "arena", "company"],
       enrollment_status: ["pending", "paid", "expired"],
       tournament_category: ["masculino", "feminino", "misto"],
       tournament_type: ["individual", "duplas", "equipes"],
