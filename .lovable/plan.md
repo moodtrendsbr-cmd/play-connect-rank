@@ -1,92 +1,68 @@
 
-# Refinamento da Hero Section - Visual Premium e Formal
+# Cadastro Unificado com Seletor de Perfil
 
-## Objetivo
-Transformar a hero section de um visual "gamer/esportivo agressivo" para uma plataforma esportiva profissional e premium.
+## Resumo
+Transformar a tela de cadastro em um formulario unificado onde o usuario primeiro escolhe seu perfil (Atleta, Organizador, Arena, Empresa) e o formulario se adapta dinamicamente. Todos os CTAs da landing page apontam para `/register`.
 
-## Mudancas no `src/pages/Index.tsx`
+## O que muda
 
-### 1. Headline - Reformulacao completa
+### 1. Landing Page (Index.tsx)
+- Todos os links de CTA dos perfis (Atleta, Organizador, Arena, Empresa) passam a apontar para `/register` em vez de `/register?role=...`
+- Os botoes "Entrar" e "Cadastrar" do header ja apontam corretamente
 
-Substituir o array `headlineLines` para aplicar verde apenas nas palavras-chave especificas (nao linhas inteiras):
+### 2. Pagina de Cadastro (Register.tsx) - Redesign completo
+- Adicionar seletor de perfil com 4 opcoes visuais (cards/botoes): **Atleta**, **Organizador**, **Arena**, **Empresa**
+- O formulario se adapta conforme a opcao selecionada:
 
-```text
-Linha 1 (bold): "Onde jogos viram ranking."
-Linha 2 (medium): "[Atletas] ganham valor."        -> "Atletas" em verde
-Linha 3 (medium): "[Torneios] viram ecossistema."   -> "Torneios" em verde
-Linha 4 (medium): "Empresas ganham [visibilidade]." -> "visibilidade" em verde
-```
+**Campos comuns a todos:**
+- Nome completo, Email, Senha, Cidade, Estado, WhatsApp
 
-- Remover CAPS LOCK (Bebas Neue ja da impacto sem caps)
-- Remover `text-glow` forte, usar glow minimo ou nenhum
-- Primeira linha: `font-bold`, demais: `font-medium`
-- Reduzir tamanho em ~15%: de `text-4xl sm:text-5xl md:text-6xl lg:text-7xl` para `text-3xl sm:text-4xl md:text-5xl lg:text-6xl`
-- Aumentar `leading` (line-height) para `leading-relaxed` ou `leading-loose`
+**Atleta** (campos atuais):
+- Genero (obrigatorio)
 
-### 2. Header Logo
-- Remover CAPS de "MOOD PLAY" -> "Mood Play"
-- Remover `text-glow` do logo
+**Organizador:**
+- Genero (obrigatorio)
 
-### 3. Subtitulo
-- Manter texto atual, garantir cor `text-muted-foreground` (cinza claro)
-- Adicionar mais espacamento vertical (`mt-8` em vez de `mt-6`)
+**Arena:**
+- Nome da Arena, Endereco, CEP (com busca ViaCEP como ja existe no MarketplaceRegister)
 
-### 4. CTAs - Reestruturacao
+**Empresa:**
+- Nome da Empresa, CNPJ (opcional, "caso possua"), Categoria, Endereco, CEP (com busca ViaCEP)
 
-**Novo CTA primario** (logo abaixo do subtitulo):
-- Texto: "Quero Participar"
-- Botao verde primario, tamanho grande
-- Com seta
+### 3. Banco de Dados
+- Adicionar os valores `arena` e `company` ao enum `app_role` para que possam ser armazenados na tabela `user_roles`
+- Adicionar coluna `cnpj` (text, nullable) na tabela `companies`
 
-**CTA secundario** (abaixo):
-- Texto: "Ver torneios disponiveis"
-- Botao branco/outline, tamanho menor
-- Link para `/tournaments`
+### 4. Logica de Cadastro
+- Ao submeter o formulario, cria a conta via `supabase.auth.signUp`
+- Atualiza o perfil na tabela `profiles` com cidade, estado, genero, whatsapp
+- Insere o papel correspondente na tabela `user_roles`
+- Se for **Empresa**: tambem cria o registro na tabela `companies` (com CNPJ, nome da empresa, categoria, etc.)
+- Se for **Arena**: salva o campo arena no perfil e dados de endereco
 
-**Botoes de perfil** (mantidos abaixo):
-- Sou Atleta, Sou Organizador, Sou Arena, Sou Empresa
-
-### 5. Mais respiro vertical
-- Aumentar padding vertical da hero section
-- Mais espaco entre headline e subtitulo
-- Mais espaco entre subtitulo e CTAs
-
-### 6. Secoes abaixo - Remover CAPS dos titulos
-- "UM ECOSSISTEMA ONDE TODOS CRESCEM JUNTOS." -> "Um ecossistema onde todos crescem juntos."
-- "TUDO QUE VOCÊ PRECISA" -> "Tudo que voce precisa"
-- "SIMPLES. RÁPIDO. PROFISSIONAL." -> "Simples. Rapido. Profissional."
-- "O ESPORTE DA SUA CIDADE..." -> sentenca normal
-- "PRONTO PARA ENTRAR NA ARENA?" -> sentenca normal
-
----
+### 5. Pos-Cadastro
+- Todos os perfis sao redirecionados para `/feed` apos o cadastro
+- O acesso ao painel/dashboard de cada perfil fica no menu do perfil (ProfileSwitcher), como ja funciona hoje
 
 ## Detalhes Tecnicos
 
-Renderizacao da headline com palavras-chave verdes inline (nao linhas inteiras):
+### Migracao SQL
+```sql
+-- Adicionar novos valores ao enum app_role
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'arena';
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'company';
 
-```tsx
-// Cada linha renderiza com spans internos para palavras verdes
-<motion.span className="block font-bold ...">
-  Onde jogos viram ranking.
-</motion.span>
-<motion.span className="block font-medium ...">
-  <span className="text-primary">Atletas</span> ganham valor.
-</motion.span>
+-- Adicionar coluna CNPJ na tabela companies
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS cnpj text;
 ```
 
-Botao "Ver torneios disponiveis":
-```tsx
-<Button variant="outline" className="border-white/30 text-white hover:bg-white/10" asChild>
-  <Link to="/tournaments">Ver torneios disponiveis</Link>
-</Button>
-```
+### Estrutura do componente Register.tsx
+- Estado `selectedRole` controla qual perfil foi selecionado
+- Renderizacao condicional dos campos extras baseada no `selectedRole`
+- Reutilizar a logica de busca CEP do MarketplaceRegister para os perfis Arena e Empresa
+- Validacao dinamica conforme o perfil selecionado
 
-Botao "Quero Participar":
-```tsx
-<Button size="lg" className="h-14 px-8 text-lg font-bold box-glow" asChild>
-  <Link to="/register">Quero Participar <ArrowRight /></Link>
-</Button>
-```
-
-## Arquivo modificado
-- `src/pages/Index.tsx` - unico arquivo alterado
+### Arquivos modificados
+1. `src/pages/Register.tsx` - Redesign com seletor de perfil e formularios adaptativos
+2. `src/pages/Index.tsx` - Atualizar links dos CTAs dos perfis para `/register`
+3. Migracao SQL para o enum e coluna CNPJ
