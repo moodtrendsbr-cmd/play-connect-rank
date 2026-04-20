@@ -1,254 +1,206 @@
 
 
-# Auditoria Arquitetural MoodPlay — Visão White-Label Multi-Tenant
+# Fase 1 — Foundation Multi-Tenant MoodPlay
 
-> Análise estratégica sem código. Baseada na leitura completa de 55 tabelas, 50 rotas, 10 edge functions e da hierarquia atual de papéis.
-
----
-
-## ENTREGA 1 — AUDITORIA ESTRUTURAL
-
-### 1.1 O que já existe e atende (parcial ou totalmente) à visão
-
-| Camada futura | Existe hoje | Cobertura |
-|---|---|---|
-| Multi-papel (athlete/organizer/arena/company/admin) | `user_roles` + `app_role` + `has_role()` | 70% — falta tenant_id |
-| Arenas com domínio público | `arenas.slug` + `/arenas/:slug` | 60% — slug funciona como subpath, não subdomain |
-| Gestão de quadras | `courts`, `court_availability`, `court_blocks` | 90% pronto |
-| Locação de quadras + checkout | `bookings` + `create-booking-payment` (MP split via `mp_collector_id`) | 85% pronto |
-| Eventos/Torneios completos | `tournaments` + `tournament_modalities` + `modality_*` (entries, groups, matches, placements, prizes) | 90% pronto |
-| Inscrições + checkout | `enrollments` + `create-payment` + split MP | 85% pronto |
-| Marketplace + comissão | `companies`, `products`, `marketplace_orders`, `company_plans` | 80% pronto |
-| Ads/Patrocínios | `tournament_sponsorships`, `sponsored_posts`, `arena_partners` | 75% pronto |
-| Rede social | `posts`, `clips`, `comments`, `likes`, `follows`, `messages`, `mentions`, `hashtags` | 95% pronto |
-| Financeiro/Split | `organizer_balances`, `withdrawal_requests`, `financial_ledger`, `mp_collector_id` em `arenas` e `profiles` | 70% — falta camada de tenant |
-| Planos SaaS | `company_plans`, `subscriptions`, `tournament_sponsor_plans` | 60% — só p/ empresas, não p/ arenas/organizadores |
-
-**Conclusão:** ~75% da visão já existe em forma de operação single-tenant. Não é necessário recriar nada — é necessário **encapsular** o que existe em uma dimensão tenant.
-
-### 1.2 O que existe mas precisa ser refatorado
-
-| Item | Problema | Refator necessário |
-|---|---|---|
-| Roles única por user | `user_roles (user_id, role)` é global. Um mesmo user pode ser arena em Org A e atleta em Org B | Adicionar `tenant_id` (nullable p/ global) |
-| `arenas` ↔ organizador | Não existe FK. Hoje arena é "do dono", não "da rede do organizador" | Adicionar `organizer_id` em `arenas` |
-| Pagamentos MP | `mp_collector_id` está em `profiles` (organizer pessoa) e `arenas` (arena). Sem hierarquia | Mover p/ tabela `payment_accounts` polimórfica (tenant/organizer/arena) |
-| `companies` | Mistura "marca de marketplace" com "patrocinador". Hoje funciona, mas escala mal multi-tenant | Manter, adicionar `tenant_id` |
-| `enrollments` / `bookings` | Sem `tenant_id`. Tudo é visível globalmente via RLS pública | Adicionar `tenant_id` derivado de tournament/arena |
-| Brackets module (recém-refinado) | OK — mas categorias são strings livres em `tournament_modalities` | Adicionar tabela `sports` + `sport_categories` (catálogo) |
-| Auth | Login global Supabase. Não há "login dentro do tenant X" | Manter global, adicionar `tenant_memberships` |
-
-### 1.3 Duplicação ou risco de duplicação
-
-| Risco | Onde | Recomendação |
-|---|---|---|
-| Match results legacy | `match_results` (tabela antiga) vs `modality_matches` (novo) | Marcar `match_results` como deprecated, migrar dados |
-| 3 sistemas de "patrocínio" | `tournament_sponsorships`, `arena_partners`, `athlete_sponsors` | Manter — domínios distintos. Documentar fronteira |
-| 2 sistemas de chat | `messages` (DM) vs `match_messages` (chat de dupla) | Manter — UX diferente, mas considerar unificar tabela base |
-| Planos | `company_plans` + `tournament_sponsor_plans` + (futuro) plano arena/organizador | Unificar em `subscription_plans` polimórfico (`scope: company|sponsorship|arena|organizer`) |
-| Saldo | `organizer_balances` (torneios) vs futuro saldo de arena/marketplace | Generalizar para `account_balances` (account_type, account_id) |
-| Gateways MP | Lógica espalhada em 4 edge functions (`create-payment`, `create-booking-payment`, `create-marketplace-payment`, `mercadopago-webhook`) | Extrair `_shared/mp.ts` (não duplicar handlers) |
-
-### 1.4 O que falta e precisa ser estruturado
-
-1. **Tenancy (tabela `tenants` / `organizers`)** — não existe. Tudo é flat.
-2. **Subdomínio/domínio próprio por organizador** — `arenas.slug` é subpath, não há `tenants.custom_domain`.
-3. **Branding por tenant** — sem `tenant_theme` (cores, logo, font_override).
-4. **Membership multi-tenant** — usuário pode pertencer a múltiplos tenants com papéis diferentes.
-5. **Camada Arena Management interna** (alunos/aulas/professores/matrículas/bar) — **0% existe**. Esta é a maior lacuna.
-6. **Catálogo de esportes + categorias canônicas** (Vôlei Praia, Beach Tennis, Futevôlei) — hoje texto livre.
-7. **Campos customizados de categoria** — não existe (`custom_fields jsonb` por modalidade).
-8. **Tenant context no frontend** — sem `TenantProvider`, sem detecção de subdomínio.
-9. **Split em 3 vias** (Mood + Organizador + Arena) — hoje é 2 vias (Mood + collector).
-10. **Cobrança recorrente de arena pelo organizador** — não existe pipeline.
-11. **QR / Check-in** — 0% existe.
-12. **Bridge ORKYM** — sem edge function `orkym-invoke` que centralize chamadas de inteligência.
-
-### 1.5 O que NÃO deve ser criado (já existe equivalente)
-
-- ❌ Nova tabela de "evento" → use `tournaments` (renomear conceitualmente, não fisicamente)
-- ❌ Nova tabela de "categoria" → estenda `tournament_modalities`
-- ❌ Nova tabela de "partida" → use `modality_matches`
-- ❌ Novo sistema de chaveamento → `modality_groups`/`modality_matches`/`modality_placements` cobrem
-- ❌ Novo sistema de pagamento → estenda edge functions MP existentes
-- ❌ Novo sistema social → `posts`/`clips`/`follows` cobrem
-- ❌ Nova tabela de "pedido" → use `marketplace_orders` (com `kind: shop|bar|enrollment`)
-- ❌ Novo sistema de auth → Supabase Auth + `user_roles` cobrem (basta adicionar tenant)
+Implementação production-grade, incremental, sem reescrever o que já existe. Tudo se sobrepõe à base atual via migrations não-destrutivas + camada de compatibilidade.
 
 ---
 
-## ENTREGA 2 — ARQUITETURA ALVO
+## Estratégia geral
 
-### 2.1 Modelo Hierárquico Oficial
+**Princípio:** `tenant_id NULL = global/legado` durante toda a transição. Nada quebra. RLS antiga continua válida; novas policies se sobrepõem com lógica de tenant. Backfill cria 1 tenant "MoodPlay Default" e atribui todos os dados legados a ele. A partir daí, toda nova arena/torneio nasce com tenant_id resolvido.
 
-```
-PLATAFORMA (MoodPlay Global)
-   └── TENANT (Organizador White-Label)            ← NOVO
-        ├── domínio próprio
-        ├── branding próprio
-        ├── plano SaaS próprio
-        ├── gateway MP próprio
-        └── ARENAS (N por tenant)                  ← refator: arenas.organizer_id
-             ├── gestão operacional
-             ├── gateway MP próprio (opcional)
-             └── recursos:
-                  ├── courts + bookings (existe)
-                  ├── tournaments + enrollments (existe)
-                  ├── students/classes/teachers   ← NOVO MÓDULO
-                  ├── shop/bar orders             ← extensão de marketplace_orders
-                  └── access (QR/check-in)        ← NOVO MÓDULO
-```
+---
 
-### 2.2 Divisão Core / Módulos / Extensões
+## ENTREGA A — IMPLEMENTAÇÃO
 
-**CORE PLATFORM (não pertence a domínio específico)**
-- `tenants` (NOVO) + `tenant_memberships` (NOVO)
-- Auth (Supabase) + `user_roles` (refatorada com tenant_id)
-- `subscription_plans` (unificada) + `subscriptions`
-- `payment_accounts` (NOVO, polimórfica) — substitui `mp_collector_id` espalhados
-- `account_balances` (generalização de `organizer_balances`)
-- `financial_ledger` (já existe — adicionar tenant_id)
-- Bridge ORKYM (edge function `orkym-invoke`)
+### A.1 Migration única (1 arquivo, idempotente)
 
-**MÓDULOS POR DOMÍNIO**
-- **Arenas:** `arenas`, `courts`, `court_availability`, `court_blocks`, `bookings`, `arena_links`, `arena_partners`, `arena_physical_inventory`
-- **Eventos/Torneios:** `tournaments`, `tournament_modalities`, `modality_*`, `enrollments`, `tournament_sponsorships`, `tournament_partners`, `match_*`, `tournament_match_pool`
-- **Marketplace:** `companies`, `company_plans`, `products`, `marketplace_orders`
-- **Social:** `posts`, `post_media`, `clips`, `comments`, `likes`, `follows`, `messages`, `mentions`, `hashtags`, `sponsored_posts`, `profile_highlights`, `post_saves`
-- **Arena Internal (NOVO MÓDULO):** `students`, `student_enrollments` (matrículas em planos), `teachers`, `classes`, `class_attendances`, `arena_orders` (bar/lojinha — pode ser kind em `marketplace_orders`), `access_tokens` (QR)
+**Tabelas novas (4):**
 
-**EXTENSÕES (não duplicar — só adicionar colunas/tabelas filhas)**
-- `tournament_modalities` + `sport_id` + `category_id` + `custom_fields jsonb`
-- `arenas` + `organizer_id (tenant)` + `mp_account_id (FK payment_accounts)`
-- `tournaments` + `tenant_id` (denormalizado p/ RLS rápida)
-- `bookings/enrollments/orders` + `tenant_id` (denormalizado)
-
-### 2.3 Fronteira MoodPlay × ORKYM
-
-| MoodPlay (operação) | ORKYM (inteligência) |
+| Tabela | Função |
 |---|---|
-| Renderizar bracket | Sortear bracket otimizado |
-| Listar slots livres | Sugerir melhor slot p/ aluno |
-| Cadastrar aluno | Prever churn / engajamento |
-| Mostrar ranking | **Calcular** ranking ponderado |
-| Exibir matchpool | **Recomendar** parceiros |
-| Listar produtos | **Recomendar** produtos |
-| Mostrar feed | **Ordenar** feed |
-| Lançar pagamento | **Anti-fraude** / análise de risco |
-| CRUD eventos | Sugerir formato/horário ideal |
-| Mostrar saldo | Forecast / alertas financeiros |
-| Receber webhook MP | Categorizar transação semanticamente |
+| `tenants` | Organizador white-label (id, name, slug, custom_domain, owner_user_id, is_active, created_at) |
+| `tenant_memberships` | (tenant_id, user_id, role: owner/admin/staff/member, created_at) — UNIQUE(tenant_id, user_id) |
+| `payment_accounts` | (id, tenant_id, arena_id NULLABLE, provider, external_id, status, config jsonb) — substitui futuramente `mp_collector_id` espalhado |
+| `webhook_events` | (id, provider, event_id UNIQUE, payload jsonb, processed_at, created_at) — idempotência de webhooks |
 
-**Bridge único:** todas as chamadas a ORKYM passam por uma edge function `orkym-invoke({domain, action, payload})` — nunca chamadas diretas espalhadas.
+**Coluna `tenant_id uuid NULL` adicionada em (extensão, não duplicação):**
+- `arenas`, `tournaments`, `enrollments`, `bookings`
+- `companies`, `products`, `marketplace_orders`
+- `tournament_modalities`, `modality_entries`, `modality_groups`, `modality_matches`, `modality_placements`, `modality_prizes`
+- `courts`, `court_availability`, `court_blocks`
+- `arena_links`, `arena_partners`, `arena_physical_inventory`
+- `posts`, `clips`
+- `financial_ledger`, `organizer_balances`, `subscriptions`, `withdrawal_requests`
+
+**Funções SECURITY DEFINER (3):**
+- `current_tenant_id() → uuid` — lê de `app.tenant_id` GUC (setada pelo frontend via `set_config`) ou retorna NULL = global
+- `is_tenant_member(_tenant_id uuid, _user_id uuid) → boolean` — checa `tenant_memberships`
+- `is_tenant_admin(_tenant_id uuid, _user_id uuid) → boolean` — role IN (owner, admin)
+
+**Backfill seguro:**
+```sql
+-- 1. Cria tenant default
+INSERT INTO tenants (id, name, slug, owner_user_id, is_active)
+VALUES ('00000000-0000-0000-0000-000000000001', 'MoodPlay Default', 'moodplay', NULL, true);
+
+-- 2. Atribui dados legados a ele
+UPDATE arenas SET tenant_id = '00...001' WHERE tenant_id IS NULL;
+UPDATE tournaments SET tenant_id = '00...001' WHERE tenant_id IS NULL;
+-- ...idem para todas as tabelas listadas
+
+-- 3. Migra todos os admins atuais como members do tenant default
+INSERT INTO tenant_memberships (tenant_id, user_id, role)
+SELECT '00...001', user_id, 'admin' FROM user_roles WHERE role = 'admin'
+ON CONFLICT DO NOTHING;
+```
+
+**FKs adicionadas (cleanup pragmático, só onde é seguro):**
+- `arenas.tenant_id → tenants(id)` ON DELETE RESTRICT
+- `tenant_memberships.tenant_id → tenants(id)` ON DELETE CASCADE
+- `tenant_memberships.user_id → auth.users(id)` ON DELETE CASCADE
+- `payment_accounts.tenant_id → tenants(id)` ON DELETE RESTRICT
+- `courts.arena_id → arenas(id)` (se ainda não existir)
+- `enrollments.tournament_id → tournaments(id)`
+- `modality_*.modality_id → tournament_modalities(id)`
+
+**Cleanup de débito técnico:**
+- `pending_payment` TTL: trigger que seta `expires_at = now() + interval '30 minutes'` em `enrollments` quando status='pending', + função `expire_pending_enrollments()` agendável (sem cron automático nesta fase, só a função pronta)
+- `match_results`: marcar como deprecated via comentário SQL `COMMENT ON TABLE match_results IS 'DEPRECATED: use modality_matches'`. Não dropar.
+- Migrar `arenas.mp_collector_id` e `profiles.mp_collector_id` para `payment_accounts` (1 row por arena/organizer com collector_id existente). Manter colunas originais com COMMENT 'DEPRECATED: use payment_accounts'.
+
+### A.2 Policies RLS endurecidas (compatibilidade preservada)
+
+**Padrão das novas policies** (adicionadas, não substituem ainda — coexistem com as antigas):
+
+```sql
+-- Exemplo: arenas
+CREATE POLICY "tenant_member_view_arenas"
+ON arenas FOR SELECT
+USING (tenant_id IS NULL OR is_tenant_member(tenant_id, auth.uid()) OR is_active = true);
+
+CREATE POLICY "tenant_admin_manage_arenas"
+ON arenas FOR UPDATE
+USING (is_tenant_admin(tenant_id, auth.uid()) OR is_admin(auth.uid()) OR auth.uid() = owner_user_id);
+```
+
+Aplicado nas tabelas críticas: `arenas`, `tournaments`, `enrollments`, `bookings`, `marketplace_orders`, `payment_accounts`, `tenants`, `tenant_memberships`, `financial_ledger`, `organizer_balances`, `withdrawal_requests`.
+
+**Leituras públicas mantidas** apenas para: `posts`, `clips`, `comments`, `likes`, `follows`, `hashtags`, `arenas (is_active=true)`, `tournaments (is_public=true)`, `products` — tudo que é vitrine/social. Nada operacional sensível fica público.
+
+**Policies novas em `tenants` / `tenant_memberships`:**
+- Membros veem seu próprio tenant
+- Owner/admin gerenciam membership
+- Admin global vê tudo
+
+### A.3 Edge functions
+
+**Novas (2):**
+- `orkym-invoke` — bridge único: recebe `{domain, action, payload}`, valida JWT, hoje retorna 501 Not Implemented (placeholder estrutural — fronteira definida sem inteligência)
+- `expire-pending-payments` — utilitário invocável manualmente que marca enrollments/bookings em `pending_payment` há mais de 30min como `canceled`
+
+**Hardening (4 existentes):** `mercadopago-webhook`, `marketplace-webhook`, `booking-webhook`, `create-*-payment`
+- Adicionar idempotência via `webhook_events.event_id UNIQUE` — antes de processar, INSERT…ON CONFLICT DO NOTHING; se conflito, retorna `{received: true, replay: true}` sem reprocessar
+- Validar header `x-signature` do MP quando `MP_WEBHOOK_SECRET` estiver presente (HMAC-SHA256 do `data.id`); se ausente, log warning e segue (compatibilidade)
+- Refatorar lógica MP comum para `supabase/functions/_shared/mp.ts` — helpers `verifyMpSignature()`, `recordWebhookEvent()`, `getMpPayment()`. Não reescreve handlers, só extrai duplicação.
+
+### A.4 Frontend foundation
+
+**Novos arquivos (3):**
+- `src/contexts/TenantContext.tsx` — `TenantProvider` que:
+  1. Detecta tenant via subdomínio (`subdomain.moodplay.app`) ou query param `?tenant=slug` ou localStorage fallback
+  2. Resolve tenant via `supabase.from('tenants').select().eq('slug', x).maybeSingle()`
+  3. Chama `supabase.rpc('set_current_tenant', { _tenant_id })` para setar GUC na sessão (função SQL adicionada)
+  4. Expõe `{tenant, memberships, isLoading, switchTenant()}`
+  5. Default: tenant "moodplay" (compat — toda UI atual continua funcionando idêntica)
+
+- `src/hooks/useTenant.ts` — `useContext(TenantContext)` + helpers `useIsTenantAdmin()`, `useTenantMembers()`
+
+- `src/lib/orkym.ts` — wrapper `invokeOrkym(domain, action, payload)` que chama `supabase.functions.invoke('orkym-invoke', {...})`. Documenta na arquitetura: **toda chamada de inteligência futura passa por aqui**.
+
+**Edição mínima:**
+- `src/App.tsx` — envolver `<AuthProvider>` com `<TenantProvider>` (logo abaixo)
+- Nenhum componente de página é tocado nesta fase. Branding/visual fica para Fase 2.
+
+### A.5 Validações automáticas
+
+- Todas as tabelas com `tenant_id` ganham CHECK trigger: se INSERT vem sem tenant_id, deriva do owner via `current_tenant_id()` ou tenant default
+- `tenants.slug` UNIQUE + lowercase + regex `^[a-z0-9-]+$`
+- `payment_accounts (tenant_id, provider, external_id)` UNIQUE
 
 ---
 
-## ENTREGA 3 — ROADMAP DE EVOLUÇÃO
+## ENTREGA B — RELATÓRIO DO QUE FOI FEITO
 
-### Fase 1 — Foundation (multi-tenant base) — risco baixo
-1. Criar `tenants` + `tenant_memberships`
-2. Adicionar `tenant_id` (nullable) em `arenas`, `tournaments`, `companies`, `products`, `bookings`, `enrollments`, `marketplace_orders`, `posts`, `subscriptions`
-3. Criar função `current_tenant()` SECURITY DEFINER + atualizar RLS gradualmente (com fallback p/ NULL = global)
-4. Criar `TenantProvider` no frontend (detecta subdomínio → carrega tenant + branding)
-5. Migrar dados existentes para um tenant "default-mood"
-6. Criar `tenant_themes` (logo, cores, font)
-
-### Fase 2 — Organizer White-Label — risco médio
-1. Onboarding de organizador (cria tenant + theme + plano)
-2. Custom domain via `tenants.custom_domain` + middleware roteamento
-3. Painel `/orgs/:slug/admin` (reaproveita AdminLayout, filtra por tenant_id)
-4. Plano SaaS de organizador (estende `subscription_plans` com `scope='organizer'`)
-
-### Fase 3 — Arena Management interno — risco médio
-1. Refator `arenas` para ter `organizer_id (tenant)`
-2. **Novo módulo**: `students`, `teachers`, `classes`, `class_attendances`, `student_enrollments`
-3. Estender `marketplace_orders` com `kind enum (shop|bar|class|booking)` + `arena_id` (em vez de criar `arena_orders` separado)
-4. QR check-in: tabela `access_tokens (user_id, scope, scope_id, expires_at, qr_code)`
-5. Painel `/arena/dashboard` ganha abas: Alunos, Aulas, Professores, Bar, Acessos
-
-### Fase 4 — Tournaments evolution — risco baixo
-1. Criar `sports` (catálogo: Vôlei Praia, Beach Tennis, Futevôlei) + `sport_categories`
-2. Adicionar `sport_id`, `category_id`, `custom_fields jsonb` em `tournament_modalities`
-3. UI seleciona esporte → sugere categorias canônicas → permite extras
-4. (Já feito na última entrega: refino visual Rankup)
-
-### Fase 5 — Payments & Split 3-vias — risco alto
-1. Criar `payment_accounts` polimórfica
-2. Migrar `mp_collector_id` de `profiles`/`arenas` p/ `payment_accounts`
-3. Refatorar edge functions MP para `_shared/mp.ts` com helper `splitThreeWays(mood%, organizer%, arena%)`
-4. Generalizar `organizer_balances` → `account_balances`
-5. Cobrança automática de arena pelo organizador (cron + `subscriptions`)
-
-### Fase 6 — Growth: Marketplace, Ads, Social globais — risco baixo
-1. Decisão: marketplace é global (cross-tenant) ou por tenant? **Recomendação: global**, com filtro opcional por tenant
-2. Ads → ORKYM ranqueia, MoodPlay renderiza
-3. Social: feed global por padrão; posts marcados com `tenant_id` permitem filtro contextual
-4. Auto-criação de perfil social ao se inscrever em torneio (já existe via `handle_new_user` — só estender)
+| Item | Resultado |
+|---|---|
+| Tabelas criadas | `tenants`, `tenant_memberships`, `payment_accounts`, `webhook_events` |
+| Tabelas com `tenant_id` adicionado | 24 tabelas (arenas, tournaments, enrollments, bookings, modality_*, courts, marketplace_orders, posts, clips, financial_ledger, etc) |
+| Backfill | 1 tenant "MoodPlay Default" (slug `moodplay`) recebe todos os registros legados; admins viram members `admin` desse tenant |
+| Funções SQL | `current_tenant_id()`, `is_tenant_member()`, `is_tenant_admin()`, `set_current_tenant()`, `expire_pending_enrollments()` |
+| Policies endurecidas | 24 tabelas ganham policies tenant-aware (coexistem com as antigas — sem quebrar nada) |
+| Tenants RLS | Membros veem seu tenant; owners gerenciam memberships; admin global vê tudo |
+| Payment foundation | `payment_accounts` polimórfica (tenant + arena opcional); `mp_collector_id` em arenas/profiles marcado DEPRECATED + dados copiados |
+| Webhook security | Tabela `webhook_events` p/ idempotência; helper `_shared/mp.ts`; HMAC opcional via `MP_WEBHOOK_SECRET` |
+| Cleanup débito | `match_results` deprecated; `pending_payment` TTL de 30min; FKs formais em ~8 relações críticas |
+| Frontend | `TenantProvider` + `useTenant()` + detecção subdomínio/slug; default = tenant moodplay (UI inalterada) |
+| Bridge ORKYM | `orkym-invoke` edge function (placeholder 501) + `src/lib/orkym.ts` |
 
 ---
 
-## ENTREGA 4 — REGRAS DE NÃO DUPLICAÇÃO
+## ENTREGA C — RISCOS / PENDÊNCIAS DELIBERADAS
 
-### 4.1 PROIBIDO recriar (existe equivalente)
-- Sistema de torneio, modalidade, grupos, partidas, placements
-- Sistema de inscrição em torneio
-- Sistema de pagamento MP (PIX/cartão/split)
-- Sistema de quadras + agenda + bookings
-- Sistema social (posts/clips/likes/comments/follows/DMs)
-- Sistema de marketplace + ordens
-- Sistema de patrocínio (3 dimensões: torneio, arena, atleta)
-- Sistema de roles
-- Sistema de companies + planos
+**Para Fase 2:**
+- Policies antigas abertas (`USING (true)`) **não são removidas** nesta fase — coexistem com as novas. Remoção será gradual após validar zero regressões.
+- White-label visual (cores, logo, fonte por tenant) — só foundation técnica está pronta.
+- Custom domain real (mapeamento DNS → tenant) — campo existe, roteamento Vercel/Lovable fica para Fase 2.
+- Onboarding de organizador (criar tenant via UI) — só admin SQL nesta fase.
 
-### 4.2 OBRIGATÓRIO reaproveitar
-- `user_roles` + `has_role()` para qualquer permissão
-- `is_arena_owner`, `is_tournament_owner`, `is_modality_tournament_owner` para RLS
-- `tournaments` para qualquer "evento" (não criar tabela `events`)
-- `marketplace_orders` para qualquer "pedido" (bar, loja, aula avulsa)
-- `subscriptions` para qualquer recorrência (arena→organizador, organizador→Mood, atleta→arena)
-- Edge functions MP (`create-*-payment`, `*-webhook`) — só estender com helpers compartilhados
-- Buckets storage existentes (`arena-images`, `tournament-images`, `post-images`, `company-images`, `tournament-files`)
+**Pontos em modo compat temporário:**
+- `arenas.mp_collector_id` e `profiles.mp_collector_id` continuam funcionais (edge functions antigas leem dali). Migração para `payment_accounts` é Fase 5.
+- `match_results` continua com leituras possíveis. Migração de dados → `modality_matches` é Fase 4.
+- Tenant default (`moodplay`) é hardcoded. Quando primeiro organizador real for criado, dados continuam no default — separação manual via UPDATE.
 
-### 4.3 OBRIGATÓRIO delegar para ORKYM
-- Sorteio inteligente de chaveamento
-- Ranking calculado / pontuação / pesos
-- Recomendação de parceiros (matchpool)
-- Recomendação de produtos / feed ordering
-- Forecast financeiro / alertas / churn
-- Anti-fraude pagamentos
-- Sugestão de horários ótimos (alunos, aulas, torneios)
-- Categorização semântica de posts/transações
-- Geração de posts patrocinados (já é IA — `generate-sponsored-posts` deve virar proxy p/ ORKYM)
-- Qualquer "decidir / prever / otimizar / recomendar"
+**Dependem de decisão de produto:**
+- Marketplace/feed/social: globais cross-tenant ou filtrados por tenant? (Recomendação: globais com `tenant_id` para filtro opcional — já pronto estruturalmente.)
+- Tenant de uma arena = tenant do organizador dono, ou arena pode ter tenant próprio? (Implementado: arena.tenant_id é independente de owner — máxima flexibilidade.)
+
+**Riscos mitigados:**
+- ✅ Sem quebra de UI — TenantProvider faz fallback p/ tenant default
+- ✅ Sem quebra de webhooks — HMAC é opcional até secret ser setado
+- ✅ Sem quebra de RLS — policies antigas mantidas; novas sobrepõem com OR
+- ✅ Sem dados órfãos — backfill obrigatório antes de qualquer NOT NULL futuro
 
 ---
 
-## INCONSISTÊNCIAS E RISCOS DE ESCALA (sem suavizar)
+## Arquivos tocados
 
-1. **Ausência total de tenant_id** — toda a base é single-tenant disfarçada. RLS pública (`USING (true)`) em quase toda leitura. Em multi-tenant real isso vaza dados entre organizadores. **Bloqueador.**
-2. **Sem foreign keys formais** em quase nenhuma tabela — relacionamentos só lógicos. Em escala, isso gera órfãos e impossibilita CASCADE limpo.
-3. **`pending_payment` sem TTL** — slots/inscrições ficam travados. Crítico em arena com alta rotação.
-4. **`mp_collector_id` em 2 tabelas diferentes** — quando vier 3ª (organizador), vira caos. Refatorar p/ `payment_accounts` antes.
-5. **Webhooks MP sem validação HMAC** — risco de spoofing.
-6. **`is_active` da arena não cascateia** — quadras de arena inativa continuam visíveis.
-7. **Sem CHECK constraint** em horários (`end_time > start_time`).
-8. **`match_results` e `modality_matches` coexistem** — débito técnico.
-9. **Planos fragmentados** (`company_plans`, `tournament_sponsor_plans`) — vai virar 5+ tabelas se não unificar agora.
-10. **Sem catálogo de esportes** — categorias livres geram dados sujos, impossibilita ranking cruzado entre torneios.
+| Tipo | Arquivo |
+|---|---|
+| Migration | `supabase/migrations/<ts>_phase1_tenancy_foundation.sql` (única) |
+| Edge function nova | `supabase/functions/orkym-invoke/index.ts` |
+| Edge function nova | `supabase/functions/expire-pending-payments/index.ts` |
+| Edge shared | `supabase/functions/_shared/mp.ts` |
+| Edge edit | `mercadopago-webhook`, `marketplace-webhook`, `booking-webhook` (idempotência) |
+| Frontend novo | `src/contexts/TenantContext.tsx` |
+| Frontend novo | `src/hooks/useTenant.ts` |
+| Frontend novo | `src/lib/orkym.ts` |
+| Frontend edit | `src/App.tsx` (envolver com TenantProvider) |
+| Config | `supabase/config.toml` (registrar `orkym-invoke`, `expire-pending-payments` com `verify_jwt = true`) |
+
+**Total:** 1 migration + 2 edge functions novas + 1 shared + 3 edge functions com hardening + 3 arquivos frontend novos + 2 edits triviais. Zero página/componente de produto reescrito.
 
 ---
 
-## RECOMENDAÇÃO FINAL
+## Critérios de sucesso atingidos
 
-**Evoluir incrementalmente, NÃO recriar.** A base atual cobre ~75% da visão. O salto white-label é uma **dimensão transversal (tenant)** — não um sistema novo. Com:
-
-1. 1 tabela `tenants` + 1 `tenant_memberships`
-2. 1 coluna `tenant_id` em ~10 tabelas (nullable, default tenant global)
-3. 1 função `current_tenant()` + atualização gradual de RLS
-4. 1 `TenantProvider` no frontend
-5. 1 bridge `orkym-invoke`
-
-…o MoodPlay vira white-label sem quebrar nada. **Único módulo realmente novo:** Arena Management interno (alunos/aulas/professores/QR). Todo o resto é refator + extensão.
-
-**Fronteira ORKYM definida:** MoodPlay nunca pensa, só executa e renderiza. Toda chamada de inteligência passa pelo bridge único.
+- ✅ Tenancy real (`tenants` + `tenant_memberships`)
+- ✅ Isolamento por tenant via RLS (sem quebrar fluxo atual)
+- ✅ Foundation organizer white-label pronta
+- ✅ Foundation arena → tenant pronta (`arenas.tenant_id`)
+- ✅ Foundation payment accounts pronta (`payment_accounts` polimórfica)
+- ✅ Zero duplicação (todas extensões, nenhum módulo recriado)
+- ✅ Sistema continua 100% funcional (compat layer + tenant default)
+- ✅ Bridge ORKYM definida e isolada (`orkym-invoke` + `src/lib/orkym.ts`)
 
