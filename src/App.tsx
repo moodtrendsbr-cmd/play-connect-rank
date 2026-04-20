@@ -147,6 +147,9 @@ const App = () => (
             <Route path="/arena/checkin" element={<ArenaCheckin />} />
             <Route path="/arena/dashboard" element={<ArenaLayout />}>
               <Route index element={<ArenaDashboard />} />
+              <Route path="torneios" element={<ArenaTournaments />} />
+              <Route path="financeiro" element={<ArenaFinance />} />
+              <Route path="transacoes" element={<ArenaTransactions />} />
               <Route path="alunos" element={<ArenaStudents />} />
               <Route path="professores" element={<ArenaInstructors />} />
               <Route path="aulas" element={<ArenaClasses />} />
@@ -159,6 +162,16 @@ const App = () => (
               <Route path="assinaturas" element={<ArenaSubscriptions />} />
               <Route path="cobrancas" element={<ArenaBilling />} />
               <Route path="ocorrencias" element={<ArenaOccurrences />} />
+            </Route>
+            <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
+            <Route path="/organizer" element={<OrganizerLayout />}>
+              <Route index element={<Navigate to="/organizer/settings" replace />} />
+              <Route path="settings" element={<OrganizerSettings />} />
+              <Route path="members" element={<OrganizerMembers />} />
+              <Route path="arenas" element={<OrganizerArenas />} />
+              <Route path="domains" element={<OrganizerDomains />} />
+              <Route path="payment" element={<OrganizerPayment />} />
+              <Route path="finance" element={<OrganizerFinance />} />
             </Route>
             <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
             <Route path="/organizer" element={<OrganizerLayout />}>
@@ -185,6 +198,7 @@ const App = () => (
               <Route path="plans" element={<AdminPlans />} />
               <Route path="monetization" element={<AdminMonetization />} />
               <Route path="arenas" element={<AdminArenas />} />
+              <Route path="split-rules" element={<AdminSplitRules />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
