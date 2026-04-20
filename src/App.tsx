@@ -65,6 +65,11 @@ import ArenaCourts from "./pages/arena-dashboard/ArenaCourts";
 import ArenaSchedule from "./pages/arena-dashboard/ArenaSchedule";
 import ArenaBookings from "./pages/arena-dashboard/ArenaBookings";
 import ArenaSponsors from "./pages/arena-dashboard/ArenaSponsors";
+import ArenaStudents from "./pages/arena-dashboard/ArenaStudents";
+import ArenaInstructors from "./pages/arena-dashboard/ArenaInstructors";
+import ArenaClasses from "./pages/arena-dashboard/ArenaClasses";
+import ArenaClassEnrollments from "./pages/arena-dashboard/ArenaClassEnrollments";
+import ArenaCheckin from "./pages/arena-dashboard/ArenaCheckin";
 import ArenasList from "./pages/arenas/ArenasList";
 import ArenaPublic from "./pages/arenas/ArenaPublic";
 import ArenaBooking from "./pages/arenas/ArenaBooking";
@@ -130,8 +135,13 @@ const App = () => (
               <Route path="tournaments" element={<SponsorTournaments />} />
               <Route path="sponsorships/:id" element={<SponsorshipDetail />} />
             </Route>
+            <Route path="/arena/checkin" element={<ArenaCheckin />} />
             <Route path="/arena/dashboard" element={<ArenaLayout />}>
               <Route index element={<ArenaDashboard />} />
+              <Route path="alunos" element={<ArenaStudents />} />
+              <Route path="professores" element={<ArenaInstructors />} />
+              <Route path="aulas" element={<ArenaClasses />} />
+              <Route path="matriculas" element={<ArenaClassEnrollments />} />
               <Route path="quadras" element={<ArenaCourts />} />
               <Route path="horarios" element={<ArenaSchedule />} />
               <Route path="reservas" element={<ArenaBookings />} />
