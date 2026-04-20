@@ -22,15 +22,7 @@ const ArenaDashboard = () => {
     const sevenDaysAhead = new Date(Date.now() + 7 * 86400000).toISOString();
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
 
-  const load = async () => {
-    if (!arena) return;
-    const today = format(new Date(), "yyyy-MM-dd");
-    const weekEnd = format(new Date(Date.now() + 7 * 86400000), "yyyy-MM-dd");
-    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(); dayEnd.setHours(23, 59, 59, 999);
-    const sevenDaysAhead = new Date(Date.now() + 7 * 86400000).toISOString();
-
-    const [todayRes, weekRes, courtsRes, upcomingRes, studentsRes, classesTodayRes, dueSoonRes, overdueRes, openOccRes, openTasksRes, tasksListRes] = await Promise.all([
+    const [todayRes, weekRes, courtsRes, upcomingRes, studentsRes, classesTodayRes, dueSoonRes, overdueRes, openOccRes, openTasksRes, tasksListRes, activeTournRes, monthRevRes] = await Promise.all([
       supabase.from("bookings").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("booking_date", today).neq("status", "canceled"),
       supabase.from("bookings").select("id,amount", { count: "exact" }).eq("arena_id", arena.id).gte("booking_date", today).lte("booking_date", weekEnd).neq("status", "canceled"),
       supabase.from("courts").select("id", { count: "exact", head: true }).eq("arena_id", arena.id),
@@ -42,9 +34,12 @@ const ArenaDashboard = () => {
       supabase.from("arena_occurrences").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).in("status", ["open", "in_progress"]),
       supabase.from("arena_operational_tasks").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("status", "open"),
       supabase.from("arena_operational_tasks").select("*").eq("arena_id", arena.id).eq("status", "open").order("priority").order("created_at", { ascending: false }).limit(5),
+      supabase.from("tournaments").select("id", { count: "exact", head: true }).eq("arena", arena.name).gte("end_date", today),
+      supabase.from("financial_transactions").select("total_amount").eq("arena_id", arena.id).eq("status", "paid").gte("paid_at", monthStart.toISOString()),
     ]);
 
     const weekRevenue = (weekRes.data || []).reduce((sum: number, b: any) => sum + Number(b.amount || 0), 0);
+    const monthRevenue = (monthRevRes.data || []).reduce((sum: number, t: any) => sum + Number(t.total_amount || 0), 0);
 
     setStats({
       today: todayRes.count || 0,
@@ -57,6 +52,8 @@ const ArenaDashboard = () => {
       overdue: overdueRes.count || 0,
       openOcc: openOccRes.count || 0,
       openTasks: openTasksRes.count || 0,
+      activeTournaments: activeTournRes.count || 0,
+      monthRevenue,
     });
     setUpcoming(upcomingRes.data || []);
     setTasks(tasksListRes.data || []);
