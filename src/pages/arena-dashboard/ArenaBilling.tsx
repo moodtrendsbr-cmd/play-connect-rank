@@ -98,6 +98,9 @@ const ArenaBilling = () => {
                   <div className="space-y-1">
                     <p className="font-medium text-foreground text-sm">{sub?.arena_students?.full_name} — {sub?.arena_membership_plans?.name}</p>
                     <p className="text-xs text-muted-foreground">Vence {format(new Date(c.due_at), "dd/MM/yyyy")} • R$ {Number(c.amount).toFixed(2)}</p>
+                    {Number(c.fee_amount || 0) > 0 && (
+                      <p className="text-xs text-muted-foreground">Taxa R$ {Number(c.fee_amount).toFixed(2)} • Líquido R$ {Number(c.net_amount ?? c.amount).toFixed(2)}</p>
+                    )}
                     {c.paid_at && <p className="text-xs text-muted-foreground">Pago em {format(new Date(c.paid_at), "dd/MM/yyyy")}</p>}
                   </div>
                   <div className="flex items-center gap-2">

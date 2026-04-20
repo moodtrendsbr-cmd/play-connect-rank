@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, AlertTriangle, Pencil } from "lucide-react";
+import { Plus, AlertTriangle, Pencil, ListPlus } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -88,6 +88,25 @@ const ArenaOccurrences = () => {
     if (error) { toast.error(error.message); return; }
     toast.success(editing ? "Ocorrência atualizada" : "Ocorrência registrada");
     setOpen(false); load();
+  };
+
+  const generateTask = async (o: any) => {
+    if (o.task_id) { toast.info("Já existe uma tarefa vinculada"); return; }
+    const { data: task, error } = await supabase.from("arena_operational_tasks").insert({
+      arena_id: arena.id,
+      task_type: "occurrence_followup",
+      title: `Resolver: ${o.title}`,
+      description: o.description || null,
+      priority: o.severity === "critical" ? 1 : o.severity === "high" ? 2 : 3,
+      source: "manual",
+      occurrence_id: o.id,
+      related_entity_type: o.related_entity_type,
+      related_entity_id: o.related_entity_id,
+    }).select("id").single();
+    if (error) { toast.error(error.message); return; }
+    await supabase.from("arena_occurrences").update({ task_id: task.id }).eq("id", o.id);
+    toast.success("Tarefa gerada na caixa de pendências");
+    load();
   };
 
   return (
@@ -174,9 +193,14 @@ const ArenaOccurrences = () => {
                       <span className="text-[10px] text-muted-foreground">• {o.category}</span>
                     </div>
                     {o.description && <p className="text-xs text-muted-foreground">{o.description}</p>}
-                    <p className="text-[10px] text-muted-foreground">Aberta em {format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</p>
+                    <p className="text-[10px] text-muted-foreground">Aberta em {format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}{o.task_id && " • tarefa vinculada"}</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(o)}><Pencil className="h-4 w-4" /></Button>
+                  <div className="flex gap-1 shrink-0">
+                    {!o.task_id && o.status !== "closed" && o.status !== "resolved" && (
+                      <Button variant="ghost" size="sm" onClick={() => generateTask(o)} title="Gerar tarefa"><ListPlus className="h-4 w-4" /></Button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(o)}><Pencil className="h-4 w-4" /></Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

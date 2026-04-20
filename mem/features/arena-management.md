@@ -44,3 +44,16 @@ Módulo `/arena/dashboard` cobre toda a operação contínua da arena.
 **RLS:** arena owner + tenant admin + admin global em tudo. Aluno vê apenas suas próprias `arena_student_subscriptions` e `arena_billing_cycles` via JOIN com `profile_user_id`.
 
 **Pendências Fase 5+:** cobrança automática Mercado Pago por ciclo; cron real para overdue; notificações ao aluno; view aluno (minhas assinaturas/pagamentos); workflow de ocorrências (assignees, comentários); marketplace interno arena.
+
+**Convenções Fase 4.1 (hardening):**
+
+- Glossário oficial (não confundir):
+  - `event` (`arena_operational_events`) = trilha bruta append-only (fato que aconteceu)
+  - `task` (`arena_operational_tasks`) = AÇÃO a executar (open/dismissed/done, tem `priority`)
+  - `occurrence` (`arena_occurrences`) = PROBLEMA registrado (open/in_progress/resolved/closed, tem `severity`)
+  - `tournament` = evento ESPORTIVO público (não tem relação com operação)
+- `event_type` segue namespace forçado por CHECK: `dominio.acao` (ex: `attendance.absent`, `billing.overdue`, `billing.paid`, `class.canceled`, `student.inactive`, `task.created`).
+- Tasks e Occurrences podem se vincular bidirecionalmente via `arena_operational_tasks.occurrence_id` e `arena_occurrences.task_id` (soft, nullable). UI da arena já oferece "Gerar tarefa" a partir de uma ocorrência.
+- Política de retenção de eventos: **archive soft** via RPC `arena_archive_old_events(_arena_id, _older_than_days=180)` — marca `archived_at` apenas em eventos já processados. Hard DELETE proibido em rotina; reservado para limpeza manual.
+- Billing split-ready: `arena_billing_cycles` carrega snapshot de `payment_account_id` + `gross_amount/fee_amount/net_amount` + `provider_preference_id`. RPC `arena_generate_billing_cycle` popula no INSERT; RPC `arena_mark_cycle_paid` aceita `_fee_amount` opcional e recalcula `net_amount`. UI mostra "Líquido" só quando `fee > 0`.
+- Índices em `arena_operational_events`: `(arena_id, created_at DESC)`, `(arena_id, processed_at) WHERE processed_at IS NULL` (partial p/ ORKYM consumir backlog), `(arena_id, event_type, created_at DESC)`.

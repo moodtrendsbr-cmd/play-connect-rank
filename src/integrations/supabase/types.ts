@@ -105,12 +105,17 @@ export type Database = {
           arena_id: string
           created_at: string
           due_at: string
+          fee_amount: number | null
+          gross_amount: number | null
           id: string
+          net_amount: number | null
           paid_at: string | null
+          payment_account_id: string | null
           payment_method: string | null
           payment_reference: string | null
           period_end: string
           period_start: string
+          provider_preference_id: string | null
           status: string
           subscription_id: string
           tenant_id: string | null
@@ -121,12 +126,17 @@ export type Database = {
           arena_id: string
           created_at?: string
           due_at: string
+          fee_amount?: number | null
+          gross_amount?: number | null
           id?: string
+          net_amount?: number | null
           paid_at?: string | null
+          payment_account_id?: string | null
           payment_method?: string | null
           payment_reference?: string | null
           period_end: string
           period_start: string
+          provider_preference_id?: string | null
           status?: string
           subscription_id: string
           tenant_id?: string | null
@@ -137,12 +147,17 @@ export type Database = {
           arena_id?: string
           created_at?: string
           due_at?: string
+          fee_amount?: number | null
+          gross_amount?: number | null
           id?: string
+          net_amount?: number | null
           paid_at?: string | null
+          payment_account_id?: string | null
           payment_method?: string | null
           payment_reference?: string | null
           period_end?: string
           period_start?: string
+          provider_preference_id?: string | null
           status?: string
           subscription_id?: string
           tenant_id?: string | null
@@ -650,6 +665,7 @@ export type Database = {
           resolved_at: string | null
           severity: string
           status: string
+          task_id: string | null
           tenant_id: string | null
           title: string
           updated_at: string
@@ -668,6 +684,7 @@ export type Database = {
           resolved_at?: string | null
           severity?: string
           status?: string
+          task_id?: string | null
           tenant_id?: string | null
           title: string
           updated_at?: string
@@ -686,6 +703,7 @@ export type Database = {
           resolved_at?: string | null
           severity?: string
           status?: string
+          task_id?: string | null
           tenant_id?: string | null
           title?: string
           updated_at?: string
@@ -716,6 +734,7 @@ export type Database = {
       }
       arena_operational_events: {
         Row: {
+          archived_at: string | null
           arena_id: string
           created_at: string
           entity_id: string | null
@@ -728,6 +747,7 @@ export type Database = {
           tenant_id: string | null
         }
         Insert: {
+          archived_at?: string | null
           arena_id: string
           created_at?: string
           entity_id?: string | null
@@ -740,6 +760,7 @@ export type Database = {
           tenant_id?: string | null
         }
         Update: {
+          archived_at?: string | null
           arena_id?: string
           created_at?: string
           entity_id?: string | null
@@ -782,6 +803,7 @@ export type Database = {
           description: string | null
           due_at: string | null
           id: string
+          occurrence_id: string | null
           priority: number
           related_entity_id: string | null
           related_entity_type: string | null
@@ -800,6 +822,7 @@ export type Database = {
           description?: string | null
           due_at?: string | null
           id?: string
+          occurrence_id?: string | null
           priority?: number
           related_entity_id?: string | null
           related_entity_type?: string | null
@@ -818,6 +841,7 @@ export type Database = {
           description?: string | null
           due_at?: string | null
           id?: string
+          occurrence_id?: string | null
           priority?: number
           related_entity_id?: string | null
           related_entity_type?: string | null
@@ -4126,19 +4150,33 @@ export type Database = {
       }
     }
     Functions: {
+      arena_archive_old_events: {
+        Args: { _arena_id: string; _older_than_days?: number }
+        Returns: number
+      }
       arena_checkin_validate: { Args: { _token: string }; Returns: Json }
       arena_generate_billing_cycle: {
         Args: { _subscription_id: string }
         Returns: string
       }
-      arena_mark_cycle_paid: {
-        Args: {
-          _cycle_id: string
-          _payment_method?: string
-          _payment_reference?: string
-        }
-        Returns: undefined
-      }
+      arena_mark_cycle_paid:
+        | {
+            Args: {
+              _cycle_id: string
+              _payment_method?: string
+              _payment_reference?: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              _cycle_id: string
+              _fee_amount?: number
+              _payment_method?: string
+              _payment_reference?: string
+            }
+            Returns: undefined
+          }
       arena_mark_overdue_cycles: {
         Args: { _arena_id: string }
         Returns: number
