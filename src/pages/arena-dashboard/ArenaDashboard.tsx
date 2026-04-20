@@ -135,6 +135,11 @@ const ArenaDashboard = () => {
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-background/60 text-muted-foreground inline-flex items-center gap-1">
                       <SourceIcon className="h-2.5 w-2.5" /> {sourceLabel(t.source)}
                     </span>
+                    {t.occurrence_id && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 inline-flex items-center gap-1">
+                        <AlertTriangle className="h-2.5 w-2.5" /> do incidente
+                      </span>
+                    )}
                   </div>
                   {t.description && <p className="text-xs text-muted-foreground line-clamp-2">{t.description}</p>}
                 </div>
