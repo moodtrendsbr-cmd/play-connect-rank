@@ -1,231 +1,268 @@
 
 
-# Fase 5 — Tournament OS PRO + Finance/Split Layer
+# Fase 5.5 — Finance Hardening + Settlement Readiness
 
-Extensão sobre Fases 1-4. Reusa estruturas existentes (`tournaments`, `tournament_modalities`, `modality_*`, `enrollments`, `organizer_balances`, `marketplace_orders`, `bookings`, `arena_billing_cycles`, `payment_accounts`). Zero duplicação. Zero IA local. Foco em **monetização rastreável**.
-
----
-
-## 1. Auditoria — reuso obrigatório
-
-| Existente | Reuso Fase 5 |
-|---|---|
-| `tournaments` (já tem categories[], gender[], types[], modality, slot_config) | Estendido com 3 colunas (sem rebuild) |
-| `tournament_modalities` (já tem sport, level, gender, bracket_format, num_groups, sets_to_win, points_per_set) | **Já é "categoria real"** — só adicionar `team_size`, `rules_json` |
-| `modality_entries / groups / matches / placements` | Já cobre fases grupos+mata-mata. Apenas estender `modality_matches` com `scheduled_at`. |
-| `enrollments` | Estendido com `amount_paid`, `checked_in_at` |
-| `organizer_balances`, `marketplace_orders`, `arena_billing_cycles`, `bookings` | Origem de eventos financeiros — todos viram entradas em `financial_transactions` |
-| `financial_ledger` (existente, simples) | **Substituído** funcionalmente pelas novas tabelas (mantido por compat, marcado deprecado) |
-| `tenant_settings` | Estendido com `metadata.split_config` (zero schema change) |
-| `arena_operational_events` (Fase 4) | Reusada para emitir eventos `finance.*` |
-
-**Não criar:** novo sistema de torneios, novo modelo de inscrições, motor financeiro contábil completo.
+Endurecer a camada financeira sem rebuild. Foco em rastreabilidade, governança e prontidão para settlement real. Zero IA local, zero duplicação, zero quebra.
 
 ---
 
-## 2. Modelo de dados — 3 novas tabelas + extensões mínimas
+## ENTREGA B (antecipada) — Auditoria do estado atual
 
-### Extensões em tabelas existentes (ALTER ADD COLUMN IF NOT EXISTS)
-
-| Tabela | Novas colunas |
-|---|---|
-| `tournament_modalities` | `team_size smallint default 1`, `rules_json jsonb default '{}'`, `phase text default 'groups_then_ko'` (groups_only/ko_only/groups_then_ko) |
-| `enrollments` | `amount_paid numeric(10,2)`, `checked_in_at timestamptz`, `modality_id uuid` (nullable, vincula a categoria específica quando aplicável) |
-| `modality_matches` | `scheduled_at timestamptz`, `arena_id uuid` (snapshot via trigger) |
-| `tournaments` | `default_split_config jsonb` (override por torneio; null = herda tenant) |
-
-### 3 tabelas novas
-
-**`financial_transactions`** — toda entrada de receita rastreável
-```
-id, tenant_id NOT NULL, arena_id (nullable), organizer_id (nullable),
-source_type text CHECK (source_type IN ('enrollment','booking','marketplace_order','arena_billing_cycle','sponsorship')),
-source_id uuid, total_amount numeric(10,2), currency text default 'BRL',
-status text CHECK (status IN ('pending','paid','refunded','canceled')) default 'pending',
-payment_provider text, payment_reference text, paid_at timestamptz,
-metadata jsonb, created_at, updated_at
-```
-UNIQUE(source_type, source_id) — idempotência total.
-
-**`transaction_splits`** — quem recebe o quê
-```
-id, transaction_id FK, tenant_id NOT NULL,
-recipient_type text CHECK (IN ('platform','organizer','arena','company','affiliate')),
-recipient_id uuid (nullable p/ platform), payment_account_id uuid (nullable, snapshot),
-percentage numeric(5,2), amount numeric(10,2),
-status text default 'pending' (pending/settled/failed),
-settled_at timestamptz, metadata jsonb, created_at
-```
-INDEX (recipient_type, recipient_id, status).
-
-**`split_rules`** — configuração por tenant (com fallback global)
-```
-id, tenant_id NOT NULL, source_type text,
-platform_pct numeric(5,2), organizer_pct numeric(5,2), arena_pct numeric(5,2), affiliate_pct numeric(5,2) default 0,
-is_active bool default true, created_at, updated_at
-UNIQUE(tenant_id, source_type)
-```
-Seed inicial para tenant `moodplay` cobrindo cada `source_type` (default: platform=10, demais conforme natureza).
-
----
-
-## 3. RLS — padrão Fase 4
-
-- `financial_transactions` / `transaction_splits`: SELECT/ALL para `is_admin` + `is_tenant_admin` + (organizador do torneio / dono da arena / dono da empresa / aluno só vê suas) via JOIN. INSERT só via `service_role` (edge functions).
-- `split_rules`: SELECT para tenant_admin/admin; UPDATE só admin global ou tenant_owner.
-- Aluno/buyer: só lê transações onde é beneficiário ou pagador (via JOIN com source).
-
----
-
-## 4. RPCs / lógica server-side (sem IA)
-
-```sql
--- Cria transação + splits a partir de pagamento bruto
-CREATE FUNCTION finance_record_payment(
-  _source_type text, _source_id uuid, _total numeric,
-  _provider text, _reference text, _paid_at timestamptz default now()
-) RETURNS uuid SECURITY DEFINER
--- 1. Resolve tenant_id, arena_id, organizer_id a partir do source
--- 2. UPSERT em financial_transactions (idempotência por source)
--- 3. Lê split_rules (tenant_id, source_type) com fallback p/ tenant default
--- 4. Aplica overrides: tournaments.default_split_config se source=enrollment
--- 5. INSERT em transaction_splits (1 linha por recipient com pct>0)
--- 6. INSERT em arena_operational_events (event_type='finance.payment_received')
-
-CREATE FUNCTION finance_mark_split_settled(_split_id uuid, _reference text) 
-  RETURNS void SECURITY DEFINER -- admin/tenant_admin
-```
-
-**Triggers leves:**
-- `enrollments` AFTER UPDATE quando `status` vira `'paid'` → chama `finance_record_payment('enrollment', id, ...)`
-- `bookings` AFTER UPDATE quando `status='confirmed'` + payment_ref novo → idem
-- `marketplace_orders` AFTER UPDATE quando `status='paid'` → idem
-- `arena_billing_cycles` AFTER UPDATE quando `status='paid'` → idem
-
-Edge functions (`create-payment`, `create-booking-payment`, `marketplace-webhook`, `mercadopago-webhook`) **mantidas intactas** — apenas o trigger captura. Zero refactor de webhook.
-
----
-
-## 5. Tournament OS PRO — frontend
-
-| Rota nova | Arquivo | Função |
+| Estrutura | Status real | Decisão Fase 5.5 |
 |---|---|---|
-| `/arena/dashboard/torneios` | `ArenaTournaments.tsx` | Lista torneios da arena (via `tournaments WHERE arena = arenas.name OR organizer_id IN (membros tenant)`). Cards com inscritos, próximas partidas, receita. |
-| `/organizer/finance` | `OrganizerFinance.tsx` | Dashboard organizador: receita total, por torneio, splits recebidos/pendentes |
-| `/admin/finance` | `AdminFinance.tsx` (estende `AdminFinances` existente se houver) | Visão global plataforma |
-| `/arena/dashboard/financeiro` | `ArenaFinance.tsx` | Receita arena: bookings + classes + torneios na arena |
-| `/arena/dashboard/transacoes` | `ArenaTransactions.tsx` | Lista de `financial_transactions` da arena com filtros |
+| `financial_transactions` (UNIQUE source_type+source_id) | **Canônico** — alimentado por 4 triggers (enrollments/bookings/marketplace/billing) | Fonte oficial. Estendida com novos status. |
+| `transaction_splits` (já tem `payment_account_id`, `settlement_reference`, `metadata`) | **Canônico** — populado por `finance_record_payment` | Fonte oficial. Estendida com governança de settlement. |
+| `split_rules` (UNIQUE tenant+source_type) | **Canônico** | Mantido. Hierarquia explícita. |
+| `payment_accounts` (provider+external_id UNIQUE) | **Canônico** — sincronizado por `sync_arena_payment_account` trigger | Promovido a fonte oficial única. |
+| `arenas.mp_collector_id` + `profiles.mp_collector_id` | **Legado ativo** (fallback em `_shared/mp.ts`) | Mantido por compat. Marcado `DEPRECATED`. Resolução nova passa só por `payment_accounts`. |
+| `financial_ledger` (0 rows) | **Legado morto** | COMMENT deprecated. Sem mudança. |
+| `organizer_balances` (2 rows seed) | **Legado paralelo** (usado em `AdminDashboard`, `request-withdrawal`) | Mantido por compat. View `v_organizer_balances_canonical` derivada de splits. |
+| Triggers de pagamento | 4 triggers idempotentes (status novo ≠ status antigo) | Adicionar guarda extra para refund. |
 
-**Extensão `ManageTournament` / `Brackets` existentes:**
-- Aba nova "Categorias" no manage: edita `tournament_modalities` com novos campos (team_size, rules_json, phase)
-- Aba nova "Check-in" reusa `arena_checkin_validate` — gera token por modalidade, atletas confirmam presença → `enrollments.checked_in_at`
-- Botão "Agendar partida" em `TabMatches.tsx`: define `scheduled_at` + `court_id` no `modality_matches`
-
-**Extensão `ArenaDashboard.tsx`:** card extra "Torneios ativos" + "Receita do mês".
-
-**Sem rebuild de Brackets** — só agregações de leitura.
+**Gaps identificados:**
+1. Sem CHECK constraint em `financial_transactions.status` e `transaction_splits.status` — qualquer string aceita.
+2. Sem suporte a `refunded`/`partially_refunded`/`disputed`.
+3. Sem registro de ajustes manuais (quem, quando, motivo).
+4. Override de split é livre (jsonb sem validação) — não auditado.
+5. `payment_accounts` ainda não é a primeira escolha em todos os fluxos novos.
+6. Settlement só tem `settled_at` + `settlement_reference` — falta `expected_settlement_at`, `payout_reference`, método.
 
 ---
 
-## 6. Split Engine — fluxo completo
+## 1. Hardening de status (CHECK + novos estados)
 
-```text
-Pagamento aprovado (qualquer fonte)
-        ↓
-Trigger PG / Edge function chama finance_record_payment()
-        ↓
-financial_transactions (1 linha, idempotente por source)
-        ↓
-Aplica split_rules[tenant, source_type] + override tournament.default_split_config
-        ↓
-transaction_splits (N linhas: platform/organizer/arena/company)
-        ↓
-arena_operational_events ('finance.payment_received') → ORKYM consome
+### `financial_transactions.status`
+```
+pending | paid | failed | canceled | refunded | partially_refunded | disputed
+```
+- `ALTER TABLE ... ADD CONSTRAINT ftx_status_chk CHECK (status IN (...)) NOT VALID;` (não revalida histórico).
+- Nova coluna: `refunded_amount numeric(10,2) default 0`, `refunded_at timestamptz`, `cancellation_reason text`.
+
+### `transaction_splits.status`
+```
+pending | calculated | settled | canceled | reversed | failed
+```
+- CHECK NOT VALID + backfill `pending → calculated` via UPDATE one-shot na migration (status atual já significa "calculated").
+- Novas colunas: `expected_settlement_at timestamptz`, `payout_reference text`, `settlement_method text`, `reversed_at timestamptz`, `reversal_reason text`.
+
+### Mapeamento status entidade → financeiro (documentado em memory, não código)
+| Entidade | Status entidade | Reflete em financial_transactions |
+|---|---|---|
+| enrollment | paid | paid |
+| enrollment | cancelled (após paid) | refunded ou partially_refunded (manual) |
+| booking | confirmed | paid |
+| booking | canceled | canceled (se não pago) / refunded (se pago) |
+| billing_cycle | paid | paid |
+| billing_cycle | canceled | canceled |
+
+---
+
+## 2. Refund / Cancel / Partial Refund foundation
+
+### Tabela nova: `financial_adjustments`
+Registro append-only de ajustes. Não substitui transações — anexa contexto.
+```
+id uuid PK, tenant_id NOT NULL, transaction_id FK NOT NULL,
+adjustment_type text CHECK IN ('refund_full','refund_partial','cancellation','manual_credit','manual_debit','split_correction'),
+amount numeric(10,2) NOT NULL,
+reason text NOT NULL,                      -- obrigatório
+external_reference text,
+created_by uuid NOT NULL DEFAULT auth.uid(),
+created_at timestamptz NOT NULL DEFAULT now(),
+metadata jsonb DEFAULT '{}'
+```
+- **Append-only**: sem UPDATE/DELETE policies (apenas admin global pode em casos extremos via RPC dedicada).
+- INDEX `(transaction_id, created_at DESC)`.
+
+### RPC: `finance_record_refund(_transaction_id, _amount, _reason, _external_ref text default null)`
+- SECURITY DEFINER. Permissão: admin global, tenant_admin, ou organizador/dono da arena beneficiária.
+- INSERT em `financial_adjustments` (`refund_full` se `_amount = total - já_reembolsado`, senão `refund_partial`).
+- UPDATE `financial_transactions`: incrementa `refunded_amount`, ajusta `status` (`partially_refunded` ou `refunded` se total).
+- Marca splits proporcionalmente como `reversed` (se total) ou cria splits negativos com `metadata.reversal_of` (se parcial).
+- Emite evento `finance.refund_created` em `arena_operational_events`.
+
+### RPC: `finance_cancel_transaction(_transaction_id, _reason)`
+- Apenas se `status='pending'`. Marca `canceled`, splits → `canceled`.
+- Emite `finance.payment_canceled`.
+
+---
+
+## 3. Governança de override de split
+
+### Hierarquia explícita (documentada e implementada)
+```
+1. financial_adjustments com adjustment_type='split_correction'  (ajuste manual auditado)
+2. tournaments.default_split_config                              (override por entidade — apenas enrollment hoje)
+3. split_rules WHERE tenant_id = X AND source_type = Y           (regra do tenant)
+4. split_rules WHERE tenant_id = '00000000-0000-0000-0000-000000000001' (default global)
+5. fallback hardcoded: platform_pct=10, demais=0
 ```
 
-**Liquidação manual** nesta fase: admin/tenant_admin marca split como `settled` via `finance_mark_split_settled` (sem transferência automática — Fase 6 com MP Marketplace API).
+### Hardening
+- Atualizar `finance_record_payment` para registrar em `metadata` qual nível foi aplicado (`split_source`: `'override'`/`'tenant_rule'`/`'global_default'`/`'fallback'`).
+- Nova RPC `finance_apply_split_override(_transaction_id, _splits jsonb, _reason text)` — admin/tenant_admin only. Cria `financial_adjustments` (`split_correction`) + reverte splits antigos + cria novos. Append-only, totalmente auditável.
+- Validação: soma das % no `default_split_config` ≤ 100 (CHECK function ao salvar `tournaments`).
 
 ---
 
-## 7. Configuração de split — UI mínima
+## 4. Idempotência reforçada
 
-| Rota | Arquivo |
+### Já existente
+- `financial_transactions UNIQUE(source_type, source_id)` ✓
+- Triggers checam `OLD.status <> NEW.status` ✓
+
+### Adicionar
+- CHECK em `financial_transactions`: `refunded_amount <= total_amount`.
+- CHECK em `transaction_splits`: `amount >= 0` (negativos vão em adjustments).
+- Guard em `finance_record_payment`: se `status` já = `'refunded'` ou `'partially_refunded'` → não recriar splits (apenas atualiza referência). Atualmente já há guard para splits existentes; reforçar para status terminais.
+- Guard em `finance_record_refund`: rejeita se `_amount + refunded_amount > total_amount`.
+
+---
+
+## 5. Settlement readiness
+
+Sem integrar payout API. Modelar tudo o que payout precisará.
+
+### Em `transaction_splits` (novas colunas)
+- `expected_settlement_at` — preenchido por `finance_record_payment` usando regra simples: D+2 (configurável via `tenant_settings.metadata.settlement_delay_days`, default 2).
+- `payout_reference` — id externo do payout (futuro).
+- `settlement_method` — `manual` (hoje) / `mp_marketplace` / `bank_transfer` / `pix` (Fase 6).
+- `payment_account_id` (já existe) — snapshot do destino. Reforçar populamento para todos recipient_types com conta canônica.
+
+### RPC atualizada `finance_mark_split_settled(_split_id, _reference, _method text default 'manual')`
+- Adiciona `_method`. Atualiza `payout_reference`. Emite `finance.split_settled` em `arena_operational_events`.
+
+### Helper RPC nova: `finance_compute_expected_settlement(_tenant_id, _paid_at) RETURNS timestamptz`
+- Usada pelo trigger de criação. Lê `tenant_settings.metadata->>'settlement_delay_days'`.
+
+---
+
+## 6. payment_accounts como fonte canônica
+
+### Mudanças
+- Atualizar `finance_record_payment` para resolver `payment_account_id` de **todos** os recipients que tenham conta (organizer, arena, company), não só arena. Hoje só arena.
+- Para organizer/company: lookup em `payment_accounts WHERE (organizer_id = X OR tenant_id = X)` com fallback documentado.
+- `_shared/mp.ts::resolveCollectorId` já tem prioridade correta (payment_accounts → arenas.mp_collector_id → profiles.mp_collector_id). Adicionar log/marker quando cair em fallback legado, exposto via nova view `v_legacy_collector_usage` (admin-only, leitura).
+- COMMENT em `arenas.mp_collector_id` e `profiles.mp_collector_id`: `'DEPRECATED Phase 5.5 — use payment_accounts. Kept for compat only.'`
+
+### View canônica nova: `v_organizer_balances_canonical`
+Substitui leitura de `organizer_balances` para dashboards novos:
+```sql
+SELECT recipient_id AS organizer_id,
+       sum(CASE WHEN status='settled' THEN amount ELSE 0 END) as settled_total,
+       sum(CASE WHEN status='calculated' THEN amount ELSE 0 END) as pending_total,
+       sum(amount) as gross_total
+FROM transaction_splits
+WHERE recipient_type='organizer'
+GROUP BY recipient_id;
+```
+RLS: SELECT para o próprio organizer + admins.
+
+`organizer_balances` e `request-withdrawal` mantidos intactos (compat). Migração em fase futura.
+
+---
+
+## 7. Eventos para ORKYM (extensão)
+
+Reusa `arena_operational_events`. Novos `event_type` (namespace `finance.*`):
+- `finance.payment_received` (já existe)
+- `finance.payment_failed` (novo — emitido por edge function ao status='failed')
+- `finance.payment_canceled`
+- `finance.split_calculated` (emitido junto com payment_received)
+- `finance.split_settled`
+- `finance.refund_created`
+- `finance.refund_completed` (quando todos splits revertidos)
+- `finance.manual_adjustment_created`
+- `finance.split_override_applied`
+
+Quando `arena_id IS NULL` (organizer-only ou platform-only), evento ainda é registrado mas sem arena_id (relax NOT NULL? — **não**, mantém constraint). Solução: nova tabela leve `tenant_operational_events` espelho **só se** evento não couber em arena_operational_events. **Decisão pragmática:** para Fase 5.5, eventos sem arena ficam apenas em `financial_transactions.metadata.events[]` (jsonb append). Evita criar tabela nova sem necessidade comprovada.
+
+---
+
+## 8. RLS — revisão
+
+- `financial_adjustments`: SELECT para admin + tenant_admin + recipient do split impactado. INSERT só via RPC SECURITY DEFINER. UPDATE/DELETE bloqueados (append-only).
+- `v_organizer_balances_canonical`: SELECT para o próprio organizer + admins (via `security_invoker=true` + filter).
+- `transaction_splits`: política `splits_recipient_select` já existe — verificar que cobre os 5 recipient_types (platform tem recipient_id NULL, hoje só admin lê — correto).
+- `payment_accounts`: política atual restringe a tenant_admin. Adicionar SELECT para arena_owner ler conta da própria arena (read-only).
+
+---
+
+## 9. Dashboards — leitura canônica
+
+| Dashboard | Mudança |
 |---|---|
-| `/admin/split-rules` | `AdminSplitRules.tsx` — gerencia `split_rules` por tenant |
-| Tab em `OrganizerSettings.tsx` | "Regras de Repartição" — organizer vê suas regras (read-only) |
-| Campo em `EditTournamentForm.tsx` | "Override de split" (opcional) → `tournaments.default_split_config` |
+| `ArenaFinance.tsx` | Já lê de `financial_transactions`/`transaction_splits`. Adicionar coluna "A liquidar (D+X)" usando `expected_settlement_at`. |
+| `ArenaTransactions.tsx` | Adicionar status `refunded`/`partially_refunded` no filtro + badge. Mostrar `refunded_amount` quando > 0. |
+| `OrganizerFinance.tsx` | Migrar para `v_organizer_balances_canonical` em vez de agregação manual. |
+| `AdminSplitRules.tsx` | Adicionar nota informativa sobre hierarquia (1.adjustment > 2.tournament override > 3.tenant rule > 4.global). |
+| `AdminDashboard.tsx` | Mantém `organizer_balances` (compat) mas adiciona card "Receita canônica" lendo `financial_transactions WHERE status='paid'`. |
+| **Novo:** `AdminAdjustments.tsx` (rota `/admin/adjustments`) | Lista `financial_adjustments` com filtros por type/tenant. Read-only. |
+| **Novo:** Botão "Reembolsar" em `ArenaTransactions.tsx` e `OrganizerFinance.tsx` | Modal com motivo obrigatório + valor → chama `finance_record_refund`. |
 
 ---
 
-## 8. Migração — arquivo único idempotente
+## 10. Migração — arquivo único idempotente
 
-`supabase/migrations/<ts>_phase5_tournament_pro_finance.sql`:
+`supabase/migrations/<ts>_phase5_5_finance_hardening.sql`:
 
-1. ALTER `tournament_modalities` (+team_size, +rules_json, +phase) IF NOT EXISTS
-2. ALTER `enrollments` (+amount_paid, +checked_in_at, +modality_id)
-3. ALTER `modality_matches` (+scheduled_at, +arena_id)
-4. ALTER `tournaments` (+default_split_config)
-5. CREATE `financial_transactions`, `transaction_splits`, `split_rules` + RLS + indexes
-6. CREATE FUNCTION `finance_record_payment`, `finance_mark_split_settled`
-7. CREATE 4 triggers (enrollments/bookings/marketplace_orders/arena_billing_cycles)
-8. SEED `split_rules` para tenant default `moodplay` (5 source_types × default 10/90)
-9. COMMENT em `financial_ledger` marcando legacy
+1. CHECK constraints em `financial_transactions.status` e `transaction_splits.status` (NOT VALID).
+2. ALTER `financial_transactions` ADD `refunded_amount`, `refunded_at`, `cancellation_reason` + CHECK `refunded_amount <= total_amount`.
+3. ALTER `transaction_splits` ADD `expected_settlement_at`, `payout_reference`, `settlement_method`, `reversed_at`, `reversal_reason` + CHECK `amount >= 0`.
+4. Backfill: `UPDATE transaction_splits SET status='calculated' WHERE status='pending';`
+5. CREATE TABLE `financial_adjustments` + RLS (admin/tenant_admin SELECT; INSERT só via RPC; UPDATE/DELETE block).
+6. CREATE OR REPLACE `finance_record_payment` (popula `expected_settlement_at`, registra `split_source` em metadata, resolve payment_account p/ todos recipients).
+7. CREATE OR REPLACE `finance_mark_split_settled` (aceita `_method`, atualiza `payout_reference`, emite evento).
+8. CREATE FUNCTION `finance_record_refund(_transaction_id, _amount, _reason, _external_ref)`.
+9. CREATE FUNCTION `finance_cancel_transaction(_transaction_id, _reason)`.
+10. CREATE FUNCTION `finance_apply_split_override(_transaction_id, _splits jsonb, _reason)`.
+11. CREATE FUNCTION `finance_compute_expected_settlement(_tenant_id, _paid_at)`.
+12. CREATE VIEW `v_organizer_balances_canonical` + grants.
+13. COMMENT em `arenas.mp_collector_id`, `profiles.mp_collector_id`, `financial_ledger`, `organizer_balances` marcando legacy/deprecated.
+14. Política nova em `payment_accounts`: arena_owner SELECT da própria conta.
 
 ---
 
-## 9. Arquivos tocados
+## 11. Arquivos tocados
 
 | Tipo | Arquivo |
 |---|---|
-| Migration | `supabase/migrations/<ts>_phase5_tournament_pro_finance.sql` |
-| Frontend novo | `ArenaTournaments.tsx`, `ArenaFinance.tsx`, `ArenaTransactions.tsx`, `OrganizerFinance.tsx`, `AdminSplitRules.tsx` |
-| Frontend edit | `ArenaLayout.tsx` (+3 navItems), `ArenaDashboard.tsx` (+2 cards), `ManageTournament.tsx` (+abas Categorias/Check-in), `TabMatches.tsx` (botão agendar), `EditTournamentForm.tsx` (split override), `OrganizerSettings.tsx` (split read-only), `App.tsx` (+rotas) |
-| Memory | `mem://features/finance-split-engine` (novo) + atualização `arena-management` |
+| Migration | `supabase/migrations/<ts>_phase5_5_finance_hardening.sql` |
+| Frontend novo | `src/pages/admin/AdminAdjustments.tsx`, `src/components/finance/RefundDialog.tsx` |
+| Frontend edit | `ArenaFinance.tsx`, `ArenaTransactions.tsx`, `OrganizerFinance.tsx`, `AdminSplitRules.tsx`, `AdminDashboard.tsx`, `AdminLayout.tsx` (+rota), `App.tsx` (+rota) |
+| Memory | `mem/features/finance-split-engine.md` (anexa Fase 5.5: hierarquia, status, refund, settlement readiness) |
 
-**Total:** 1 migration + 5 telas novas + 7 edits triviais. Zero módulo reescrito. Webhooks MP intocados.
-
----
-
-## ENTREGA B — Relatório esperado
-
-| Item | Resultado |
-|---|---|
-| Tabelas criadas | 3 (`financial_transactions`, `transaction_splits`, `split_rules`) |
-| Tabelas estendidas | 4 (`tournament_modalities`, `enrollments`, `modality_matches`, `tournaments`) |
-| Reaproveitado | `tournaments`, `tournament_modalities`, `modality_*`, `enrollments`, `bookings`, `marketplace_orders`, `arena_billing_cycles`, `organizer_balances`, `payment_accounts`, `arena_operational_events` |
-| Engine split | Trigger por fonte → `finance_record_payment` → splits idempotentes + evento operacional |
-| Tournament PRO | Categorias reais (modalities estendidas), check-in reusado, agendamento de partida, dashboard receita |
-| RLS | Privacidade financeira por tenant/arena/organizador/empresa/comprador |
+**Total:** 1 migration + 1 página + 1 dialog + 7 edits triviais. Webhooks MP, edge functions de pagamento e Brackets intocados.
 
 ---
 
 ## ENTREGA C — Riscos / Pendências (Fase 6+)
 
 **Pendente:**
-- Transferência automática (MP Marketplace API real) — hoje é registro contábil + liquidação manual
-- Conciliação bancária / extratos
-- Reembolso parcial automatizado
-- Affiliate/referral engine concreto (estrutura pronta, sem UI)
-- ORKYM consumindo `finance.*` events (sugestão de preço, churn, etc)
-- View de atleta "minhas inscrições + comprovantes"
-- Migração histórica de `organizer_balances`/`financial_ledger` para `financial_transactions` (script separado, não bloqueia)
+- Payout automático real (MP Marketplace API ou OAuth de subcontas) — `payout_reference`/`settlement_method` já modelados.
+- Cron real para `arena_mark_overdue_cycles` por tenant.
+- Migração definitiva de `organizer_balances` → leitura via `v_organizer_balances_canonical` em todos os pontos (hoje compat).
+- Remoção física de `mp_collector_id` em `arenas` e `profiles` — só após auditoria de fallback usage zerado.
+- ORKYM consumindo eventos `finance.*` (sugestão de preço, churn predict).
+- Disputed/chargeback workflow concreto (estrutura modelada, sem UI).
+- View de aluno: "minhas inscrições + reembolsos".
+- Conciliação bancária real.
 
-**Simplificações:**
-- Splits ficam `pending` até admin marcar `settled` manualmente
-- `default_split_config` por torneio é JSON livre (sem schema rígido)
-- Sem suporte a múltiplos affiliates por transação
-- Check-in de torneio reusa RPC de classes — token por modalidade, expira em 4h
-
-**Compatibilidade:**
-- Webhooks MP, fluxos de pagamento, brackets, marketplace, bookings, arena management — todos intactos
-- `organizer_balances` continua sendo populado pelos webhooks atuais (paralelo, será migrado depois)
+**Modo compatível mantido:**
+- `financial_ledger` (0 rows, marcado deprecated)
+- `organizer_balances` (2 rows seed, lido por AdminDashboard + request-withdrawal)
+- `arenas.mp_collector_id` / `profiles.mp_collector_id` (fallback ativo em `_shared/mp.ts`)
+- Webhooks MP atuais — não tocados nesta fase
+- `seed-test-data` — não atualizado (gera dados legados; problema de testing, não de produção)
 
 **Critérios de sucesso:**
-- ✅ Toda receita (enrollment/booking/marketplace/billing) gera `financial_transactions` + splits
-- ✅ Organizador vê receita por torneio e splits pendentes/liquidados
-- ✅ Arena vê receita consolidada
-- ✅ Admin configura `split_rules` por tenant e source
-- ✅ Torneio com categorias reais (team_size, rules, phase) + check-in funcional
-- ✅ Eventos `finance.*` emitidos para ORKYM
-- ✅ Zero IA local, zero quebra, zero duplicação
+- ✅ `financial_transactions` com status formal (CHECK) + suporte a refund/partial/canceled
+- ✅ `transaction_splits` com modelo settlement-ready (expected/payout/method)
+- ✅ `financial_adjustments` cobre refund/cancel/manual/split-override de forma append-only e auditada
+- ✅ Hierarquia de override documentada e registrada em metadata
+- ✅ `payment_accounts` é primeira escolha em todos os fluxos novos; fallback marcado
+- ✅ Dashboards lendo da camada canônica + ação de reembolso disponível
+- ✅ Idempotência reforçada por CHECK e guards
+- ✅ Eventos `finance.*` para ORKYM (sem IA local)
+- ✅ Zero quebra em fluxos existentes
 
