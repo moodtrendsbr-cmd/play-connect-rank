@@ -1,7 +1,7 @@
 import { NavLink, Outlet, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant, useIsTenantAdmin } from "@/hooks/useTenant";
-import { Settings, Users, Building2, Globe, CreditCard, Loader2 } from "lucide-react";
+import { Settings, Users, Building2, Globe, CreditCard, Loader2, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const links = [
@@ -10,6 +10,7 @@ const links = [
   { to: "/organizer/arenas", label: "Arenas", icon: Building2 },
   { to: "/organizer/domains", label: "Domínios", icon: Globe },
   { to: "/organizer/payment", label: "Pagamentos", icon: CreditCard },
+  { to: "/organizer/finance", label: "Financeiro", icon: DollarSign },
 ];
 
 const OrganizerLayout = () => {
