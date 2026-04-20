@@ -150,6 +150,10 @@ const App = () => (
               <Route path="horarios" element={<ArenaSchedule />} />
               <Route path="reservas" element={<ArenaBookings />} />
               <Route path="patrocinios" element={<ArenaSponsors />} />
+              <Route path="planos" element={<ArenaPlans />} />
+              <Route path="assinaturas" element={<ArenaSubscriptions />} />
+              <Route path="cobrancas" element={<ArenaBilling />} />
+              <Route path="ocorrencias" element={<ArenaOccurrences />} />
             </Route>
             <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
             <Route path="/organizer" element={<OrganizerLayout />}>
