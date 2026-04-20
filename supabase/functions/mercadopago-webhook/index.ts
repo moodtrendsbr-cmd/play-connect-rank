@@ -24,6 +24,17 @@ serve(async (req) => {
     if (body.type === "payment" || body.topic === "payment") {
       const paymentId = body.data?.id || body.id;
 
+      // Idempotency: skip if already processed
+      const idemClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const { error: idemErr } = await idemClient.from("webhook_events").insert({
+        provider: "mercadopago", event_id: String(paymentId), payload: body, processed_at: new Date().toISOString(),
+      });
+      if (idemErr && (idemErr as any).code === "23505") {
+        return new Response(JSON.stringify({ received: true, replay: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
         headers: { Authorization: `Bearer ${MERCADO_PAGO_ACCESS_TOKEN}` },
       });
