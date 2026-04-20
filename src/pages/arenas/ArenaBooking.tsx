@@ -31,7 +31,7 @@ const ArenaBooking = () => {
   // Load arena + courts
   useEffect(() => {
     const load = async () => {
-      const { data: a } = await supabase.from("arenas").select("*").eq("slug", arenaSlug).eq("is_active", true).maybeSingle();
+      const { data: a } = await supabase.from("arenas_public").select("*").eq("slug", arenaSlug).maybeSingle();
       if (!a) return;
       setArena(a);
       const { data: c } = await supabase.from("courts").select("*").eq("arena_id", a.id).eq("is_active", true).order("created_at");

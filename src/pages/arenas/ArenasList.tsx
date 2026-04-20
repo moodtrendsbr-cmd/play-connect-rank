@@ -13,7 +13,7 @@ const ArenasList = () => {
 
   useEffect(() => {
     const fetchArenas = async () => {
-      let q = supabase.from("arenas").select("*, courts(id, price_per_hour)").eq("is_active", true);
+      let q = supabase.from("arenas_public").select("*, courts(id, price_per_hour)");
       const { data } = await q.order("name");
       setArenas(data || []);
       setLoading(false);

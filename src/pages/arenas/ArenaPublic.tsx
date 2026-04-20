@@ -24,7 +24,7 @@ const ArenaPublic = () => {
 
   useEffect(() => {
     const load = async () => {
-      const { data: arenaData } = await supabase.from("arenas").select("*").eq("slug", arenaSlug).eq("is_active", true).maybeSingle();
+      const { data: arenaData } = await supabase.from("arenas_public").select("*").eq("slug", arenaSlug).maybeSingle();
       if (!arenaData) { setLoading(false); return; }
       setArena(arenaData);
 

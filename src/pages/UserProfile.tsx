@@ -24,7 +24,7 @@ const UserProfile = () => {
     setLoading(true);
 
     const [profileRes, followersRes, followingRes, postsCountRes] = await Promise.all([
-      supabase.from("profiles").select("*").eq("user_id", userId).single(),
+      supabase.from("profiles_public").select("*").eq("user_id", userId).single(),
       supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", userId),
       supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", userId),
       supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", userId),
