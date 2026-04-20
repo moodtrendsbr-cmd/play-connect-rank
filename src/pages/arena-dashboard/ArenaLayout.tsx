@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, Grid3X3, Clock, CalendarCheck, Handshake, Zap, ArrowLeft, Users, GraduationCap, CalendarClock, ClipboardList } from "lucide-react";
+import { LayoutDashboard, Grid3X3, Clock, CalendarCheck, Handshake, Zap, ArrowLeft, Users, GraduationCap, CalendarClock, ClipboardList, Tag, RefreshCw, Receipt, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const navItems = [
@@ -11,6 +11,10 @@ const navItems = [
   { to: "/arena/dashboard/professores", label: "Professores", icon: GraduationCap },
   { to: "/arena/dashboard/aulas", label: "Aulas", icon: CalendarClock },
   { to: "/arena/dashboard/matriculas", label: "Matrículas", icon: ClipboardList },
+  { to: "/arena/dashboard/planos", label: "Planos", icon: Tag },
+  { to: "/arena/dashboard/assinaturas", label: "Assinaturas", icon: RefreshCw },
+  { to: "/arena/dashboard/cobrancas", label: "Cobranças", icon: Receipt },
+  { to: "/arena/dashboard/ocorrencias", label: "Ocorrências", icon: AlertTriangle },
   { to: "/arena/dashboard/quadras", label: "Quadras", icon: Grid3X3 },
   { to: "/arena/dashboard/horarios", label: "Horários", icon: Clock },
   { to: "/arena/dashboard/reservas", label: "Reservas", icon: CalendarCheck },
