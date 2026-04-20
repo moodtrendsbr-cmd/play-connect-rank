@@ -2104,6 +2104,50 @@ export type Database = {
           },
         ]
       }
+      tenant_domains: {
+        Row: {
+          created_at: string
+          domain: string
+          id: string
+          is_primary: boolean
+          kind: string
+          tenant_id: string
+          verification_status: string
+          verification_token: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          id?: string
+          is_primary?: boolean
+          kind?: string
+          tenant_id: string
+          verification_status?: string
+          verification_token?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          id?: string
+          is_primary?: boolean
+          kind?: string
+          tenant_id?: string
+          verification_status?: string
+          verification_token?: string | null
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_domains_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_memberships: {
         Row: {
           created_at: string
@@ -2131,6 +2175,68 @@ export type Database = {
             foreignKeyName: "tenant_memberships_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_settings: {
+        Row: {
+          created_at: string
+          default_locale: string
+          display_name: string
+          favicon_url: string | null
+          legal_name: string | null
+          logo_url: string | null
+          metadata: Json
+          primary_color: string
+          secondary_color: string
+          status: string
+          support_email: string | null
+          support_phone: string | null
+          tenant_id: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_locale?: string
+          display_name: string
+          favicon_url?: string | null
+          legal_name?: string | null
+          logo_url?: string | null
+          metadata?: Json
+          primary_color?: string
+          secondary_color?: string
+          status?: string
+          support_email?: string | null
+          support_phone?: string | null
+          tenant_id: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_locale?: string
+          display_name?: string
+          favicon_url?: string | null
+          legal_name?: string | null
+          logo_url?: string | null
+          metadata?: Json
+          primary_color?: string
+          secondary_color?: string
+          status?: string
+          support_email?: string | null
+          support_phone?: string | null
+          tenant_id?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
@@ -2632,6 +2738,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_organizer_tenant: {
+        Args: { _display_name?: string; _name: string; _slug: string }
+        Returns: string
+      }
       current_tenant_id: { Args: never; Returns: string }
       expire_pending_enrollments: { Args: never; Returns: number }
       get_arena_id_from_court: { Args: { _court_id: string }; Returns: string }
@@ -2680,6 +2790,7 @@ export type Database = {
         Returns: boolean
       }
       set_current_tenant: { Args: { _tenant_id: string }; Returns: undefined }
+      set_tenant_from_user: { Args: { _user_id: string }; Returns: string }
     }
     Enums: {
       app_role: "organizer" | "athlete" | "admin" | "arena" | "company"
