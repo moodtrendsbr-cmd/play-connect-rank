@@ -27,6 +27,16 @@ Deno.serve(async (req) => {
       });
     }
 
+    const idemClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { error: idemErr } = await idemClient.from("webhook_events").insert({
+      provider: "mercadopago-booking", event_id: String(paymentId), payload: body, processed_at: new Date().toISOString(),
+    });
+    if (idemErr && (idemErr as any).code === "23505") {
+      return new Response(JSON.stringify({ received: true, replay: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Fetch payment from MP
     const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
       headers: { Authorization: `Bearer ${MP_TOKEN}` },
