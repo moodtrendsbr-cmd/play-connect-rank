@@ -1324,6 +1324,7 @@ export type Database = {
       }
       modality_matches: {
         Row: {
+          court_id: string | null
           created_at: string
           entry_a_id: string | null
           entry_b_id: string | null
@@ -1338,6 +1339,7 @@ export type Database = {
           winner_entry_id: string | null
         }
         Insert: {
+          court_id?: string | null
           created_at?: string
           entry_a_id?: string | null
           entry_b_id?: string | null
@@ -1352,6 +1354,7 @@ export type Database = {
           winner_entry_id?: string | null
         }
         Update: {
+          court_id?: string | null
           created_at?: string
           entry_a_id?: string | null
           entry_b_id?: string | null
@@ -2037,9 +2040,16 @@ export type Database = {
         Row: {
           bracket_format: string
           created_at: string
+          gender: string | null
           id: string
+          level: string | null
+          max_entries: number | null
           name: string
           num_groups: number | null
+          points_per_set: number | null
+          sets_to_win: number | null
+          sport: string | null
+          start_time: string | null
           status: string
           tournament_id: string
           type: string
@@ -2047,9 +2057,16 @@ export type Database = {
         Insert: {
           bracket_format?: string
           created_at?: string
+          gender?: string | null
           id?: string
+          level?: string | null
+          max_entries?: number | null
           name: string
           num_groups?: number | null
+          points_per_set?: number | null
+          sets_to_win?: number | null
+          sport?: string | null
+          start_time?: string | null
           status?: string
           tournament_id: string
           type?: string
@@ -2057,9 +2074,16 @@ export type Database = {
         Update: {
           bracket_format?: string
           created_at?: string
+          gender?: string | null
           id?: string
+          level?: string | null
+          max_entries?: number | null
           name?: string
           num_groups?: number | null
+          points_per_set?: number | null
+          sets_to_win?: number | null
+          sport?: string | null
+          start_time?: string | null
           status?: string
           tournament_id?: string
           type?: string
