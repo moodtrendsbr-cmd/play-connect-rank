@@ -134,6 +134,13 @@ export type Database = {
             foreignKeyName: "arena_partners_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_partners_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
             referencedRelation: "companies_public"
             referencedColumns: ["id"]
           },
@@ -295,6 +302,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_sponsors_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
             referencedColumns: ["id"]
           },
           {
@@ -816,6 +830,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_ledger_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
             referencedColumns: ["id"]
           },
           {
@@ -1879,6 +1900,13 @@ export type Database = {
             foreignKeyName: "products_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
             referencedRelation: "companies_public"
             referencedColumns: ["id"]
           },
@@ -2076,6 +2104,13 @@ export type Database = {
             foreignKeyName: "sponsored_posts_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsored_posts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
             referencedRelation: "companies_public"
             referencedColumns: ["id"]
           },
@@ -2196,6 +2231,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: true
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies_contact_public"
             referencedColumns: ["id"]
           },
           {
@@ -2537,6 +2579,13 @@ export type Database = {
             foreignKeyName: "tournament_partners_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_partners_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
             referencedRelation: "companies_public"
             referencedColumns: ["id"]
           },
@@ -2649,6 +2698,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_sponsorships_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
             referencedColumns: ["id"]
           },
           {
@@ -2908,6 +2964,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      companies_contact_public: {
+        Row: {
+          address: string | null
+          category: string | null
+          city: string | null
+          created_at: string | null
+          description: string | null
+          email: string | null
+          id: string | null
+          logo_url: string | null
+          name: string | null
+          phone: string | null
+          plan: string | null
+          state: string | null
+          status: string | null
+          tenant_id: string | null
+          whatsapp: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          category?: string | null
+          city?: string | null
+          created_at?: string | null
+          description?: string | null
+          email?: string | null
+          id?: string | null
+          logo_url?: string | null
+          name?: string | null
+          phone?: string | null
+          plan?: string | null
+          state?: string | null
+          status?: string | null
+          tenant_id?: string | null
+          whatsapp?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          category?: string | null
+          city?: string | null
+          created_at?: string | null
+          description?: string | null
+          email?: string | null
+          id?: string | null
+          logo_url?: string | null
+          name?: string | null
+          phone?: string | null
+          plan?: string | null
+          state?: string | null
+          status?: string | null
+          tenant_id?: string | null
+          whatsapp?: string | null
+          zip_code?: string | null
+        }
+        Relationships: []
       }
       companies_public: {
         Row: {
