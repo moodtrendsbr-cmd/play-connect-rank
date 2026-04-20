@@ -31,7 +31,7 @@ const Cart = () => {
   // Fetch company zip_code
   useEffect(() => {
     if (!companyId) return;
-    supabase.from("companies").select("zip_code, city, state").eq("id", companyId).single().then(({ data }) => {
+    supabase.from("companies_contact_public").select("zip_code, city, state").eq("id", companyId).single().then(({ data }) => {
       if (data?.zip_code) {
         setCompanyZip(data.zip_code);
         // Fetch company address info from ViaCEP

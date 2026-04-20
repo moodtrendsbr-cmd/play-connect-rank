@@ -12,7 +12,7 @@ const MarketplaceCompany = () => {
   useEffect(() => {
     const fetch = async () => {
       const [compRes, prodRes] = await Promise.all([
-        supabase.from("companies_public").select("*").eq("id", companyId).single(),
+        supabase.from("companies_contact_public").select("*").eq("id", companyId).single(),
         supabase.from("products").select("*").eq("company_id", companyId).eq("status", "approved"),
       ]);
       setCompany(compRes.data);

@@ -29,7 +29,7 @@ const FriendSuggestions = () => {
 
     // 1. Get my profile (city/state) and who I follow
     const [profileRes, followsRes] = await Promise.all([
-      supabase.from("profiles").select("city, state").eq("user_id", user.id).maybeSingle(),
+      supabase.from("profiles_public").select("city, state").eq("user_id", user.id).maybeSingle(),
       supabase.from("follows").select("following_id").eq("follower_id", user.id),
     ]);
 
