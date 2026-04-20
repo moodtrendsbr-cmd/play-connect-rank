@@ -2,25 +2,29 @@ import { useEffect, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarCheck, Grid3X3, DollarSign, Clock, ArrowRight } from "lucide-react";
+import { CalendarCheck, Grid3X3, DollarSign, Clock, ArrowRight, Users, CalendarClock } from "lucide-react";
 import { format } from "date-fns";
 
 const ArenaDashboard = () => {
   const { arena } = useOutletContext<{ arena: any }>();
-  const [stats, setStats] = useState({ today: 0, week: 0, revenue: 0, courts: 0 });
+  const [stats, setStats] = useState({ today: 0, week: 0, revenue: 0, courts: 0, students: 0, classesToday: 0 });
   const [upcoming, setUpcoming] = useState<any[]>([]);
 
   useEffect(() => {
     if (!arena) return;
     const today = format(new Date(), "yyyy-MM-dd");
     const weekEnd = format(new Date(Date.now() + 7 * 86400000), "yyyy-MM-dd");
+    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(); dayEnd.setHours(23, 59, 59, 999);
 
     const load = async () => {
-      const [todayRes, weekRes, courtsRes, upcomingRes] = await Promise.all([
+      const [todayRes, weekRes, courtsRes, upcomingRes, studentsRes, classesTodayRes] = await Promise.all([
         supabase.from("bookings").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("booking_date", today).neq("status", "canceled"),
         supabase.from("bookings").select("id,amount", { count: "exact" }).eq("arena_id", arena.id).gte("booking_date", today).lte("booking_date", weekEnd).neq("status", "canceled"),
         supabase.from("courts").select("id", { count: "exact", head: true }).eq("arena_id", arena.id),
         supabase.from("bookings").select("*, courts(name)").eq("arena_id", arena.id).gte("booking_date", today).neq("status", "canceled").order("booking_date").order("start_time").limit(5),
+        supabase.from("arena_students").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("status", "active"),
+        supabase.from("arena_classes").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).gte("start_at", dayStart.toISOString()).lte("start_at", dayEnd.toISOString()),
       ]);
 
       const weekRevenue = (weekRes.data || []).reduce((sum: number, b: any) => sum + Number(b.amount || 0), 0);
@@ -30,6 +34,8 @@ const ArenaDashboard = () => {
         week: weekRes.count || 0,
         revenue: weekRevenue,
         courts: courtsRes.count || 0,
+        students: studentsRes.count || 0,
+        classesToday: classesTodayRes.count || 0,
       });
       setUpcoming(upcomingRes.data || []);
     };
@@ -38,9 +44,9 @@ const ArenaDashboard = () => {
 
   const statCards = [
     { label: "Reservas hoje", value: stats.today, icon: CalendarCheck, color: "text-primary" },
-    { label: "Reservas semana", value: stats.week, icon: Clock, color: "text-blue-400" },
-    { label: "Receita semana", value: `R$ ${stats.revenue.toFixed(2)}`, icon: DollarSign, color: "text-emerald-400" },
-    { label: "Quadras", value: stats.courts, icon: Grid3X3, color: "text-amber-400" },
+    { label: "Aulas hoje", value: stats.classesToday, icon: CalendarClock, color: "text-blue-400" },
+    { label: "Alunos ativos", value: stats.students, icon: Users, color: "text-emerald-400" },
+    { label: "Receita semana", value: `R$ ${stats.revenue.toFixed(2)}`, icon: DollarSign, color: "text-amber-400" },
   ];
 
   return (
@@ -83,6 +89,10 @@ const ArenaDashboard = () => {
 
       <div className="grid grid-cols-2 gap-3">
         {[
+          { to: "/arena/dashboard/alunos", label: "Alunos" },
+          { to: "/arena/dashboard/professores", label: "Professores" },
+          { to: "/arena/dashboard/aulas", label: "Aulas" },
+          { to: "/arena/dashboard/matriculas", label: "Matrículas" },
           { to: "/arena/dashboard/quadras", label: "Quadras" },
           { to: "/arena/dashboard/horarios", label: "Horários" },
           { to: "/arena/dashboard/reservas", label: "Reservas" },
