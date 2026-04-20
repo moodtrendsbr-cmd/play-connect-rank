@@ -193,9 +193,14 @@ const ArenaOccurrences = () => {
                       <span className="text-[10px] text-muted-foreground">• {o.category}</span>
                     </div>
                     {o.description && <p className="text-xs text-muted-foreground">{o.description}</p>}
-                    <p className="text-[10px] text-muted-foreground">Aberta em {format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</p>
+                    <p className="text-[10px] text-muted-foreground">Aberta em {format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}{o.task_id && " • tarefa vinculada"}</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(o)}><Pencil className="h-4 w-4" /></Button>
+                  <div className="flex gap-1 shrink-0">
+                    {!o.task_id && o.status !== "closed" && o.status !== "resolved" && (
+                      <Button variant="ghost" size="sm" onClick={() => generateTask(o)} title="Gerar tarefa"><ListPlus className="h-4 w-4" /></Button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(o)}><Pencil className="h-4 w-4" /></Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
