@@ -1,176 +1,293 @@
 
 
-# Fase 1 — Foundation Multi-Tenant MoodPlay
+# Fase 2 — Organizer White-Label + Security Hardening
 
-Implementação production-grade, incremental, sem reescrever o que já existe. Tudo se sobrepõe à base atual via migrations não-destrutivas + camada de compatibilidade.
-
----
-
-## Estratégia geral
-
-**Princípio:** `tenant_id NULL = global/legado` durante toda a transição. Nada quebra. RLS antiga continua válida; novas policies se sobrepõem com lógica de tenant. Backfill cria 1 tenant "MoodPlay Default" e atribui todos os dados legados a ele. A partir daí, toda nova arena/torneio nasce com tenant_id resolvido.
+Evolução incremental sobre a foundation da Fase 1. Sem rebuild, sem inteligência local, sem duplicação. Tudo coexiste com a base atual via tenant default `moodplay`.
 
 ---
 
-## ENTREGA A — IMPLEMENTAÇÃO
+## Ordem de execução (conforme aprovado)
 
-### A.1 Migration única (1 arquivo, idempotente)
+1. Auditoria + classificação de risco das policies abertas
+2. Hardening RLS das tabelas críticas
+3. `tenant_settings` (white-label foundation)
+4. Onboarding + admin foundation do tenant
+5. Consolidação organizador → arenas
+6. Domain resolution foundation (`tenant_domains`)
+7. Evolução `payment_accounts` com fallback
+8. Relatório final
 
-**Tabelas novas (4):**
+---
 
-| Tabela | Função |
-|---|---|
-| `tenants` | Organizador white-label (id, name, slug, custom_domain, owner_user_id, is_active, created_at) |
-| `tenant_memberships` | (tenant_id, user_id, role: owner/admin/staff/member, created_at) — UNIQUE(tenant_id, user_id) |
-| `payment_accounts` | (id, tenant_id, arena_id NULLABLE, provider, external_id, status, config jsonb) — substitui futuramente `mp_collector_id` espalhado |
-| `webhook_events` | (id, provider, event_id UNIQUE, payload jsonb, processed_at, created_at) — idempotência de webhooks |
+## 1. Auditoria de policies abertas — classificação
 
-**Coluna `tenant_id uuid NULL` adicionada em (extensão, não duplicação):**
-- `arenas`, `tournaments`, `enrollments`, `bookings`
-- `companies`, `products`, `marketplace_orders`
-- `tournament_modalities`, `modality_entries`, `modality_groups`, `modality_matches`, `modality_placements`, `modality_prizes`
-- `courts`, `court_availability`, `court_blocks`
-- `arena_links`, `arena_partners`, `arena_physical_inventory`
-- `posts`, `clips`
-- `financial_ledger`, `organizer_balances`, `subscriptions`, `withdrawal_requests`
+| Tabela | Policy aberta atual | Risco | Decisão Fase 2 |
+|---|---|---|---|
+| `arenas` | `Public view active arenas (is_active=true)` | **Baixo** | Manter — descoberta pública legítima |
+| `arena_links` / `arena_partners` / `arena_physical_inventory` | `Public view (is_active=true / true)` | **Baixo** | Manter — vitrine pública |
+| `clips` / `comments` / `likes` / `follows` / `mentions` (view) | `Anyone view` | **Baixo** | Manter — rede social |
+| `hashtags` / `hashtag_searches` | `Anyone view` | **Baixo** | Manter |
+| `courts` / `court_availability` / `court_blocks` | `Public view (true)` | **Médio** | Restringir blocks a owner+admin (vaza ocupação interna). Courts/availability seguem públicos (descoberta de slots). |
+| `athlete_sponsors` | `Public view (true)` | **Médio** | Manter — exposição de patrocínio é pública por natureza |
+| `match_results` (deprecated) | `Public view via tournaments.is_public` | **Baixo** | Manter (deprecated, será removida na Fase 4) |
+| `modality_entries` / `modality_groups` / `modality_matches` / `modality_placements` / `modality_*_members` | `Public view (true)` | **Baixo** | Manter — chaveamento público é parte do produto |
+| `marketplace_orders` | `Buyer/Company/Admin view` | **OK** | Já segura — só endurecer com `tenant_id` (não mexer em USING aberto pois não existe) |
+| `enrollments` | Tem `View enrollments` por user/payer/owner | **OK** | Já segura |
+| `bookings` | Tem por user_id + arena_owner | **OK** | Já segura |
+| `financial_ledger` | Admin + tenant_admin | **OK** | Já segura |
 
-**Funções SECURITY DEFINER (3):**
-- `current_tenant_id() → uuid` — lê de `app.tenant_id` GUC (setada pelo frontend via `set_config`) ou retorna NULL = global
-- `is_tenant_member(_tenant_id uuid, _user_id uuid) → boolean` — checa `tenant_memberships`
-- `is_tenant_admin(_tenant_id uuid, _user_id uuid) → boolean` — role IN (owner, admin)
+**Conclusão:** o risco real de vazamento operacional já está coberto. O único endurecimento crítico é em `court_blocks` (revela bloqueios internos da arena).
 
-**Backfill seguro:**
+---
+
+## 2. Hardening RLS — Migração
+
 ```sql
--- 1. Cria tenant default
-INSERT INTO tenants (id, name, slug, owner_user_id, is_active)
-VALUES ('00000000-0000-0000-0000-000000000001', 'MoodPlay Default', 'moodplay', NULL, true);
+-- Restringir court_blocks: blocos são informação operacional interna
+DROP POLICY "Public view blocks" ON court_blocks;
+CREATE POLICY "Owner/admin view blocks" ON court_blocks FOR SELECT
+  USING (is_arena_owner(get_arena_id_from_court(court_id), auth.uid())
+         OR is_admin(auth.uid())
+         OR (tenant_id IS NOT NULL AND is_tenant_admin(tenant_id, auth.uid())));
 
--- 2. Atribui dados legados a ele
-UPDATE arenas SET tenant_id = '00...001' WHERE tenant_id IS NULL;
-UPDATE tournaments SET tenant_id = '00...001' WHERE tenant_id IS NULL;
--- ...idem para todas as tabelas listadas
+-- Adicionar policies tenant-aware faltantes em tabelas operacionais
+-- (UPDATE/DELETE para tenant_admin onde só existe SELECT)
+CREATE POLICY "tenant_admin_manage_arenas_delete" ON arenas FOR DELETE
+  USING (tenant_id IS NOT NULL AND is_tenant_admin(tenant_id, auth.uid()));
 
--- 3. Migra todos os admins atuais como members do tenant default
-INSERT INTO tenant_memberships (tenant_id, user_id, role)
-SELECT '00...001', user_id, 'admin' FROM user_roles WHERE role = 'admin'
+CREATE POLICY "tenant_admin_view_orders_full" ON marketplace_orders FOR UPDATE
+  USING (tenant_id IS NOT NULL AND is_tenant_admin(tenant_id, auth.uid()));
+
+-- Garantir que enrollments/bookings tenant-aware existam para UPDATE também
+CREATE POLICY "tenant_admin_update_enrollments" ON enrollments FOR UPDATE
+  USING (tenant_id IS NOT NULL AND is_tenant_admin(tenant_id, auth.uid()));
+
+CREATE POLICY "tenant_admin_update_bookings" ON bookings FOR UPDATE
+  USING (tenant_id IS NOT NULL AND is_tenant_admin(tenant_id, auth.uid()));
+```
+
+**Princípio:** não removemos policies abertas legítimas (vitrine, social, chaveamento). Só endurecemos onde há vazamento real (court_blocks) e adicionamos capacidade administrativa via tenant.
+
+---
+
+## 3. `tenant_settings` (white-label foundation)
+
+```sql
+CREATE TABLE public.tenant_settings (
+  tenant_id uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+  display_name text NOT NULL,
+  legal_name text,
+  support_email text,
+  support_phone text,
+  primary_color text DEFAULT '#2BFF88',
+  secondary_color text DEFAULT '#050708',
+  logo_url text,
+  favicon_url text,
+  default_locale text NOT NULL DEFAULT 'pt-BR',
+  timezone text NOT NULL DEFAULT 'America/Sao_Paulo',
+  status text NOT NULL DEFAULT 'active',
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- RLS: público para leitura (necessário para branding em domínio próprio)
+-- Escrita só para tenant owner/admin
+CREATE POLICY "Public read tenant_settings" ON tenant_settings FOR SELECT USING (true);
+CREATE POLICY "Tenant admin manage settings" ON tenant_settings FOR ALL
+  USING (is_tenant_admin(tenant_id, auth.uid()) OR is_admin(auth.uid()));
+
+-- Backfill: 1 row para tenant default moodplay
+INSERT INTO tenant_settings (tenant_id, display_name, primary_color, secondary_color)
+VALUES ('00000000-0000-0000-0000-000000000001', 'MoodPlay', '#2BFF88', '#050708')
 ON CONFLICT DO NOTHING;
 ```
 
-**FKs adicionadas (cleanup pragmático, só onde é seguro):**
-- `arenas.tenant_id → tenants(id)` ON DELETE RESTRICT
-- `tenant_memberships.tenant_id → tenants(id)` ON DELETE CASCADE
-- `tenant_memberships.user_id → auth.users(id)` ON DELETE CASCADE
-- `payment_accounts.tenant_id → tenants(id)` ON DELETE RESTRICT
-- `courts.arena_id → arenas(id)` (se ainda não existir)
-- `enrollments.tournament_id → tournaments(id)`
-- `modality_*.modality_id → tournament_modalities(id)`
+---
 
-**Cleanup de débito técnico:**
-- `pending_payment` TTL: trigger que seta `expires_at = now() + interval '30 minutes'` em `enrollments` quando status='pending', + função `expire_pending_enrollments()` agendável (sem cron automático nesta fase, só a função pronta)
-- `match_results`: marcar como deprecated via comentário SQL `COMMENT ON TABLE match_results IS 'DEPRECATED: use modality_matches'`. Não dropar.
-- Migrar `arenas.mp_collector_id` e `profiles.mp_collector_id` para `payment_accounts` (1 row por arena/organizer com collector_id existente). Manter colunas originais com COMMENT 'DEPRECATED: use payment_accounts'.
-
-### A.2 Policies RLS endurecidas (compatibilidade preservada)
-
-**Padrão das novas policies** (adicionadas, não substituem ainda — coexistem com as antigas):
+## 4. `tenant_domains` (domain resolution foundation)
 
 ```sql
--- Exemplo: arenas
-CREATE POLICY "tenant_member_view_arenas"
-ON arenas FOR SELECT
-USING (tenant_id IS NULL OR is_tenant_member(tenant_id, auth.uid()) OR is_active = true);
+CREATE TABLE public.tenant_domains (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  domain text NOT NULL UNIQUE,
+  kind text NOT NULL DEFAULT 'subdomain' CHECK (kind IN ('subdomain','custom')),
+  is_primary boolean NOT NULL DEFAULT false,
+  verification_status text NOT NULL DEFAULT 'pending' CHECK (verification_status IN ('pending','verified','failed')),
+  verification_token text,
+  verified_at timestamptz,
+  created_at timestamptz DEFAULT now()
+);
 
-CREATE POLICY "tenant_admin_manage_arenas"
-ON arenas FOR UPDATE
-USING (is_tenant_admin(tenant_id, auth.uid()) OR is_admin(auth.uid()) OR auth.uid() = owner_user_id);
+CREATE UNIQUE INDEX tenant_domains_one_primary ON tenant_domains(tenant_id) WHERE is_primary;
+
+-- RLS público para leitura (resolver tenant pelo host) + admin para escrita
+CREATE POLICY "Public read domains" ON tenant_domains FOR SELECT USING (true);
+CREATE POLICY "Tenant admin manage domains" ON tenant_domains FOR ALL
+  USING (is_tenant_admin(tenant_id, auth.uid()) OR is_admin(auth.uid()));
+
+-- Backfill default
+INSERT INTO tenant_domains (tenant_id, domain, kind, is_primary, verification_status, verified_at)
+VALUES ('00000000-0000-0000-0000-000000000001', 'play-connect-rank.lovable.app', 'subdomain', true, 'verified', now())
+ON CONFLICT DO NOTHING;
 ```
 
-Aplicado nas tabelas críticas: `arenas`, `tournaments`, `enrollments`, `bookings`, `marketplace_orders`, `payment_accounts`, `tenants`, `tenant_memberships`, `financial_ledger`, `organizer_balances`, `withdrawal_requests`.
-
-**Leituras públicas mantidas** apenas para: `posts`, `clips`, `comments`, `likes`, `follows`, `hashtags`, `arenas (is_active=true)`, `tournaments (is_public=true)`, `products` — tudo que é vitrine/social. Nada operacional sensível fica público.
-
-**Policies novas em `tenants` / `tenant_memberships`:**
-- Membros veem seu próprio tenant
-- Owner/admin gerenciam membership
-- Admin global vê tudo
-
-### A.3 Edge functions
-
-**Novas (2):**
-- `orkym-invoke` — bridge único: recebe `{domain, action, payload}`, valida JWT, hoje retorna 501 Not Implemented (placeholder estrutural — fronteira definida sem inteligência)
-- `expire-pending-payments` — utilitário invocável manualmente que marca enrollments/bookings em `pending_payment` há mais de 30min como `canceled`
-
-**Hardening (4 existentes):** `mercadopago-webhook`, `marketplace-webhook`, `booking-webhook`, `create-*-payment`
-- Adicionar idempotência via `webhook_events.event_id UNIQUE` — antes de processar, INSERT…ON CONFLICT DO NOTHING; se conflito, retorna `{received: true, replay: true}` sem reprocessar
-- Validar header `x-signature` do MP quando `MP_WEBHOOK_SECRET` estiver presente (HMAC-SHA256 do `data.id`); se ausente, log warning e segue (compatibilidade)
-- Refatorar lógica MP comum para `supabase/functions/_shared/mp.ts` — helpers `verifyMpSignature()`, `recordWebhookEvent()`, `getMpPayment()`. Não reescreve handlers, só extrai duplicação.
-
-### A.4 Frontend foundation
-
-**Novos arquivos (3):**
-- `src/contexts/TenantContext.tsx` — `TenantProvider` que:
-  1. Detecta tenant via subdomínio (`subdomain.moodplay.app`) ou query param `?tenant=slug` ou localStorage fallback
-  2. Resolve tenant via `supabase.from('tenants').select().eq('slug', x).maybeSingle()`
-  3. Chama `supabase.rpc('set_current_tenant', { _tenant_id })` para setar GUC na sessão (função SQL adicionada)
-  4. Expõe `{tenant, memberships, isLoading, switchTenant()}`
-  5. Default: tenant "moodplay" (compat — toda UI atual continua funcionando idêntica)
-
-- `src/hooks/useTenant.ts` — `useContext(TenantContext)` + helpers `useIsTenantAdmin()`, `useTenantMembers()`
-
-- `src/lib/orkym.ts` — wrapper `invokeOrkym(domain, action, payload)` que chama `supabase.functions.invoke('orkym-invoke', {...})`. Documenta na arquitetura: **toda chamada de inteligência futura passa por aqui**.
-
-**Edição mínima:**
-- `src/App.tsx` — envolver `<AuthProvider>` com `<TenantProvider>` (logo abaixo)
-- Nenhum componente de página é tocado nesta fase. Branding/visual fica para Fase 2.
-
-### A.5 Validações automáticas
-
-- Todas as tabelas com `tenant_id` ganham CHECK trigger: se INSERT vem sem tenant_id, deriva do owner via `current_tenant_id()` ou tenant default
-- `tenants.slug` UNIQUE + lowercase + regex `^[a-z0-9-]+$`
-- `payment_accounts (tenant_id, provider, external_id)` UNIQUE
+`TenantContext` ganha lookup adicional: `from('tenant_domains').select('tenant_id').eq('domain', host).eq('verification_status','verified').maybeSingle()` antes do fallback de slug.
 
 ---
 
-## ENTREGA B — RELATÓRIO DO QUE FOI FEITO
+## 5. Organizador → arenas (consolidação)
 
-| Item | Resultado |
-|---|---|
-| Tabelas criadas | `tenants`, `tenant_memberships`, `payment_accounts`, `webhook_events` |
-| Tabelas com `tenant_id` adicionado | 24 tabelas (arenas, tournaments, enrollments, bookings, modality_*, courts, marketplace_orders, posts, clips, financial_ledger, etc) |
-| Backfill | 1 tenant "MoodPlay Default" (slug `moodplay`) recebe todos os registros legados; admins viram members `admin` desse tenant |
-| Funções SQL | `current_tenant_id()`, `is_tenant_member()`, `is_tenant_admin()`, `set_current_tenant()`, `expire_pending_enrollments()` |
-| Policies endurecidas | 24 tabelas ganham policies tenant-aware (coexistem com as antigas — sem quebrar nada) |
-| Tenants RLS | Membros veem seu tenant; owners gerenciam memberships; admin global vê tudo |
-| Payment foundation | `payment_accounts` polimórfica (tenant + arena opcional); `mp_collector_id` em arenas/profiles marcado DEPRECATED + dados copiados |
-| Webhook security | Tabela `webhook_events` p/ idempotência; helper `_shared/mp.ts`; HMAC opcional via `MP_WEBHOOK_SECRET` |
-| Cleanup débito | `match_results` deprecated; `pending_payment` TTL de 30min; FKs formais em ~8 relações críticas |
-| Frontend | `TenantProvider` + `useTenant()` + detecção subdomínio/slug; default = tenant moodplay (UI inalterada) |
-| Bridge ORKYM | `orkym-invoke` edge function (placeholder 501) + `src/lib/orkym.ts` |
+Análise: `arenas.tenant_id` já existe (Fase 1). Falta apenas:
+
+```sql
+-- Trigger: ao criar arena, herdar tenant do owner se não fornecido
+CREATE OR REPLACE FUNCTION set_arena_tenant_default()
+RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
+DECLARE v_tenant uuid;
+BEGIN
+  IF NEW.tenant_id IS NULL THEN
+    SELECT tenant_id INTO v_tenant FROM tenant_memberships
+      WHERE user_id = NEW.owner_user_id ORDER BY created_at LIMIT 1;
+    NEW.tenant_id := COALESCE(v_tenant, '00000000-0000-0000-0000-000000000001');
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER arenas_set_tenant BEFORE INSERT ON arenas
+  FOR EACH ROW EXECUTE FUNCTION set_arena_tenant_default();
+```
+
+Mesmo padrão para `tournaments`, `bookings`, `enrollments`, `marketplace_orders`, `companies`, `posts`, `clips`, `courts` (8 triggers análogos).
 
 ---
 
-## ENTREGA C — RISCOS / PENDÊNCIAS DELIBERADAS
+## 6. Onboarding + admin foundation
 
-**Para Fase 2:**
-- Policies antigas abertas (`USING (true)`) **não são removidas** nesta fase — coexistem com as novas. Remoção será gradual após validar zero regressões.
-- White-label visual (cores, logo, fonte por tenant) — só foundation técnica está pronta.
-- Custom domain real (mapeamento DNS → tenant) — campo existe, roteamento Vercel/Lovable fica para Fase 2.
-- Onboarding de organizador (criar tenant via UI) — só admin SQL nesta fase.
+### Backend: RPC seguro
+```sql
+CREATE OR REPLACE FUNCTION create_organizer_tenant(
+  _name text, _slug text, _display_name text DEFAULT NULL
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_tenant uuid; v_user uuid := auth.uid();
+BEGIN
+  IF v_user IS NULL THEN RAISE EXCEPTION 'auth required'; END IF;
+  INSERT INTO tenants (name, slug, owner_user_id, is_active)
+    VALUES (_name, lower(_slug), v_user, true) RETURNING id INTO v_tenant;
+  INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES (v_tenant, v_user, 'owner');
+  INSERT INTO tenant_settings (tenant_id, display_name) VALUES (v_tenant, COALESCE(_display_name, _name));
+  RETURN v_tenant;
+END $$;
+```
 
-**Pontos em modo compat temporário:**
-- `arenas.mp_collector_id` e `profiles.mp_collector_id` continuam funcionais (edge functions antigas leem dali). Migração para `payment_accounts` é Fase 5.
-- `match_results` continua com leituras possíveis. Migração de dados → `modality_matches` é Fase 4.
-- Tenant default (`moodplay`) é hardcoded. Quando primeiro organizador real for criado, dados continuam no default — separação manual via UPDATE.
+### Frontend novo (4 arquivos pequenos):
+- `src/pages/organizer/OrganizerOnboarding.tsx` — formulário (nome, slug, display_name) → chama RPC → redireciona p/ admin do tenant
+- `src/pages/organizer/OrganizerLayout.tsx` — layout sidebar minimal (Configurações, Membros, Arenas, Domínios)
+- `src/pages/organizer/OrganizerSettings.tsx` — edita `tenant_settings` (cores, logo, support, locale)
+- `src/pages/organizer/OrganizerMembers.tsx` — lista `tenant_memberships`, adiciona/remove/altera papel (owner/admin/staff/member)
 
-**Dependem de decisão de produto:**
-- Marketplace/feed/social: globais cross-tenant ou filtrados por tenant? (Recomendação: globais com `tenant_id` para filtro opcional — já pronto estruturalmente.)
-- Tenant de uma arena = tenant do organizador dono, ou arena pode ter tenant próprio? (Implementado: arena.tenant_id é independente de owner — máxima flexibilidade.)
+Rotas:
+- `/organizer/onboarding` (qualquer user autenticado)
+- `/organizer` (owner/admin do tenant atual) → redireciona p/ `/organizer/settings`
+- `/organizer/settings`, `/organizer/members`, `/organizer/arenas`, `/organizer/domains`
 
-**Riscos mitigados:**
-- ✅ Sem quebra de UI — TenantProvider faz fallback p/ tenant default
-- ✅ Sem quebra de webhooks — HMAC é opcional até secret ser setado
-- ✅ Sem quebra de RLS — policies antigas mantidas; novas sobrepõem com OR
-- ✅ Sem dados órfãos — backfill obrigatório antes de qualquer NOT NULL futuro
+Guard: usa `useIsTenantAdmin()` da Fase 1.
+
+---
+
+## 7. Payment accounts evolution (compatibilidade)
+
+**Estratégia:** não quebrar nada. Adicionar fonte canônica + fallback.
+
+### Backend helper (já existe `_shared/mp.ts`):
+```typescript
+// supabase/functions/_shared/mp.ts — adicionar:
+export async function resolveCollectorId(supabase, opts: {
+  tenantId?: string, arenaId?: string, organizerId?: string
+}): Promise<string | null> {
+  // 1. payment_accounts (fonte canônica)
+  if (opts.tenantId || opts.arenaId) {
+    const q = supabase.from('payment_accounts').select('external_id').eq('provider','mercadopago').eq('status','active');
+    if (opts.arenaId) q.eq('arena_id', opts.arenaId);
+    else if (opts.tenantId) q.eq('tenant_id', opts.tenantId).is('arena_id', null);
+    const { data } = await q.maybeSingle();
+    if (data?.external_id) return data.external_id;
+  }
+  // 2. fallback legado
+  if (opts.arenaId) {
+    const { data } = await supabase.from('arenas').select('mp_collector_id, mp_connected').eq('id', opts.arenaId).maybeSingle();
+    if (data?.mp_connected && data?.mp_collector_id) return data.mp_collector_id;
+  }
+  if (opts.organizerId) {
+    const { data } = await supabase.from('profiles').select('mp_collector_id').eq('user_id', opts.organizerId).maybeSingle();
+    return data?.mp_collector_id ?? null;
+  }
+  return null;
+}
+```
+
+### Trigger de sincronização:
+```sql
+-- Quando arenas.mp_collector_id muda, sincronizar payment_accounts
+CREATE OR REPLACE FUNCTION sync_arena_payment_account() RETURNS trigger
+LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF NEW.mp_collector_id IS NOT NULL AND NEW.mp_connected THEN
+    INSERT INTO payment_accounts (tenant_id, arena_id, provider, external_id, status)
+    VALUES (NEW.tenant_id, NEW.id, 'mercadopago', NEW.mp_collector_id, 'active')
+    ON CONFLICT (tenant_id, provider, external_id) DO UPDATE SET status='active', updated_at=now();
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER arenas_sync_payment AFTER INSERT OR UPDATE OF mp_collector_id, mp_connected
+  ON arenas FOR EACH ROW EXECUTE FUNCTION sync_arena_payment_account();
+```
+
+### Edge functions: refator mínimo
+- `create-payment/index.ts` e `create-booking-payment/index.ts` passam a chamar `resolveCollectorId()` em vez de query direta. **Comportamento idêntico** se nenhum payment_account existir (cai no legado).
+
+### Frontend: `src/pages/organizer/OrganizerPayment.tsx` (nova rota `/organizer/payment`)
+- Lista `payment_accounts` do tenant
+- Permite adicionar/editar `external_id` (collector_id MP)
+
+---
+
+## 8. Frontend tenant awareness evolution
+
+`TenantContext.tsx` ganha:
+1. Lookup por host em `tenant_domains` antes do slug
+2. Carrega `tenant_settings` junto com `tenants`
+3. Aplica branding via CSS vars no `<html>`:
+```typescript
+useEffect(() => {
+  if (settings) {
+    document.documentElement.style.setProperty('--brand-primary', settings.primary_color);
+    document.documentElement.style.setProperty('--brand-secondary', settings.secondary_color);
+  }
+}, [settings]);
+```
+4. Expõe `settings` no contexto.
+
+`useTenant()` retorna `{ tenant, settings, memberships, ... }`.
+
+**Não muda visual existente** — os tokens do design system continuam dominantes; brand vars ficam disponíveis para uso opt-in em fases futuras.
+
+---
+
+## 9. Governança pública vs privada (política explícita)
+
+Documentado em `mem://constraints/data-visibility`:
+
+| Categoria | Política | Tabelas |
+|---|---|---|
+| **Público global** | Qualquer um lê | `posts`, `clips`, `comments`, `likes`, `follows`, `hashtags`, `mentions` (próprias), `tenant_settings`, `tenant_domains` |
+| **Público com flag** | Lê se `is_active=true` ou `is_public=true` | `arenas`, `tournaments`, `products`, `companies (status=approved)`, `arena_links`, `arena_partners`, `match_results` (via tournament.is_public) |
+| **Público de modalidade** | Chaveamento é parte do produto | `modality_entries/groups/matches/placements/*_members`, `courts`, `court_availability` |
+| **Privado operacional** | Owner + tenant admin + admin global | `enrollments`, `bookings`, `marketplace_orders`, `payment_accounts`, `webhook_events`, `court_blocks`, `financial_ledger`, `organizer_balances`, `withdrawal_requests` |
+| **Privado de membership** | Só membros do tenant | `tenant_memberships` |
+| **Privado de conversação** | Só participantes | `messages`, `match_messages`, `match_conversations`, `match_pairs`, `match_pair_members` |
 
 ---
 
@@ -178,29 +295,53 @@ Aplicado nas tabelas críticas: `arenas`, `tournaments`, `enrollments`, `booking
 
 | Tipo | Arquivo |
 |---|---|
-| Migration | `supabase/migrations/<ts>_phase1_tenancy_foundation.sql` (única) |
-| Edge function nova | `supabase/functions/orkym-invoke/index.ts` |
-| Edge function nova | `supabase/functions/expire-pending-payments/index.ts` |
-| Edge shared | `supabase/functions/_shared/mp.ts` |
-| Edge edit | `mercadopago-webhook`, `marketplace-webhook`, `booking-webhook` (idempotência) |
-| Frontend novo | `src/contexts/TenantContext.tsx` |
-| Frontend novo | `src/hooks/useTenant.ts` |
-| Frontend novo | `src/lib/orkym.ts` |
-| Frontend edit | `src/App.tsx` (envolver com TenantProvider) |
-| Config | `supabase/config.toml` (registrar `orkym-invoke`, `expire-pending-payments` com `verify_jwt = true`) |
+| Migration única | `supabase/migrations/<ts>_phase2_white_label.sql` |
+| Edge shared edit | `supabase/functions/_shared/mp.ts` (+ `resolveCollectorId`) |
+| Edge edit | `create-payment/index.ts`, `create-booking-payment/index.ts` (usar helper) |
+| Frontend novo | `src/pages/organizer/OrganizerOnboarding.tsx` |
+| Frontend novo | `src/pages/organizer/OrganizerLayout.tsx` |
+| Frontend novo | `src/pages/organizer/OrganizerSettings.tsx` |
+| Frontend novo | `src/pages/organizer/OrganizerMembers.tsx` |
+| Frontend novo | `src/pages/organizer/OrganizerArenas.tsx` (lista arenas do tenant) |
+| Frontend novo | `src/pages/organizer/OrganizerDomains.tsx` |
+| Frontend novo | `src/pages/organizer/OrganizerPayment.tsx` |
+| Frontend edit | `src/contexts/TenantContext.tsx` (+host lookup, +settings, +CSS vars) |
+| Frontend edit | `src/hooks/useTenant.ts` (+ settings) |
+| Frontend edit | `src/App.tsx` (+ rotas /organizer/*) |
+| Memory novo | `mem://constraints/data-visibility` |
 
-**Total:** 1 migration + 2 edge functions novas + 1 shared + 3 edge functions com hardening + 3 arquivos frontend novos + 2 edits triviais. Zero página/componente de produto reescrito.
+**Total:** 1 migration + 2 edge edits + 7 arquivos frontend novos + 3 edits triviais. Nenhum módulo de produto reescrito.
 
 ---
 
-## Critérios de sucesso atingidos
+## ENTREGA C — Riscos / Pendências deliberadas
 
-- ✅ Tenancy real (`tenants` + `tenant_memberships`)
-- ✅ Isolamento por tenant via RLS (sem quebrar fluxo atual)
-- ✅ Foundation organizer white-label pronta
-- ✅ Foundation arena → tenant pronta (`arenas.tenant_id`)
-- ✅ Foundation payment accounts pronta (`payment_accounts` polimórfica)
-- ✅ Zero duplicação (todas extensões, nenhum módulo recriado)
-- ✅ Sistema continua 100% funcional (compat layer + tenant default)
-- ✅ Bridge ORKYM definida e isolada (`orkym-invoke` + `src/lib/orkym.ts`)
+**Para Fase 3+:**
+- Branding visual completo (aplicar `--brand-primary` em todo o design system)
+- DNS automation real (verificação via DNS TXT record)
+- Billing/cobrança self-service do organizador
+- Gestão completa de arenas (alunos/aulas/professores) — Fase 3
+- Split 3-vias completo — Fase 5
+- Migração definitiva fora de `mp_collector_id` legado — Fase 5
+- Remoção de `match_results` — Fase 4
+
+**Compat temporário mantido:**
+- Policies abertas de descoberta (`is_active=true`) permanecem — são parte do produto
+- `mp_collector_id` em `arenas` e `profiles` continua funcional via fallback
+- Tenant default `moodplay` recebe todos os dados sem tenant explícito
+
+**Decisões de produto pendentes:**
+- Tenant atual quando user pertence a múltiplos: priorizar membership mais recente? Adicionar switcher?
+- Onboarding cria tenant ao primeiro login de um role "organizer"? Ou exige ação manual? (Plano: ação manual via `/organizer/onboarding`)
+
+**Critérios de sucesso:**
+- ✅ `tenant_settings` oficial existe
+- ✅ Onboarding estrutural funcional via `/organizer/onboarding`
+- ✅ Admin foundation com 6 telas mínimas
+- ✅ Organizador → arenas via trigger automático
+- ✅ Domain resolution preparado (`tenant_domains`)
+- ✅ `payment_accounts` é fonte canônica com fallback
+- ✅ Hardening RLS sem quebra (court_blocks fechado)
+- ✅ Zero IA local
+- ✅ Sistema 100% funcional (tenant default cobre legado)
 
