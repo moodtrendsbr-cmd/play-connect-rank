@@ -1,179 +1,191 @@
 
 
-# Fase 2.5 — Public Data Audit + Tenant Privacy Hardening
+# Fase 3 — Arena Management (Core Operacional)
 
-Hardening cirúrgico. Sem rebuild. Sem quebrar fluxos. Foco real: **vazamento de PII e dados administrativos via SELECTs abertos**, não em fechar descoberta legítima.
-
----
-
-## 1. Auditoria — classificação oficial
-
-| Tabela | Policy SELECT atual | PII/Admin exposta? | Classificação | Ação |
-|---|---|---|---|---|
-| **profiles** | `true` | whatsapp, mp_collector_id | **CRÍTICA** | Trocar por VIEW pública + bloquear base |
-| **arenas** | `is_active=true` | contact_email, contact_whatsapp, address, zip_code, mp_collector_id, mp_connected | **CRÍTICA** | Trocar por VIEW pública + manter SELECT base só p/ owner/tenant_admin/admin |
-| **companies** | `status='approved'` | email, phone, whatsapp, cnpj, address, zip_code | **CRÍTICA** | Trocar por VIEW pública + base só p/ owner/admin |
-| **tenant_settings** | `true` | support_email, support_phone, metadata, status | **CRÍTICA** | Trocar por VIEW pública + base só p/ tenant_admin/admin |
-| **tenant_domains** | `true` | verification_token | **CRÍTICA** | Bloquear base + RPC `resolve_tenant_by_host()` |
-| **tournaments** | `is_public OR organizer_id=auth.uid()` | address, zip_code | **SEMI-SENSÍVEL** | Manter (endereço de evento público é parte do produto). Apenas confirmar. |
-| **arena_links / arena_partners** | `is_active=true` | nenhuma | PÚBLICA LEGÍTIMA | Manter |
-| **arena_physical_inventory** | `true` | nenhuma | PÚBLICA LEGÍTIMA | Manter (vitrine de mídia) |
-| **athlete_sponsors** | `true` | nenhuma | PÚBLICA LEGÍTIMA | Manter |
-| **clips, posts, post_media, post_hashtags, comments, likes, follows, profile_highlights, mentions** | `true` (próprias) | nenhuma | PÚBLICA LEGÍTIMA (rede social) | Manter |
-| **hashtags, hashtag_searches** | `true` | nenhuma | PÚBLICA LEGÍTIMA | Manter |
-| **modality_entries/groups/matches/placements/prizes/*_members** | `true` | nenhuma | PÚBLICA LEGÍTIMA (chaveamento) | Manter |
-| **courts, court_availability** | `true` | nenhuma | PÚBLICA LEGÍTIMA (descoberta de slots) | Manter |
-| **company_plans, tournament_sponsor_plans** | `true` | nenhuma | PÚBLICA LEGÍTIMA (catálogo) | Manter |
-| **tournament_modalities, tournament_partners, tournament_sponsorships, tournament_match_pool** | `true` | nenhuma | PÚBLICA LEGÍTIMA | Manter |
-| **products** | `status='approved'` AND empresa aprovada | nenhuma | PÚBLICA LEGÍTIMA | Manter |
-| **match_results** | tournament.is_public | nenhuma | PÚBLICA LEGÍTIMA (deprecated) | Manter |
-| **tenants** | `is_active=true` | nenhuma sensível (id, name, slug) | PÚBLICA LEGÍTIMA | Manter — necessário p/ resolução tenant |
-| **bookings, enrollments, marketplace_orders, payment_accounts, financial_ledger, organizer_balances, withdrawal_requests, subscriptions, court_blocks, webhook_events** | já restritas | — | PRIVADA OPERACIONAL | OK (Fase 1/2) |
-| **tenant_memberships, user_roles, messages, match_***  | já restritas | — | PRIVADA | OK |
-| **sponsored_posts, sponsorship_giveaways** | a verificar | — | a confirmar | Auditar e hardenizar se necessário |
-
-**Conclusão:** o vazamento real está concentrado em **5 tabelas** (profiles, arenas, companies, tenant_settings, tenant_domains). O resto é descoberta legítima ou já está privado.
+Extensão do `ArenaLayout` existente em `/arena/dashboard`. Sem duplicar `arenas`, `courts`, `bookings`, `profiles`. Reutiliza tudo.
 
 ---
 
-## 2. Estratégia oficial: VIEW pública + tabela base trancada
+## 1. Auditoria — o que já existe e será reutilizado
 
-Padrão único, replicável:
+| Existente | Reuso na Fase 3 |
+|---|---|
+| `arenas` (com tenant_id) | Centro operacional — todas novas tabelas referenciam `arena_id` |
+| `courts` (com tenant_id, modalities, price_per_hour) | Aulas referenciam court_id existente |
+| `bookings` (locação) | **Não tocar** — locação avulsa continua paralela às aulas |
+| `profiles` | Reutilizado para alunos/professores via `profile_user_id` (não duplicar pessoa) |
+| `payment_accounts` | Reutilizado para futura cobrança de mensalidade |
+| `ArenaLayout` + nav existente | Estendido com 4 novas abas |
+| `tenant_id` + RLS pattern Fase 1 | Replicado em todas as 6 tabelas novas |
+
+**Conflito de nome:** já existe `enrollments` (inscrições em torneios). As matrículas em aulas serão **`class_enrollments`** — nome distinto, semântica distinta, zero ambiguidade.
+
+---
+
+## 2. Modelo de dados — 6 tabelas novas
+
+Padrão obrigatório em todas: `id`, `tenant_id` (NOT NULL, FK), `arena_id` (NOT NULL, FK), `created_at`, `updated_at`.
+
+| Tabela | Campos principais | Notas |
+|---|---|---|
+| **arena_students** | `id, tenant_id, arena_id, profile_user_id (nullable FK auth.users), full_name, email, phone, birth_date, status (active/inactive), notes, joined_at` | `profile_user_id` opcional — aluno pode existir sem conta no app (cadastro feito pela arena). UNIQUE(arena_id, email) parcial. |
+| **arena_instructors** | `id, tenant_id, arena_id, profile_user_id (nullable FK auth.users), full_name, email, phone, specialties text[], bio, status, hourly_rate (nullable)` | Mesmo padrão. UNIQUE(arena_id, profile_user_id) parcial. |
+| **arena_instructor_availability** | `id, instructor_id, weekday (0-6), start_time, end_time` | Disponibilidade base; sem inteligência. |
+| **arena_classes** | `id, tenant_id, arena_id, instructor_id (FK), court_id (nullable FK courts), title, description, modality, level (iniciante/intermediario/avancado/livre), recurrence (none/weekly), weekday (nullable, 0-6), start_at (timestamptz), end_at (timestamptz), capacity (int), status (scheduled/canceled/completed), price (nullable)` | Aula única OU recorrente semanal. Sem geração automática de ocorrências (Fase 4 via ORKYM). |
+| **arena_class_enrollments** | `id, tenant_id, arena_id, class_id (FK), student_id (FK arena_students), status (active/canceled/waitlist), payment_status (none/pending/paid), enrolled_at` | UNIQUE(class_id, student_id). |
+| **arena_attendance** | `id, tenant_id, arena_id, class_id (FK), student_id (FK), enrollment_id (nullable), status (present/absent/late), checked_in_at (timestamptz), check_in_method (manual/qr), recorded_by (FK auth.users)` | UNIQUE(class_id, student_id). |
+| **arena_checkin_tokens** | `id, tenant_id, arena_id, class_id (FK), token (text UNIQUE), expires_at (timestamptz), created_at` | Token efêmero p/ QR. Sem lógica avançada. |
+
+**Triggers `set_*_tenant_default`** (mesmo padrão da Fase 2) para 6 tabelas — herdam `tenant_id` da arena.
+
+---
+
+## 3. RLS — isolamento total por arena/tenant
+
+Padrão único para as 7 novas tabelas:
 
 ```sql
--- 1. View segura (apenas campos públicos)
-CREATE VIEW public.profiles_public WITH (security_invoker = on) AS
-  SELECT user_id, full_name, avatar_url, bio, city, state, team, created_at
-  FROM public.profiles;
-GRANT SELECT ON public.profiles_public TO anon, authenticated;
+-- SELECT: arena owner + tenant admin + admin global + (alunos veem suas próprias matrículas)
+CREATE POLICY "arena_owner_view" ON arena_students FOR SELECT
+  USING (is_arena_owner(arena_id, auth.uid())
+         OR is_tenant_admin(tenant_id, auth.uid())
+         OR is_admin(auth.uid()));
 
--- 2. Tabela base: SELECT só para o próprio usuário + admin
-DROP POLICY "Anyone can view profiles" ON public.profiles;
-CREATE POLICY "Owner view full profile" ON public.profiles FOR SELECT
-  USING (auth.uid() = user_id OR is_admin(auth.uid()));
+-- INSERT/UPDATE/DELETE: arena owner + tenant admin + admin
+CREATE POLICY "arena_owner_manage" ON arena_students FOR ALL
+  USING (is_arena_owner(arena_id, auth.uid())
+         OR is_tenant_admin(tenant_id, auth.uid())
+         OR is_admin(auth.uid()));
 ```
 
-Replicado em 5 tabelas críticas com colunas distintas:
+**Exceções:**
+- `arena_class_enrollments` SELECT: aluno vê suas próprias (`profile_user_id = auth.uid()` via JOIN com students)
+- `arena_attendance` SELECT: idem (transparência ao aluno)
+- `arena_checkin_tokens` SELECT: somente arena owner + tenant admin (token é segredo)
 
-| View | Campos públicos | Campos retidos só para owner/admin |
+**Sem leituras públicas** — toda a fase é privada operacional.
+
+---
+
+## 4. Função de check-in (RPC SECURITY DEFINER)
+
+```sql
+CREATE FUNCTION arena_checkin_validate(_token text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+```
+
+Fluxo:
+1. Recebe token + `auth.uid()` do aluno autenticado
+2. Valida token não expirado
+3. Localiza `class_id` → `arena_id` → student via `profile_user_id`
+4. Confere matrícula ativa
+5. INSERT em `arena_attendance` (status=present, method=qr)
+6. Retorna `{ success, class_title, checked_in_at }`
+
+Sem antifraude avançado, sem geolocalização — apenas fluxo funcional.
+
+---
+
+## 5. Frontend — extensão do ArenaLayout existente
+
+**Não criar layout novo.** Adicionar 4 itens ao `navItems` em `src/pages/arena-dashboard/ArenaLayout.tsx`:
+
+| Rota | Componente | Função |
 |---|---|---|
-| `profiles_public` | user_id, full_name, avatar_url, bio, city, state, team, role-display | whatsapp, mp_collector_id, instagram/tiktok privados se houver |
-| `arenas_public` | id, name, slug, city, state, cover_image_url, description, rules, is_active | contact_email, contact_whatsapp, address, zip_code, mp_collector_id, mp_connected |
-| `companies_public` | id, name, logo_url, description, category, city, state, plan, status | email, phone, whatsapp, cnpj, address, zip_code, billing_status, plan_id |
-| `tenant_settings_public` | tenant_id, display_name, logo_url, favicon_url, primary_color, secondary_color, default_locale, timezone | support_email, support_phone, legal_name, status, metadata |
-| `tenant_domains_public` | (nenhuma — bloqueada) | tudo via RPC controlada |
+| `/arena/dashboard/alunos` | `ArenaStudents.tsx` | Listar/criar/editar alunos. Busca por nome/email. Vincular a profile existente (autocomplete) ou criar standalone. |
+| `/arena/dashboard/professores` | `ArenaInstructors.tsx` | Listar/criar/editar professores + disponibilidade básica. |
+| `/arena/dashboard/aulas` | `ArenaClasses.tsx` | Lista de aulas (semanal), criar nova com instructor/court/horário/capacidade. |
+| `/arena/dashboard/matriculas` | `ArenaClassEnrollments.tsx` | Por aula: ver matriculados, adicionar/remover aluno, marcar presença manual. Botão "Gerar QR" cria token + abre modal com código (canvas QR). |
 
-Para `tenant_domains` adicional: **RPC `resolve_tenant_by_host(host text) → uuid`** (SECURITY DEFINER) que retorna apenas `tenant_id` se `verification_status='verified'`. A tabela base fica privada (apenas tenant_admin gerencia).
+**Dashboard existente (`ArenaDashboard.tsx`):** adicionar 2 cards (alunos ativos, aulas hoje) sem reescrever.
 
----
-
-## 3. Migração das views (auditoria de uso)
-
-Antes de trocar policies, varremos o frontend:
-- `from("profiles")` → `from("profiles_public")` em leituras públicas; manter `profiles` quando usuário lê seu próprio perfil (autenticado)
-- `from("arenas")` → `from("arenas_public")` em descoberta; `arenas` quando owner/admin gerencia
-- `from("companies")` → `from("companies_public")` em vitrine; `companies` quando owner gerencia
-- `from("tenant_settings")` → `from("tenant_settings_public")` no `TenantContext` (branding); `tenant_settings` no `OrganizerSettings` (admin)
-- `from("tenant_domains")` no `TenantContext` → substituir por `supabase.rpc("resolve_tenant_by_host", { host })`; `OrganizerDomains` continua usando tabela base (admin)
-
-Edge functions: revisar `_shared/mp.ts`, `create-payment`, `create-booking-payment`, `marketplace-webhook` — leituras que usam service role NÃO são afetadas por RLS, mas **validações de tenant_id explícitas** são adicionadas onde leem dados sob ação do usuário.
+**QR display:** usar lib leve `qrcode.react` (já comum em sandbox) renderizando o token. Página pública `/arena/checkin?t=TOKEN` valida via RPC e mostra confirmação. Usuário precisa estar logado (auth via TenantContext + AuthContext).
 
 ---
 
-## 4. Hardening adicional (sem quebrar)
+## 6. Integrações sem duplicação
 
-**Token de verificação de domínio:** `tenant_domains.verification_token` nunca pode aparecer em SELECT público. Garantido pela RPC + SELECT base restrito a tenant_admin.
-
-**`mp_collector_id` em arenas/profiles:** continua nas tabelas base (DEPRECATED, lidas apenas via service role nas edge functions). View pública NÃO inclui esses campos. Risco de vazamento eliminado.
-
-**Enumeração:** todas as tabelas críticas passam a exigir filtro explícito por id (já é o caso via REST). Sem `SELECT *` público em base.
-
-**Anti-recursão:** todas as views usam `WITH (security_invoker = on)` — respeitam RLS do invocador, sem virar bypass.
-
-**Edge functions tenant validation:**
-- `create-payment`, `create-booking-payment`: já chamam `resolveCollectorId` (Fase 2). Adicionar verificação de que `tournament.tenant_id` ou `arena.tenant_id` corresponde ao recurso solicitado pelo usuário autenticado.
-- `expire-pending-payments`: adicionar limite por tenant quando invocada com `tenant_id` (opcional).
-- `orkym-invoke`: já valida JWT; adicionar log estruturado.
-
-**Audit log mínimo:** nova tabela `security_audit_log` (id, user_id, tenant_id, action, resource_type, resource_id, ip, created_at). Apenas admins leem. Inserts feitos por trigger leve em mudanças sensíveis (membership add/remove, payment_account create/update, tenant_domain insert/delete). Sem inflar — só eventos administrativos.
+- **Bookings (locação avulsa):** intocados. Aulas usam `court_id` mas não criam booking — `arena_classes` é a fonte.
+- **Conflito de horário court x aula:** validação no frontend ao criar aula (query bookings + classes overlapping). Sem trigger SQL nesta fase.
+- **Marketplace (consumo interno):** **não criar** nesta fase. Documentado em pendências — Fase 4.
+- **Pagamento de mensalidade:** `class_enrollments.payment_status` existe como string. Sem fluxo de cobrança implementado — preparado p/ Fase 5.
+- **ORKYM:** zero chamadas. Sugestões de horário, otimização de turmas, recomendação de professor ficam para integração futura via `invokeOrkym()`.
 
 ---
 
-## 5. Storage buckets (warning do linter)
+## 7. Migração — arquivo único idempotente
 
-5 buckets públicos (`tournament-images`, `post-images`, `company-images`, `tournament-files`, `arena-images`) permitem listagem de objetos. Hardening: política `storage.objects` SELECT restrita a `bucket_id IN (...)` mantém leitura por path direto, mas remove listagem cega. Implementação: política que exige `name IS NOT NULL` na leitura individual, sem permitir `LIST` sem prefix de owner. Mantém compat (URLs públicas continuam funcionando) e fecha enumeração.
+`supabase/migrations/<ts>_phase3_arena_management.sql`:
 
----
-
-## 6. Migração — arquivo único, idempotente
-
-`supabase/migrations/<ts>_phase2_5_privacy_hardening.sql`:
-
-1. CREATE 5 views `*_public` com `security_invoker=on` + GRANT SELECT
-2. DROP + CREATE policies SELECT base nas 5 tabelas críticas
-3. CREATE FUNCTION `resolve_tenant_by_host(text) RETURNS uuid` SECURITY DEFINER
-4. CREATE TABLE `security_audit_log` + RLS (admin only) + 3 triggers leves
-5. Storage policies hardening (anti-list)
-6. Auditoria de policies em `sponsored_posts`, `sponsorship_giveaways` — endurecer se abertas
+1. CREATE 7 tables com FKs e UNIQUE constraints
+2. ALTER TABLE … ENABLE ROW LEVEL SECURITY
+3. CREATE 6 triggers `set_*_tenant_default`
+4. CREATE policies (SELECT/INSERT/UPDATE/DELETE) por tabela
+5. CREATE FUNCTION `arena_checkin_validate(text)` SECURITY DEFINER
+6. CREATE INDEX em colunas de busca: `(arena_id, status)`, `(class_id, student_id)`, `(token)`
 
 ---
 
-## 7. Frontend — substituições mínimas
-
-Arquivos afetados (leitura pública → view):
-
-| Arquivo | Mudança |
-|---|---|
-| `src/contexts/TenantContext.tsx` | `tenant_settings` → `tenant_settings_public` (leitura); `tenant_domains` → RPC `resolve_tenant_by_host` |
-| `src/pages/UserProfile.tsx`, `Profile.tsx`, `ProfileHeader.tsx`, `FriendSuggestions.tsx`, `feed/*` | `profiles` (leitura de outros) → `profiles_public` |
-| `src/pages/arenas/ArenasList.tsx`, `ArenaPublic.tsx`, `ArenaBooking.tsx` | `arenas` (leitura pública) → `arenas_public` |
-| `src/pages/Marketplace.tsx`, `MarketplaceCompany.tsx`, `MarketplaceProduct.tsx` | `companies` (leitura pública) → `companies_public` |
-| `src/integrations/supabase/types.ts` | regenerado automaticamente — inclui as views |
-
-**Não tocados:** `OrganizerSettings`, `OrganizerDomains`, `MyCompany`, telas de admin, edição própria do perfil — todas autenticadas, leem a tabela base com policy de owner/admin.
-
----
-
-## 8. Riscos / Pendências (Fase 3+)
-
-- Refator visual de branding via CSS vars (Fase 3)
-- Remoção definitiva de policies legadas redundantes em `arenas`/`companies` após validação de produção (auditoria 30 dias)
-- Migração definitiva de `profiles.mp_collector_id` p/ `payment_accounts` (Fase 5 — split)
-- DNS automation (Fase 3)
-- Rate limiting nas edge functions (Fase 3)
-- Audit log expandido (queries sensíveis) — só base nesta fase
-
-**Compat preservada:**
-- Todas as URLs públicas de storage continuam funcionando
-- Toda UI de descoberta continua funcionando (lê via view)
-- Owner/tenant_admin/admin têm acesso completo via base (UI de gestão inalterada)
-- `tenant_domains` resolve via RPC (TenantContext atualizado)
-
----
-
-## 9. Critérios de sucesso
-
-- ✅ Nenhuma tabela com PII tem SELECT `USING (true)`
-- ✅ `mp_collector_id`, `verification_token`, `support_email`, `cnpj`, `whatsapp` privados nunca expostos por leitura pública
-- ✅ Descoberta pública preservada via views (sem mudança de UX)
-- ✅ `tenant_domains` não enumerável; resolução por host via RPC
-- ✅ Admin/tenant_admin/owner mantêm acesso completo
-- ✅ Storage buckets sem listagem cega
-- ✅ Audit log foundation pronta
-- ✅ Zero IA local; ORKYM continua único bridge
-- ✅ Sistema 100% funcional
-
----
-
-## 10. Arquivos tocados
+## 8. Arquivos tocados
 
 | Tipo | Arquivo |
 |---|---|
-| Migration | `supabase/migrations/<ts>_phase2_5_privacy_hardening.sql` |
-| Frontend edit | `src/contexts/TenantContext.tsx` |
-| Frontend edit | ~8 telas (Profile, UserProfile, ProfileHeader, FriendSuggestions, ArenasList, ArenaPublic, ArenaBooking, Marketplace, MarketplaceCompany, MarketplaceProduct) — apenas trocar nome da tabela em `from()` |
-| Edge edit | `_shared/mp.ts`, `create-payment`, `create-booking-payment` (validação tenant) |
-| Memory update | `mem://constraints/data-visibility` (atualizar com views oficiais) |
+| Migration | `supabase/migrations/<ts>_phase3_arena_management.sql` |
+| Frontend novo | `src/pages/arena-dashboard/ArenaStudents.tsx` |
+| Frontend novo | `src/pages/arena-dashboard/ArenaInstructors.tsx` |
+| Frontend novo | `src/pages/arena-dashboard/ArenaClasses.tsx` |
+| Frontend novo | `src/pages/arena-dashboard/ArenaClassEnrollments.tsx` |
+| Frontend novo | `src/pages/arena-dashboard/ArenaCheckin.tsx` (página pública /arena/checkin) |
+| Frontend edit | `src/pages/arena-dashboard/ArenaLayout.tsx` (+4 navItems) |
+| Frontend edit | `src/pages/arena-dashboard/ArenaDashboard.tsx` (+2 cards: alunos ativos, aulas hoje) |
+| Frontend edit | `src/App.tsx` (+5 rotas) |
+| Dependency | `qrcode.react` (geração QR) |
+| Memory novo | `mem://features/arena-management` |
 
-**Total:** 1 migration + ~10 edits triviais frontend + 3 edge edits leves. Zero módulo reescrito.
+**Total:** 1 migration + 5 telas novas + 3 edits triviais. Zero módulo existente reescrito.
+
+---
+
+## ENTREGA B — Relatório esperado
+
+| Item | Resultado |
+|---|---|
+| Tabelas criadas | 7 (`arena_students`, `arena_instructors`, `arena_instructor_availability`, `arena_classes`, `arena_class_enrollments`, `arena_attendance`, `arena_checkin_tokens`) |
+| Reaproveitado | `arenas`, `courts`, `profiles`, `auth.users`, `tenant_id`, `is_arena_owner`, `is_tenant_admin` |
+| Estendido | `ArenaLayout` (+4 abas), `ArenaDashboard` (+2 cards) |
+| Relação chave | tenant → arena → (students, instructors, classes) → enrollments → attendance |
+| Integração bookings | Mantida paralela; aula referencia `court_id` mas não cria booking |
+| Check-in | Token efêmero + RPC `arena_checkin_validate` + página pública `/arena/checkin?t=` |
+| RLS | 100% privada operacional; arena owner + tenant admin + admin global |
+
+---
+
+## ENTREGA C — Riscos / Pendências
+
+**Para Fase 4:**
+- Geração automática de ocorrências de aulas recorrentes (ORKYM)
+- Sugestão de turma ideal por aluno (ORKYM)
+- Otimização de horários professor x quadra (ORKYM)
+- Cobrança recorrente de mensalidade via `payment_accounts`
+- Marketplace interno (bar/lojinha da arena) — reutilizando estrutura `products` existente com flag `arena_id`
+
+**Simplificações deliberadas:**
+- Sem geolocalização no check-in
+- Sem antifraude no QR (token simples + expires_at)
+- Sem geração automática de ocorrências (criar aula = 1 ocorrência ou recorrência semanal lógica, sem materializar datas)
+- Sem detecção automática de conflito de horário no SQL (validação no frontend)
+- Sem fluxo de pagamento da matrícula (apenas campo `payment_status`)
+
+**Compatibilidade preservada:**
+- Bookings, tournaments, marketplace, sponsors, organizer admin: todos intocados
+- Arena dashboard atual continua 100% funcional
+- Sem mudanças em RLS de tabelas existentes
+
+**Critério de sucesso:**
+- ✅ Arena cadastra alunos, professores, aulas, matrículas, presença
+- ✅ QR check-in funcional via token + RPC
+- ✅ Tudo isolado por tenant + arena
+- ✅ Zero duplicação (profiles/courts/arenas reutilizados)
+- ✅ Zero IA local (ORKYM continua o cérebro)
+- ✅ Sistema 100% funcional
 
