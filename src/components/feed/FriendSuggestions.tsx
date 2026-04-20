@@ -29,7 +29,7 @@ const FriendSuggestions = () => {
 
     // 1. Get my profile (city/state) and who I follow
     const [profileRes, followsRes] = await Promise.all([
-      supabase.from("profiles").select("city, state").eq("user_id", user.id).maybeSingle(),
+      supabase.from("profiles_public").select("city, state").eq("user_id", user.id).maybeSingle(),
       supabase.from("follows").select("following_id").eq("follower_id", user.id),
     ]);
 
@@ -59,7 +59,7 @@ const FriendSuggestions = () => {
     let mutualProfiles: Suggestion[] = [];
     if (mutualIds.length > 0) {
       const { data } = await supabase
-        .from("profiles")
+        .from("profiles_public")
         .select("user_id, full_name, avatar_url, city, state")
         .in("user_id", mutualIds);
       mutualProfiles = (data || []).map((p) => ({
@@ -73,7 +73,7 @@ const FriendSuggestions = () => {
     // 4. Location-based suggestions
     let locationProfiles: Suggestion[] = [];
     if (myCity || myState) {
-      let q = supabase.from("profiles").select("user_id, full_name, avatar_url, city, state").limit(30);
+      let q = supabase.from("profiles_public").select("user_id, full_name, avatar_url, city, state").limit(30);
       if (myCity) q = q.ilike("city", myCity);
       else if (myState) q = q.ilike("state", myState);
 

@@ -56,6 +56,13 @@ export type Database = {
             referencedRelation: "arenas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "arena_links_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       arena_partners: {
@@ -110,10 +117,31 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "arena_partners_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "arena_partners_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_partners_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_partners_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
             referencedColumns: ["id"]
           },
         ]
@@ -155,6 +183,13 @@ export type Database = {
             columns: ["arena_id"]
             isOneToOne: false
             referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_physical_inventory_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
             referencedColumns: ["id"]
           },
         ]
@@ -269,6 +304,20 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "athlete_sponsors_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_sponsors_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       bookings: {
@@ -332,6 +381,13 @@ export type Database = {
             columns: ["arena_id"]
             isOneToOne: false
             referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
             referencedColumns: ["id"]
           },
           {
@@ -669,6 +725,13 @@ export type Database = {
             referencedRelation: "arenas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "courts_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       enrollments: {
@@ -767,6 +830,20 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_ledger_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_ledger_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
             referencedColumns: ["id"]
           },
         ]
@@ -1819,6 +1896,20 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "products_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       profile_highlights: {
@@ -1928,6 +2019,39 @@ export type Database = {
         }
         Relationships: []
       }
+      security_audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          metadata: Json
+          resource_id: string | null
+          resource_type: string
+          tenant_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          resource_id?: string | null
+          resource_type: string
+          tenant_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          resource_id?: string | null
+          resource_type?: string
+          tenant_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       sponsored_posts: {
         Row: {
           active: boolean
@@ -1974,6 +2098,20 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsored_posts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsored_posts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
             referencedColumns: ["id"]
           },
           {
@@ -2093,6 +2231,20 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: true
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies_public"
             referencedColumns: ["id"]
           },
           {
@@ -2424,6 +2576,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tournament_partners_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_partners_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "tournament_partners_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
@@ -2532,6 +2698,20 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_sponsorships_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_sponsorships_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
             referencedColumns: ["id"]
           },
           {
@@ -2735,7 +2915,259 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      arenas_public: {
+        Row: {
+          city: string | null
+          cover_image_url: string | null
+          created_at: string | null
+          description: string | null
+          id: string | null
+          is_active: boolean | null
+          name: string | null
+          rules: string | null
+          slug: string | null
+          state: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          city?: string | null
+          cover_image_url?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          rules?: string | null
+          slug?: string | null
+          state?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          city?: string | null
+          cover_image_url?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          rules?: string | null
+          slug?: string | null
+          state?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arenas_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies_contact_public: {
+        Row: {
+          address: string | null
+          category: string | null
+          city: string | null
+          created_at: string | null
+          description: string | null
+          email: string | null
+          id: string | null
+          logo_url: string | null
+          name: string | null
+          phone: string | null
+          plan: string | null
+          state: string | null
+          status: string | null
+          tenant_id: string | null
+          whatsapp: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          category?: string | null
+          city?: string | null
+          created_at?: string | null
+          description?: string | null
+          email?: string | null
+          id?: string | null
+          logo_url?: string | null
+          name?: string | null
+          phone?: string | null
+          plan?: string | null
+          state?: string | null
+          status?: string | null
+          tenant_id?: string | null
+          whatsapp?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          category?: string | null
+          city?: string | null
+          created_at?: string | null
+          description?: string | null
+          email?: string | null
+          id?: string | null
+          logo_url?: string | null
+          name?: string | null
+          phone?: string | null
+          plan?: string | null
+          state?: string | null
+          status?: string | null
+          tenant_id?: string | null
+          whatsapp?: string | null
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
+      companies_public: {
+        Row: {
+          category: string | null
+          city: string | null
+          created_at: string | null
+          description: string | null
+          id: string | null
+          logo_url: string | null
+          name: string | null
+          plan: string | null
+          state: string | null
+          status: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          city?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          logo_url?: string | null
+          name?: string | null
+          plan?: string | null
+          state?: string | null
+          status?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          city?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          logo_url?: string | null
+          name?: string | null
+          plan?: string | null
+          state?: string | null
+          status?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles_public: {
+        Row: {
+          arena: string | null
+          avatar_url: string | null
+          bio: string | null
+          city: string | null
+          created_at: string | null
+          full_name: string | null
+          gender: string | null
+          link: string | null
+          social_facebook: string | null
+          social_instagram: string | null
+          social_linkedin: string | null
+          social_tiktok: string | null
+          social_x: string | null
+          social_youtube: string | null
+          state: string | null
+          team: string | null
+          titles: string | null
+          user_id: string | null
+        }
+        Insert: {
+          arena?: string | null
+          avatar_url?: string | null
+          bio?: string | null
+          city?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          gender?: string | null
+          link?: string | null
+          social_facebook?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          social_tiktok?: string | null
+          social_x?: string | null
+          social_youtube?: string | null
+          state?: string | null
+          team?: string | null
+          titles?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          arena?: string | null
+          avatar_url?: string | null
+          bio?: string | null
+          city?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          gender?: string | null
+          link?: string | null
+          social_facebook?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          social_tiktok?: string | null
+          social_x?: string | null
+          social_youtube?: string | null
+          state?: string | null
+          team?: string | null
+          titles?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      tenant_settings_public: {
+        Row: {
+          default_locale: string | null
+          display_name: string | null
+          favicon_url: string | null
+          logo_url: string | null
+          primary_color: string | null
+          secondary_color: string | null
+          tenant_id: string | null
+          timezone: string | null
+        }
+        Insert: {
+          default_locale?: string | null
+          display_name?: string | null
+          favicon_url?: string | null
+          logo_url?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          tenant_id?: string | null
+          timezone?: string | null
+        }
+        Update: {
+          default_locale?: string | null
+          display_name?: string | null
+          favicon_url?: string | null
+          logo_url?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          tenant_id?: string | null
+          timezone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       create_organizer_tenant: {
@@ -2789,6 +3221,7 @@ export type Database = {
         Args: { _tournament_id: string; _user_id: string }
         Returns: boolean
       }
+      resolve_tenant_by_host: { Args: { _host: string }; Returns: string }
       set_current_tenant: { Args: { _tenant_id: string }; Returns: undefined }
       set_tenant_from_user: { Args: { _user_id: string }; Returns: string }
     }

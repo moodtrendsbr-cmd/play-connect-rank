@@ -28,7 +28,7 @@ const ClipsBar = () => {
     if (!clips || clips.length === 0) { setGroups([]); return; }
 
     const authorIds = [...new Set(clips.map((c: any) => c.author_id))];
-    const { data: profiles } = await supabase.from("profiles").select("user_id, full_name, avatar_url").in("user_id", authorIds);
+    const { data: profiles } = await supabase.from("profiles_public").select("user_id, full_name, avatar_url").in("user_id", authorIds);
     const profileMap: Record<string, any> = {};
     (profiles || []).forEach((p: any) => { profileMap[p.user_id] = p; });
 
