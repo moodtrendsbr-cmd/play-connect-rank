@@ -64,7 +64,7 @@ const Feed = () => {
 
       const [profilesRes, mediaRes, commentsRes, likesCountRes, commentsCountRes, myLikesRes, mySavesRes, myFollowsRes] =
         await Promise.all([
-          supabase.from("profiles").select("user_id, full_name, avatar_url").in("user_id", authorIds),
+          supabase.from("profiles_public").select("user_id, full_name, avatar_url").in("user_id", authorIds),
           supabase.from("post_media").select("*").in("post_id", postIds).order("order_index"),
           supabase.from("comments").select("id, post_id, author_id, content, created_at").in("post_id", postIds).order("created_at", { ascending: true }),
           supabase.from("likes").select("post_id").in("post_id", postIds),
@@ -95,7 +95,7 @@ const Feed = () => {
 
       let commentProfileMap: Record<string, string> = {};
       if (commentAuthorIds.size > 0) {
-        const { data: cp } = await supabase.from("profiles").select("user_id, full_name").in("user_id", Array.from(commentAuthorIds));
+        const { data: cp } = await supabase.from("profiles_public").select("user_id, full_name").in("user_id", Array.from(commentAuthorIds));
         (cp || []).forEach((p) => { commentProfileMap[p.user_id] = p.full_name; });
       }
 
@@ -146,7 +146,7 @@ const Feed = () => {
         (contentPosts || []).forEach((p) => results.add(p.id));
 
         // 2. Search by author name
-        const { data: matchedProfiles } = await supabase.from("profiles").select("user_id").ilike("full_name", `%${term}%`);
+        const { data: matchedProfiles } = await supabase.from("profiles_public").select("user_id").ilike("full_name", `%${term}%`);
         if (matchedProfiles && matchedProfiles.length > 0) {
           const authorIds = matchedProfiles.map((p) => p.user_id);
           const { data: authorPosts } = await supabase.from("posts").select("id").in("author_id", authorIds).limit(100);

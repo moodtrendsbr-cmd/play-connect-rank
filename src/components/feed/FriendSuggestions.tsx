@@ -59,7 +59,7 @@ const FriendSuggestions = () => {
     let mutualProfiles: Suggestion[] = [];
     if (mutualIds.length > 0) {
       const { data } = await supabase
-        .from("profiles")
+        .from("profiles_public")
         .select("user_id, full_name, avatar_url, city, state")
         .in("user_id", mutualIds);
       mutualProfiles = (data || []).map((p) => ({
@@ -73,7 +73,7 @@ const FriendSuggestions = () => {
     // 4. Location-based suggestions
     let locationProfiles: Suggestion[] = [];
     if (myCity || myState) {
-      let q = supabase.from("profiles").select("user_id, full_name, avatar_url, city, state").limit(30);
+      let q = supabase.from("profiles_public").select("user_id, full_name, avatar_url, city, state").limit(30);
       if (myCity) q = q.ilike("city", myCity);
       else if (myState) q = q.ilike("state", myState);
 

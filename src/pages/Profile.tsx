@@ -47,7 +47,7 @@ const Profile = () => {
     const authorIds = [...new Set(rawPosts.map((p) => p.author_id))];
 
     const [profilesRes, mediaRes, likesRes, commentsRes, myLikesRes, mySavesRes] = await Promise.all([
-      supabase.from("profiles").select("user_id, full_name, avatar_url").in("user_id", authorIds),
+      supabase.from("profiles_public").select("user_id, full_name, avatar_url").in("user_id", authorIds),
       supabase.from("post_media").select("*").in("post_id", postIds).order("order_index"),
       supabase.from("likes").select("post_id").in("post_id", postIds),
       supabase.from("comments").select("post_id").in("post_id", postIds),
