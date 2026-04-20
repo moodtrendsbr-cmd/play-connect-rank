@@ -154,16 +154,44 @@ const Brackets = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              <div className="mb-2">
-                <h1 className="text-4xl font-display text-foreground">CHAVEAMENTOS</h1>
-                <p className="text-muted-foreground">{tournament.name}</p>
-                {tournament.city && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    📍 {tournament.city}{tournament.state ? `, ${tournament.state}` : ""}
-                    {tournament.start_date && ` • ${new Date(tournament.start_date).toLocaleDateString("pt-BR")}`}
-                  </p>
-                )}
-              </div>
+              {(() => {
+                const now = new Date();
+                const start = tournament.start_date ? new Date(tournament.start_date) : null;
+                const end = tournament.end_date ? new Date(tournament.end_date) : null;
+                let statusLabel = "Inscrições Abertas";
+                let statusClass = "bg-primary/15 text-primary border-primary/30";
+                if (end && now > end) { statusLabel = "Finalizado"; statusClass = "bg-muted text-muted-foreground border-border"; }
+                else if (start && now >= start) { statusLabel = "Em andamento"; statusClass = "bg-blue-500/15 text-blue-400 border-blue-500/30"; }
+
+                return (
+                  <div className="rounded-xl border border-border bg-card p-4 mb-6">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <h1 className="text-2xl sm:text-3xl font-display text-foreground tracking-wide leading-tight">
+                          {tournament.name}
+                        </h1>
+                        <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                          {tournament.city && (
+                            <span>📍 {tournament.city}{tournament.state ? `, ${tournament.state}` : ""}</span>
+                          )}
+                          {start && (
+                            <span>
+                              📅 {start.toLocaleDateString("pt-BR")}
+                              {end && end.getTime() !== start.getTime() && ` – ${end.toLocaleDateString("pt-BR")}`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${statusClass}`}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-3">
+                      Categorias <span className="text-foreground font-semibold">({modalities.length})</span>
+                    </p>
+                  </div>
+                );
+              })()}
 
               {isOrganizer && (
                 <Button
