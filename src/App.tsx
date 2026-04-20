@@ -79,6 +79,7 @@ import ArenaFinance from "./pages/arena-dashboard/ArenaFinance";
 import ArenaTransactions from "./pages/arena-dashboard/ArenaTransactions";
 import OrganizerFinance from "./pages/organizer/OrganizerFinance";
 import AdminSplitRules from "./pages/admin/AdminSplitRules";
+import AdminAdjustments from "./pages/admin/AdminAdjustments";
 import ArenasList from "./pages/arenas/ArenasList";
 import ArenaPublic from "./pages/arenas/ArenaPublic";
 import ArenaBooking from "./pages/arenas/ArenaBooking";
@@ -199,6 +200,7 @@ const App = () => (
               <Route path="monetization" element={<AdminMonetization />} />
               <Route path="arenas" element={<AdminArenas />} />
               <Route path="split-rules" element={<AdminSplitRules />} />
+              <Route path="adjustments" element={<AdminAdjustments />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

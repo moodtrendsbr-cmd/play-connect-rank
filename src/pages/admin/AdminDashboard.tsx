@@ -22,11 +22,13 @@ const AdminDashboard = () => {
     activeSubscriptions: 0,
     subscriptionRevenue: 0,
     overdueCompanies: 0,
+    canonicalRevenue: 0,
+    canonicalPending: 0,
   });
 
   useEffect(() => {
     const fetch = async () => {
-      const [profiles, roles, tournaments, enrollments, balances, withdrawals, companiesRes, productsRes, ordersRes, subsRes, ledgerRes] = await Promise.all([
+      const [profiles, roles, tournaments, enrollments, balances, withdrawals, companiesRes, productsRes, ordersRes, subsRes, ledgerRes, ftxRes] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }),
         supabase.from("user_roles").select("role"),
         supabase.from("tournaments").select("id, start_date, end_date"),
@@ -38,6 +40,7 @@ const AdminDashboard = () => {
         supabase.from("marketplace_orders").select("mood_commission"),
         supabase.from("subscriptions").select("status"),
         supabase.from("financial_ledger").select("source, amount"),
+        supabase.from("financial_transactions").select("total_amount, status"),
       ]);
 
       const organizers = (roles.data || []).filter((r) => r.role === "organizer").length;
@@ -51,6 +54,14 @@ const AdminDashboard = () => {
       const mkRevenue = (ordersRes.data || []).reduce((s, o) => s + Number((o as any).mood_commission || 0), 0);
       const subsData = subsRes.data || [];
       const subRevenue = (ledgerRes.data || []).filter((l: any) => l.source === "subscription").reduce((s: number, l: any) => s + Number(l.amount), 0);
+
+      const ftxData = ftxRes.data || [];
+      const canonicalRevenue = ftxData
+        .filter((t: any) => t.status === "paid" || t.status === "partially_refunded")
+        .reduce((s: number, t: any) => s + Number(t.total_amount), 0);
+      const canonicalPending = ftxData
+        .filter((t: any) => t.status === "pending")
+        .reduce((s: number, t: any) => s + Number(t.total_amount), 0);
 
       setMetrics({
         totalUsers: profiles.count || 0,
@@ -70,6 +81,8 @@ const AdminDashboard = () => {
         activeSubscriptions: subsData.filter((s: any) => s.status === "active").length,
         subscriptionRevenue: subRevenue,
         overdueCompanies: companiesData.filter((c: any) => c.billing_status === "overdue").length,
+        canonicalRevenue,
+        canonicalPending,
       });
     };
     fetch();
@@ -80,6 +93,8 @@ const AdminDashboard = () => {
     { label: "Organizadores", value: metrics.totalOrganizers, icon: UserCheck },
     { label: "Torneios Ativos", value: `${metrics.activeTournaments}/${metrics.totalTournaments}`, icon: Trophy },
     { label: "Inscrições (Pagas/Pend.)", value: `${metrics.paidEnrollments}/${metrics.pendingEnrollments}`, icon: ClipboardList },
+    { label: "Receita Canônica (paid)", value: `R$ ${metrics.canonicalRevenue.toFixed(2)}`, icon: DollarSign },
+    { label: "Receita Pendente (canônica)", value: `R$ ${metrics.canonicalPending.toFixed(2)}`, icon: AlertTriangle },
     { label: "Receita Mood (Comissões)", value: `R$ ${metrics.totalRevenue.toFixed(2)}`, icon: DollarSign },
     { label: "Saques Pendentes", value: `R$ ${metrics.pendingWithdrawals.toFixed(2)}`, icon: AlertTriangle },
     { label: "Empresas (Aprov./Pend.)", value: `${metrics.totalCompanies - metrics.pendingCompanies}/${metrics.pendingCompanies}`, icon: Store },

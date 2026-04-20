@@ -89,6 +89,19 @@ const AdminSplitRules = () => {
         <p className="text-sm text-muted-foreground">Configuração de % por tenant e fonte de receita.</p>
       </div>
 
+      <Card className="bg-muted/40 border-dashed">
+        <CardContent className="py-3 text-xs text-muted-foreground space-y-1">
+          <p className="font-semibold text-foreground">Hierarquia de precedência:</p>
+          <ol className="list-decimal pl-5 space-y-0.5">
+            <li>Ajuste manual auditado (<code>financial_adjustments.split_correction</code>)</li>
+            <li>Override por torneio (<code>tournaments.default_split_config</code>) — apenas inscrições</li>
+            <li>Regra do tenant (definida abaixo)</li>
+            <li>Default global (tenant Mood Play)</li>
+            <li>Fallback hardcoded (platform=10%)</li>
+          </ol>
+        </CardContent>
+      </Card>
+
       <div>
         <Label>Tenant</Label>
         <Select value={selectedTenant} onValueChange={setSelectedTenant}>

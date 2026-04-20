@@ -6,7 +6,7 @@ import { DollarSign, TrendingUp, Wallet, Clock } from "lucide-react";
 
 const ArenaFinance = () => {
   const { arena } = useOutletContext<{ arena: any }>();
-  const [stats, setStats] = useState({ total: 0, settled: 0, pending: 0, count: 0 });
+  const [stats, setStats] = useState({ total: 0, settled: 0, pending: 0, upcoming: 0, count: 0 });
   const [bySource, setBySource] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
@@ -24,17 +24,24 @@ const ArenaFinance = () => {
       let arenaSplitsTotal = 0;
       let arenaSplitsPending = 0;
       let arenaSplitsSettled = 0;
+      let arenaSplitsUpcoming = 0;
       if (txIds.length > 0) {
         const { data: splits } = await supabase
           .from("transaction_splits")
-          .select("amount, status, recipient_type, recipient_id")
+          .select("amount, status, recipient_type, recipient_id, expected_settlement_at")
           .in("transaction_id", txIds)
           .eq("recipient_type", "arena")
           .eq("recipient_id", arena.id);
+        const now = Date.now();
         (splits || []).forEach((s: any) => {
           arenaSplitsTotal += Number(s.amount);
           if (s.status === "settled") arenaSplitsSettled += Number(s.amount);
-          else arenaSplitsPending += Number(s.amount);
+          else if (s.status === "calculated" || s.status === "pending") {
+            arenaSplitsPending += Number(s.amount);
+            if (s.expected_settlement_at && new Date(s.expected_settlement_at).getTime() <= now + 7 * 86400000) {
+              arenaSplitsUpcoming += Number(s.amount);
+            }
+          }
         });
       }
 
@@ -47,6 +54,7 @@ const ArenaFinance = () => {
         total: arenaSplitsTotal,
         settled: arenaSplitsSettled,
         pending: arenaSplitsPending,
+        upcoming: arenaSplitsUpcoming,
         count: txList.length,
       });
       setBySource(sourceMap);
@@ -74,7 +82,7 @@ const ArenaFinance = () => {
         <p className="text-sm text-muted-foreground">Receita gerada e splits a receber.</p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardContent className="pt-6">
             <p className="text-xs text-muted-foreground flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Total Recebido</p>
@@ -91,6 +99,12 @@ const ArenaFinance = () => {
           <CardContent className="pt-6">
             <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> A Liquidar</p>
             <p className="text-2xl font-bold mt-1 text-secondary">R$ {stats.pending.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> Próx. 7 dias</p>
+            <p className="text-2xl font-bold mt-1 text-secondary">R$ {stats.upcoming.toFixed(2)}</p>
           </CardContent>
         </Card>
         <Card>
