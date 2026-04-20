@@ -1,185 +1,146 @@
 
-# Modulo de Arenas - Mood Play
 
-## Resumo
-Implementar o sistema completo de arenas com multi-quadras, reservas com pagamento, painel de gestao, pagina publica e integracao com patrocinadores. O modulo segue os mesmos padroes visuais e arquiteturais ja existentes no projeto (SponsorLayout, Marketplace, etc.).
+# Refino do módulo de Torneios — estilo Rankup
 
-## Fase 1 - Banco de Dados (Migracao SQL)
+Transformar o que já existe em uma experiência de **acompanhamento** simples, mobile-first. Sem duplicar nada: reaproveitamos `Brackets.tsx`, `ModalityDetail`, `TabEntries/Groups/Matches/Placements/BracketView` e o `GenerateBracketDialog`. Apenas refinamos UI e adicionamos 2 colunas mínimas no banco para suportar **Vagas** e **Quadras**.
 
-Criar 7 tabelas principais com RLS:
+## 1. Auditoria do que já existe (reaproveitado)
 
-**arenas** - Dados da arena (vinculada ao user_id do dono via user_roles com role='arena')
-- id, owner_user_id, name, slug (unique), city, state, address, zip_code, description, rules, cover_image_url, contact_email, contact_whatsapp, mp_connected (boolean default false), mp_collector_id (text nullable), is_active (boolean default true), created_at
+| Camada | Arquivo / Tabela | Estado | Ação |
+|---|---|---|---|
+| Overview do torneio | `src/pages/Brackets.tsx` | OK (lista modalidades) | Refinar header + cards |
+| Detalhe da modalidade | `ModalityDetail.tsx` (6 tabs) | OK | Adicionar **card resumo** no topo |
+| Inscritos | `TabEntries.tsx` | OK | Adicionar status "Confirmado/Pendente" + grupo |
+| Grupos | `TabGroups.tsx` | Lista plana | Substituir por tabela classificação (J/V/D/PF/PC/SG) |
+| Bracket visual | `TabBracketView.tsx` | OK | Adicionar zoom + tab "Grupos / Mata-Mata" |
+| Partidas | `TabMatches.tsx` | OK | Agrupar por rodada + filtro Grupo/Mata-mata |
+| Top 4 | `TabPlacements.tsx` | Grid 2col | Substituir por **Pódio central maior** |
+| Geração | `GenerateBracketDialog.tsx` | 4 formatos | Reaproveitado |
+| Placar | `ScoreEntryDialog.tsx` | OK | Adicionar opção **BYE** + **Quadra** |
+| Tabelas DB | `tournament_modalities`, `modality_*`, `enrollments`, `courts` | OK | +2 colunas mínimas |
 
-**courts** - Quadras de cada arena
-- id, arena_id (FK arenas), name, is_active (default true), price_per_hour (numeric nullable), modalities (text[] default '{}'), created_at
+**Nada será duplicado.** Nenhuma tabela nova.
 
-**court_availability** - Horarios de funcionamento por dia da semana
-- id, court_id (FK courts), weekday (int 0-6), start_time (time), end_time (time), slot_duration_minutes (int default 60), created_at
+## 2. Migration mínima (extensão, não duplicação)
 
-**court_blocks** - Bloqueios pontuais (manutencao, feriados)
-- id, court_id (FK courts), block_date (date), start_time (time nullable), end_time (time nullable), reason (text), created_at
+```sql
+-- Vagas e horário por modalidade (já temos name/type/status/bracket_format/num_groups)
+ALTER TABLE tournament_modalities
+  ADD COLUMN IF NOT EXISTS max_entries int,
+  ADD COLUMN IF NOT EXISTS start_time time,
+  ADD COLUMN IF NOT EXISTS sets_to_win int DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS points_per_set int DEFAULT 21,
+  ADD COLUMN IF NOT EXISTS sport text DEFAULT 'Vôlei',
+  ADD COLUMN IF NOT EXISTS level text,
+  ADD COLUMN IF NOT EXISTS gender text;
 
-**bookings** - Reservas
-- id, arena_id (FK arenas), court_id (FK courts), user_id (uuid, ref auth.users), booking_date (date), start_time (time), end_time (time), amount (numeric), status (text default 'pending_payment': pending_payment, confirmed, canceled, completed), payment_provider (text nullable), payment_ref (text nullable), customer_name (text), customer_email (text), customer_whatsapp (text), created_at
+-- Quadra vinculada à partida (reusa courts existente do módulo Arenas)
+ALTER TABLE modality_matches
+  ADD COLUMN IF NOT EXISTS court_id uuid;
 
-**arena_links** - Links externos da arena
-- id, arena_id (FK arenas), title, url, icon_type (text: video, instagram, maps, site, other), is_active (default true), position_order (int default 0), created_at
-
-**arena_partners** - Patrocinadores/apoiadores da arena
-- id, arena_id (FK arenas), company_id (uuid nullable FK companies), name, logo_url (text nullable), link_url (text nullable), tier (text default 'basic': basic, pro, elite), physical_space_included (boolean default false), position_order (int default 0), is_active (default true), created_at
-
-**arena_physical_inventory** - Espacos fisicos para venda
-- id, arena_id (FK arenas), space_type (text: mural, banner, placa, backdrop), description (text nullable), price_monthly (numeric nullable), is_available (boolean default true), created_at
-
-**Politicas RLS:**
-- arenas: publico pode ler arenas ativas; owner pode CRUD na propria arena; admin pode tudo
-- courts: publico pode ler quadras de arenas ativas; owner da arena pode CRUD
-- court_availability/court_blocks: publico pode ler; owner da arena pode CRUD
-- bookings: usuario pode ver/criar as proprias; owner da arena pode ver/atualizar todas da arena; admin pode tudo
-- arena_links/arena_partners/arena_physical_inventory: publico pode ler ativos; owner pode CRUD; admin pode tudo
-
-**Funcoes auxiliares:**
-- `is_arena_owner(arena_id uuid, user_id uuid)` - security definer para verificar dono da arena
-
-**Storage bucket:**
-- `arena-images` (publico) para capa e logos de parceiros
-
-**Registro na tabela arenas:**
-- Ao cadastrar como role='arena', tambem criar registro na tabela `arenas` com os dados iniciais (nome, cidade, estado, endereco)
-
-## Fase 2 - Rotas e Navegacao
-
-Adicionar no App.tsx:
-
-```
-/arenas                           -> ArenasList (dentro do AppLayout)
-/arenas/:arenaSlug                -> ArenaPublic (dentro do AppLayout)
-/arenas/:arenaSlug/reservar       -> ArenaBooking (dentro do AppLayout)
-/arena/dashboard                  -> ArenaLayout > ArenaDashboard
-/arena/dashboard/quadras          -> ArenaLayout > ArenaCourts
-/arena/dashboard/horarios         -> ArenaLayout > ArenaSchedule
-/arena/dashboard/reservas         -> ArenaLayout > ArenaBookings
-/arena/dashboard/patrocinios      -> ArenaLayout > ArenaSponsors
-/admin/arenas                     -> AdminArenas (dentro do AdminLayout)
+-- Status confirmado/pendente já existe em enrollments.status (enum). Não criar.
 ```
 
-Adicionar "Arenas" na barra de navegacao inferior (FeedBottomNav) e no admin sidebar.
+Sem novas tabelas, sem novas RLS (herdam das existentes via `is_modality_tournament_owner`).
 
-## Fase 3 - Paginas Publicas
+## 3. Telas a refinar (sem criar páginas novas)
 
-### 3.1 Listagem de Arenas (/arenas)
-- Cards com: foto, nome, cidade, qtd quadras, preco a partir de, CTA "Ver Arena"
-- Filtros: cidade, modalidade, disponivel hoje
-- Busca por nome
+### 3.1 `Brackets.tsx` — Tela Geral
+**Card principal** no topo (acima da lista):
+- Nome do torneio + Etapa (`tournament.name`)
+- Datas (`start_date – end_date`)
+- Status pill: Inscrições Abertas / Em andamento / Finalizado (derivado de datas)
+- Contador "Categorias (N)"
 
-### 3.2 Pagina Publica da Arena (/arenas/:arenaSlug)
-- Hero com capa, nome, endereco, qtd quadras, botao "Reservar quadra"
-- Secoes: Sobre/Infraestrutura, Regras, Links externos (cards com icones), Patrocinadores (grid com logos), Espacos fisicos disponiveis
+**Cards de categoria** (`ModalityCard.tsx`) reformulados:
+- Título da modalidade
+- Pills: Esporte • Nível • Gênero • Tipo (Dupla/Quarteto)
+- Linha: 🕐 horário • 👥 X/Y equipes
+- Pill de status: **Lotado** (X==Y) ou **Aberto**
+- Click → modalidade
 
-### 3.3 Fluxo de Reserva (/arenas/:arenaSlug/reservar)
-- Passo 1: Escolher quadra, data, horario, duracao
-- Passo 2: Resumo (arena + quadra + data/hora + valor)
-- Passo 3: Checkout transparente Mercado Pago (nome, email, whatsapp, pagamento)
-- Regras: slot so garantido apos pagamento; validacao de overbooking no backend
+### 3.2 `ModalityDetail.tsx` — Header card
+Adicionar **resumo fixo** acima das tabs:
+- Pills (Esporte, Nível, Tipo)
+- Grid 2x2: Formato • Equipes (X/Y) • Sets para vencer • Pontos por set
 
-## Fase 4 - Painel da Arena
+Tabs renomeadas e enxutas: **Inscritos · Grupos · Jogos · Pódio**
+(remover "Chaveamento" e "Parceiros" da modalidade — chaveamento vira sub-tab dentro de "Jogos"; parceiros já existem em TournamentDetail).
 
-### 4.1 ArenaLayout
-- Seguir o padrao do SponsorLayout: header com nome da arena, nav com abas (Dashboard, Quadras, Horarios, Reservas, Patrocinios)
-- Verificar se usuario tem role='arena' e se possui registro na tabela arenas
+### 3.3 `TabEntries` — Inscritos
+- Lista numerada
+- Coluna: nome da equipe + grupo (se sorteado: "Grupo A")
+- Pill direita: **Confirmado** (`enrollments.status='paid'`) / **Pendente**
+- Toggle topo: "Mostrar gênero"
 
-### 4.2 ArenaDashboard (/arena/dashboard)
-- Cards: reservas de hoje, reservas da semana, receita total, saldo disponivel
-- Proximas reservas (lista)
-- Atalhos rapidos para sub-paginas
+### 3.4 `TabGroups` — Classificação
+Para cada grupo card:
+- Header "Grupo A — N equipes" + pill "Completo"
+- Tabela: # | Equipe | J | V | D | PF | PC | SG
+- Top N classificados (`num_groups` define corte) → linha em **verde** com ícone troféu
+- Cálculo dos números feito em frontend a partir de `modality_matches` finalizados do grupo
 
-### 4.3 ArenaCourts (/arena/dashboard/quadras)
-- Lista de quadras com nome, status, preco/hora
-- Acoes: adicionar, editar, ativar/desativar
+### 3.5 `TabMatches` — Jogos (com sub-abas)
+Sub-tabs internas: **Grupos | Mata-Mata | Lista**
+- **Grupos:** filtro por grupo (chips A,B,C,D)
+- **Mata-Mata:** reusa `TabBracketView` com controle de zoom (botões −/40%/+)
+- **Lista:** rodadas agrupadas (Rodada 1, 2, 3...) — visual igual hoje, status: Em andamento / Finalizada / BYE
+- Botão "Editar" abre `ScoreEntryDialog` ampliado (ver 3.7)
 
-### 4.4 ArenaSchedule (/arena/dashboard/horarios)
-- Para cada quadra: horario de funcionamento por dia da semana
-- Duracoes permitidas
-- Bloqueios (data + motivo)
+### 3.6 `TabPlacements` — Pódio
+- Pódio visual: card 1º **central maior** (dourado), 2º esquerda (prata), 3º direita (bronze)
+- Linha embaixo: 4º Lugar
+- Lista numerada 1–4 abaixo do pódio
 
-### 4.5 ArenaBookings (/arena/dashboard/reservas)
-- Lista com quadra, data/horario, cliente (nome/whatsapp), status
-- Acoes: cancelar, marcar concluida
+### 3.7 `ScoreEntryDialog` — extensão
+Adicionar:
+- Select **Status da Partida**: Em andamento / Finalizada
+- Botões **BYE → Equipe A** / **BYE → Equipe B** (passa direto sem placar)
+- Select **Quadra** (lista `courts` da arena do torneio se houver, senão "Sem quadra atribuída")
 
-### 4.6 ArenaSponsors (/arena/dashboard/patrocinios)
-- Patrocinadores ativos
-- Espacos fisicos (mural/banner/placa) - status disponivel/vendido
-- Gerenciar parceiros
+### 3.8 Quadras (sub-aba opcional dentro de Jogos → Mata-Mata header)
+Pequeno bloco "Quadras em uso": chips Quadra 1 (Livre) / Quadra 2 (Em uso: Time X vs Y). Derivado de `modality_matches.court_id` + `status='in_progress'`. Nenhuma tela nova, só um bloco compacto.
 
-## Fase 5 - Edge Function de Pagamento
+## 4. UI/UX
 
-### create-booking-payment
-- Recebe: booking_id, dados do pagador, metodo de pagamento
-- Verifica se slot ainda esta disponivel (anti-overbooking)
-- Cria pagamento no Mercado Pago
-- Se arena tem mp_collector_id: split automatico (arena recebe - comissao Mood)
-- Se nao: pagamento integral para Mood, gera saldo na arena para saque posterior
-- Atualiza status da reserva
+- Mobile-first; cards `rounded-xl border bg-card`
+- Pills: `rounded-full px-2.5 py-0.5 text-xs` com cores existentes (`primary/20`, `secondary/20`, `muted`)
+- Tipografia: `font-display` (Bebas) nos títulos, `font-sans` no resto
+- Hierarquia: título > pills meta > contador > status
+- Verde `#2BFF88` (primary) só em: status "Aberto", linhas de classificados, vencedor
+- Sem bottom-bar duplicada — `Brackets.tsx` já vive fora do AppLayout (header próprio)
 
-### booking-webhook (Mercado Pago callback)
-- Confirma reserva apos pagamento aprovado
-- Bloqueia slot no calendario
+## 5. Arquitetura — sem inteligência local
 
-## Fase 6 - Admin (/admin/arenas)
+Nenhum motor de decisão será criado no MoodPlay. Toda lógica de:
+- ranking
+- otimização de chaveamento
+- agendamento automático de quadras
+- predição
 
-- Lista de arenas com status, cidade, qtd quadras
-- Acoes: aprovar/suspender arena
-- Visualizar reservas e financeiro por arena
+permanece **delegada a ORKYM** via edge functions existentes. Esta entrega é **apenas UI + render + CRUD básico** (placar, status, BYE, atribuição manual de quadra). O sorteio atual (`GenerateBracketDialog`) continua sendo um shuffle simples — quando ORKYM expuser endpoint de sorteio inteligente, basta trocar a função `generate()` por um `supabase.functions.invoke('orkym-bracket')`.
 
-## Fase 7 - Integracao no Cadastro
+## 6. Arquivos tocados
 
-Atualizar o Register.tsx para que ao cadastrar como "Arena":
-- Criar conta no auth
-- Inserir role='arena' no user_roles
-- Criar registro na tabela `arenas` com nome, slug (gerado a partir do nome), cidade, estado, endereco, zip_code, contact_whatsapp
-- Redirecionar para /arena/dashboard apos cadastro
+| Arquivo | Tipo |
+|---|---|
+| `supabase/migrations/<timestamp>_modality_extensions.sql` | novo (só ALTER) |
+| `src/pages/Brackets.tsx` | refino header + tournament status |
+| `src/components/brackets/ModalityCard.tsx` | redesenho pills+vagas+horário |
+| `src/components/brackets/ModalityDetail.tsx` | card resumo + tabs reduzidas |
+| `src/components/brackets/TabEntries.tsx` | + status + grupo + toggle |
+| `src/components/brackets/TabGroups.tsx` | tabela classificação calculada |
+| `src/components/brackets/TabMatches.tsx` | sub-abas Grupos/Mata/Lista + bloco Quadras |
+| `src/components/brackets/TabBracketView.tsx` | controles de zoom |
+| `src/components/brackets/TabPlacements.tsx` | pódio central |
+| `src/components/brackets/ScoreEntryDialog.tsx` | + BYE + Status + Quadra |
 
-## Arquivos a Criar
+**Não criados:** nenhuma página nova, nenhuma tabela nova, nenhuma edge function nova, nenhum motor de IA local.
 
-```
-src/pages/arenas/ArenasList.tsx
-src/pages/arenas/ArenaPublic.tsx
-src/pages/arenas/ArenaBooking.tsx
-src/pages/arena-dashboard/ArenaLayout.tsx
-src/pages/arena-dashboard/ArenaDashboard.tsx
-src/pages/arena-dashboard/ArenaCourts.tsx
-src/pages/arena-dashboard/ArenaSchedule.tsx
-src/pages/arena-dashboard/ArenaBookings.tsx
-src/pages/arena-dashboard/ArenaSponsors.tsx
-src/pages/admin/AdminArenas.tsx
-supabase/functions/create-booking-payment/index.ts
-supabase/functions/booking-webhook/index.ts
-```
+## 7. Resultado
 
-## Arquivos a Modificar
+- Visitante entende o torneio em 3 segundos (status + categorias + vagas)
+- Atleta sabe se está confirmado, em qual grupo, quando joga, contra quem
+- Organizador continua com os mesmos botões (gerar, lançar placar) + BYE + quadra
+- Visual idêntico em peso ao Rankup (pills, contadores, pódio, classificação)
 
-```
-src/App.tsx                        - Novas rotas
-src/pages/Register.tsx             - Criar arena no cadastro
-src/components/feed/FeedBottomNav.tsx - Adicionar aba "Arenas"
-src/pages/admin/AdminLayout.tsx    - Adicionar "Arenas" no sidebar
-src/components/feed/ProfileSwitcher.tsx - Link para painel arena
-supabase/config.toml               - Config das novas edge functions
-```
-
-## Ordem de Implementacao
-
-1. Migracao SQL (tabelas + RLS + funcoes + bucket)
-2. Atualizar Register.tsx (criar arena no cadastro)
-3. ArenaLayout + ArenaDashboard
-4. ArenaCourts + ArenaSchedule
-5. ArenaBookings
-6. ArenasList (listagem publica)
-7. ArenaPublic (pagina da arena)
-8. ArenaBooking (fluxo de reserva)
-9. Edge functions de pagamento
-10. ArenaSponsors
-11. AdminArenas
-12. Atualizacao da navegacao (FeedBottomNav, ProfileSwitcher, AdminLayout)
-13. Rotas no App.tsx
