@@ -10,6 +10,22 @@ export interface Tenant {
   branding: Record<string, any>;
 }
 
+export interface TenantSettings {
+  tenant_id: string;
+  display_name: string;
+  legal_name: string | null;
+  support_email: string | null;
+  support_phone: string | null;
+  primary_color: string;
+  secondary_color: string;
+  logo_url: string | null;
+  favicon_url: string | null;
+  default_locale: string;
+  timezone: string;
+  status: string;
+  metadata: Record<string, any>;
+}
+
 export interface TenantMembership {
   tenant_id: string;
   user_id: string;
@@ -18,6 +34,7 @@ export interface TenantMembership {
 
 interface TenantContextType {
   tenant: Tenant | null;
+  settings: TenantSettings | null;
   memberships: TenantMembership[];
   isLoading: boolean;
   switchTenant: (slug: string) => Promise<void>;
@@ -29,6 +46,7 @@ const STORAGE_KEY = "moodplay.tenant.slug";
 
 const TenantContext = createContext<TenantContextType>({
   tenant: null,
+  settings: null,
   memberships: [],
   isLoading: true,
   switchTenant: async () => {},
@@ -36,6 +54,11 @@ const TenantContext = createContext<TenantContextType>({
 });
 
 export const useTenantContext = () => useContext(TenantContext);
+
+function getCurrentHost(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.location.hostname;
+}
 
 function detectInitialSlug(): string {
   if (typeof window === "undefined") return DEFAULT_TENANT_SLUG;
@@ -45,7 +68,7 @@ function detectInitialSlug(): string {
   const qp = url.searchParams.get("tenant");
   if (qp) return qp;
 
-  // 2. Subdomain (foo.moodplay.app, foo.lovable.app — ignore preview/lovable hosts)
+  // 2. Subdomain (foo.moodplay.app — ignore preview/lovable hosts)
   const host = window.location.hostname;
   const parts = host.split(".");
   const isLovable = host.endsWith("lovable.app") || host.endsWith("lovable.dev");
@@ -66,31 +89,68 @@ function detectInitialSlug(): string {
 
 export const TenantProvider = ({ children }: { children: ReactNode }) => {
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [settings, setSettings] = useState<TenantSettings | null>(null);
   const [memberships, setMemberships] = useState<TenantMembership[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadTenant = useCallback(async (slug: string) => {
-    let { data, error } = await supabase
+  const loadTenantById = useCallback(async (tenantId: string) => {
+    const { data } = await supabase
       .from("tenants")
       .select("id, name, slug, custom_domain, is_active, branding")
-      .eq("slug", slug)
+      .eq("id", tenantId)
       .maybeSingle();
+    return data;
+  }, []);
 
-    // Fallback to default tenant if requested slug not found
-    if ((!data || error) && slug !== DEFAULT_TENANT_SLUG) {
-      const fallback = await supabase
+  const loadTenant = useCallback(async (slug: string) => {
+    // 0. Try domain resolution by host first
+    const host = getCurrentHost();
+    let resolvedTenantData: any = null;
+    if (host) {
+      const { data: dom } = await supabase
+        .from("tenant_domains")
+        .select("tenant_id")
+        .eq("domain", host)
+        .eq("verification_status", "verified")
+        .maybeSingle();
+      if (dom?.tenant_id) {
+        resolvedTenantData = await loadTenantById(dom.tenant_id);
+      }
+    }
+
+    // 1. Slug lookup if no domain match
+    if (!resolvedTenantData) {
+      const { data } = await supabase
+        .from("tenants")
+        .select("id, name, slug, custom_domain, is_active, branding")
+        .eq("slug", slug)
+        .maybeSingle();
+      resolvedTenantData = data;
+    }
+
+    // 2. Fallback to default tenant
+    if (!resolvedTenantData && slug !== DEFAULT_TENANT_SLUG) {
+      const { data } = await supabase
         .from("tenants")
         .select("id, name, slug, custom_domain, is_active, branding")
         .eq("slug", DEFAULT_TENANT_SLUG)
         .maybeSingle();
-      data = fallback.data;
+      resolvedTenantData = data;
     }
 
-    if (data) {
-      setTenant(data as Tenant);
-      try { localStorage.setItem(STORAGE_KEY, data.slug); } catch { /* ignore */ }
+    if (resolvedTenantData) {
+      setTenant(resolvedTenantData as Tenant);
+      try { localStorage.setItem(STORAGE_KEY, resolvedTenantData.slug); } catch { /* ignore */ }
       // Set GUC for RLS-aware queries this session
-      await supabase.rpc("set_current_tenant", { _tenant_id: data.id });
+      await supabase.rpc("set_current_tenant", { _tenant_id: resolvedTenantData.id });
+
+      // Load tenant_settings
+      const { data: settingsData } = await supabase
+        .from("tenant_settings")
+        .select("*")
+        .eq("tenant_id", resolvedTenantData.id)
+        .maybeSingle();
+      setSettings((settingsData as TenantSettings) ?? null);
 
       // Load current user's memberships
       const { data: userData } = await supabase.auth.getUser();
@@ -104,7 +164,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         setMemberships([]);
       }
     }
-  }, []);
+  }, [loadTenantById]);
 
   const switchTenant = useCallback(async (slug: string) => {
     setIsLoading(true);
@@ -114,6 +174,14 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   const refresh = useCallback(async () => {
     if (tenant) await loadTenant(tenant.slug);
   }, [tenant, loadTenant]);
+
+  // Apply branding via CSS vars (opt-in, doesn't override design system)
+  useEffect(() => {
+    if (settings && typeof document !== "undefined") {
+      document.documentElement.style.setProperty("--brand-primary", settings.primary_color);
+      document.documentElement.style.setProperty("--brand-secondary", settings.secondary_color);
+    }
+  }, [settings]);
 
   useEffect(() => {
     let mounted = true;
@@ -133,7 +201,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <TenantContext.Provider value={{ tenant, memberships, isLoading, switchTenant, refresh }}>
+    <TenantContext.Provider value={{ tenant, settings, memberships, isLoading, switchTenant, refresh }}>
       {children}
     </TenantContext.Provider>
   );
