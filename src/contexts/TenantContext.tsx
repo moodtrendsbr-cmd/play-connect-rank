@@ -103,18 +103,13 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const loadTenant = useCallback(async (slug: string) => {
-    // 0. Try domain resolution by host first
+    // 0. Try domain resolution by host first via secure RPC
     const host = getCurrentHost();
     let resolvedTenantData: any = null;
     if (host) {
-      const { data: dom } = await supabase
-        .from("tenant_domains")
-        .select("tenant_id")
-        .eq("domain", host)
-        .eq("verification_status", "verified")
-        .maybeSingle();
-      if (dom?.tenant_id) {
-        resolvedTenantData = await loadTenantById(dom.tenant_id);
+      const { data: tenantId } = await supabase.rpc("resolve_tenant_by_host", { _host: host });
+      if (tenantId) {
+        resolvedTenantData = await loadTenantById(tenantId as string);
       }
     }
 
@@ -144,9 +139,9 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
       // Set GUC for RLS-aware queries this session
       await supabase.rpc("set_current_tenant", { _tenant_id: resolvedTenantData.id });
 
-      // Load tenant_settings
+      // Load tenant_settings via PUBLIC view (no PII)
       const { data: settingsData } = await supabase
-        .from("tenant_settings")
+        .from("tenant_settings_public")
         .select("*")
         .eq("tenant_id", resolvedTenantData.id)
         .maybeSingle();
