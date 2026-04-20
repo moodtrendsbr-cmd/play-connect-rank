@@ -1779,6 +1779,53 @@ export type Database = {
           },
         ]
       }
+      financial_adjustments: {
+        Row: {
+          adjustment_type: string
+          amount: number
+          created_at: string
+          created_by: string
+          external_reference: string | null
+          id: string
+          metadata: Json
+          reason: string
+          tenant_id: string
+          transaction_id: string
+        }
+        Insert: {
+          adjustment_type: string
+          amount: number
+          created_at?: string
+          created_by?: string
+          external_reference?: string | null
+          id?: string
+          metadata?: Json
+          reason: string
+          tenant_id: string
+          transaction_id: string
+        }
+        Update: {
+          adjustment_type?: string
+          amount?: number
+          created_at?: string
+          created_by?: string
+          external_reference?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string
+          tenant_id?: string
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_adjustments_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "financial_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_ledger: {
         Row: {
           amount: number
@@ -1840,6 +1887,7 @@ export type Database = {
       financial_transactions: {
         Row: {
           arena_id: string | null
+          cancellation_reason: string | null
           created_at: string
           currency: string
           id: string
@@ -1848,6 +1896,8 @@ export type Database = {
           paid_at: string | null
           payment_provider: string | null
           payment_reference: string | null
+          refunded_amount: number
+          refunded_at: string | null
           source_id: string
           source_type: string
           status: string
@@ -1857,6 +1907,7 @@ export type Database = {
         }
         Insert: {
           arena_id?: string | null
+          cancellation_reason?: string | null
           created_at?: string
           currency?: string
           id?: string
@@ -1865,6 +1916,8 @@ export type Database = {
           paid_at?: string | null
           payment_provider?: string | null
           payment_reference?: string | null
+          refunded_amount?: number
+          refunded_at?: string | null
           source_id: string
           source_type: string
           status?: string
@@ -1874,6 +1927,7 @@ export type Database = {
         }
         Update: {
           arena_id?: string | null
+          cancellation_reason?: string | null
           created_at?: string
           currency?: string
           id?: string
@@ -1882,6 +1936,8 @@ export type Database = {
           paid_at?: string | null
           payment_provider?: string | null
           payment_reference?: string | null
+          refunded_amount?: number
+          refunded_at?: string | null
           source_id?: string
           source_type?: string
           status?: string
@@ -3942,13 +3998,18 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          expected_settlement_at: string | null
           id: string
           metadata: Json
           payment_account_id: string | null
+          payout_reference: string | null
           percentage: number
           recipient_id: string | null
           recipient_type: string
+          reversal_reason: string | null
+          reversed_at: string | null
           settled_at: string | null
+          settlement_method: string | null
           settlement_reference: string | null
           status: string
           tenant_id: string
@@ -3957,13 +4018,18 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string
+          expected_settlement_at?: string | null
           id?: string
           metadata?: Json
           payment_account_id?: string | null
+          payout_reference?: string | null
           percentage: number
           recipient_id?: string | null
           recipient_type: string
+          reversal_reason?: string | null
+          reversed_at?: string | null
           settled_at?: string | null
+          settlement_method?: string | null
           settlement_reference?: string | null
           status?: string
           tenant_id: string
@@ -3972,13 +4038,18 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          expected_settlement_at?: string | null
           id?: string
           metadata?: Json
           payment_account_id?: string | null
+          payout_reference?: string | null
           percentage?: number
           recipient_id?: string | null
           recipient_type?: string
+          reversal_reason?: string | null
+          reversed_at?: string | null
           settled_at?: string | null
+          settlement_method?: string | null
           settlement_reference?: string | null
           status?: string
           tenant_id?: string
@@ -4327,6 +4398,18 @@ export type Database = {
           },
         ]
       }
+      v_organizer_balances_canonical: {
+        Row: {
+          gross_total: number | null
+          organizer_id: string | null
+          pending_total: number | null
+          reversed_total: number | null
+          settled_total: number | null
+          split_count: number | null
+          tenant_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       arena_archive_old_events: {
@@ -4366,10 +4449,27 @@ export type Database = {
       }
       current_tenant_id: { Args: never; Returns: string }
       expire_pending_enrollments: { Args: never; Returns: number }
-      finance_mark_split_settled: {
-        Args: { _reference?: string; _split_id: string }
+      finance_apply_split_override: {
+        Args: { _reason: string; _splits: Json; _transaction_id: string }
+        Returns: string
+      }
+      finance_cancel_transaction: {
+        Args: { _reason: string; _transaction_id: string }
         Returns: undefined
       }
+      finance_compute_expected_settlement: {
+        Args: { _paid_at: string; _tenant_id: string }
+        Returns: string
+      }
+      finance_mark_split_settled:
+        | {
+            Args: { _reference?: string; _split_id: string }
+            Returns: undefined
+          }
+        | {
+            Args: { _method?: string; _reference?: string; _split_id: string }
+            Returns: undefined
+          }
       finance_record_payment: {
         Args: {
           _paid_at?: string
@@ -4378,6 +4478,15 @@ export type Database = {
           _source_id: string
           _source_type: string
           _total: number
+        }
+        Returns: string
+      }
+      finance_record_refund: {
+        Args: {
+          _amount: number
+          _external_ref?: string
+          _reason: string
+          _transaction_id: string
         }
         Returns: string
       }
