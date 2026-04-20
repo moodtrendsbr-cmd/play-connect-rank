@@ -3,7 +3,7 @@ import { useOutletContext, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CalendarCheck, Grid3X3, DollarSign, ArrowRight, Users, CalendarClock, Receipt, AlertTriangle, Inbox, Bot, User as UserIcon, Cog } from "lucide-react";
+import { CalendarCheck, Grid3X3, DollarSign, ArrowRight, Users, CalendarClock, Receipt, AlertTriangle, Inbox, Bot, User as UserIcon, Cog, Trophy, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
