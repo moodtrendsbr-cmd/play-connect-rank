@@ -136,7 +136,7 @@ const ArenaDashboard = () => {
                       <SourceIcon className="h-2.5 w-2.5" /> {sourceLabel(t.source)}
                     </span>
                     {t.occurrence_id && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 inline-flex items-center gap-1">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive inline-flex items-center gap-1">
                         <AlertTriangle className="h-2.5 w-2.5" /> do incidente
                       </span>
                     )}
