@@ -70,6 +70,10 @@ import ArenaInstructors from "./pages/arena-dashboard/ArenaInstructors";
 import ArenaClasses from "./pages/arena-dashboard/ArenaClasses";
 import ArenaClassEnrollments from "./pages/arena-dashboard/ArenaClassEnrollments";
 import ArenaCheckin from "./pages/arena-dashboard/ArenaCheckin";
+import ArenaPlans from "./pages/arena-dashboard/ArenaPlans";
+import ArenaSubscriptions from "./pages/arena-dashboard/ArenaSubscriptions";
+import ArenaBilling from "./pages/arena-dashboard/ArenaBilling";
+import ArenaOccurrences from "./pages/arena-dashboard/ArenaOccurrences";
 import ArenasList from "./pages/arenas/ArenasList";
 import ArenaPublic from "./pages/arenas/ArenaPublic";
 import ArenaBooking from "./pages/arenas/ArenaBooking";
@@ -146,6 +150,10 @@ const App = () => (
               <Route path="horarios" element={<ArenaSchedule />} />
               <Route path="reservas" element={<ArenaBookings />} />
               <Route path="patrocinios" element={<ArenaSponsors />} />
+              <Route path="planos" element={<ArenaPlans />} />
+              <Route path="assinaturas" element={<ArenaSubscriptions />} />
+              <Route path="cobrancas" element={<ArenaBilling />} />
+              <Route path="ocorrencias" element={<ArenaOccurrences />} />
             </Route>
             <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
             <Route path="/organizer" element={<OrganizerLayout />}>
