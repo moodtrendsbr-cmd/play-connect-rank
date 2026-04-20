@@ -75,6 +75,8 @@ const ArenaDashboard = () => {
     { label: "Aulas hoje", value: stats.classesToday, icon: CalendarClock, color: "text-blue-400" },
     { label: "Alunos ativos", value: stats.students, icon: Users, color: "text-emerald-400" },
     { label: "Receita semana", value: `R$ ${stats.revenue.toFixed(2)}`, icon: DollarSign, color: "text-amber-400" },
+    { label: "Torneios ativos", value: stats.activeTournaments, icon: Trophy, color: "text-purple-400" },
+    { label: "Receita do mês", value: `R$ ${stats.monthRevenue.toFixed(2)}`, icon: TrendingUp, color: "text-emerald-400" },
   ];
 
   const opCards = [
