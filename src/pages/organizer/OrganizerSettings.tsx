@@ -24,6 +24,13 @@ const OrganizerSettings = () => {
     timezone: "America/Sao_Paulo",
   });
   const [saving, setSaving] = useState(false);
+  const [splitRules, setSplitRules] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!tenant) return;
+    supabase.from("split_rules").select("*").eq("tenant_id", tenant.id).eq("is_active", true).order("source_type")
+      .then(({ data }) => setSplitRules(data || []));
+  }, [tenant]);
 
   useEffect(() => {
     if (settings) {
@@ -135,6 +142,42 @@ const OrganizerSettings = () => {
               <Input value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Percent className="h-4 w-4" /> Regras de Repartição
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {splitRules.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma regra ativa. Contate o suporte para configurar.</p>
+          ) : (
+            <div className="space-y-2">
+              {splitRules.map((r) => {
+                const labels: Record<string, string> = {
+                  enrollment: "Inscrições de torneio",
+                  booking: "Reservas de quadra",
+                  marketplace_order: "Vendas marketplace",
+                  arena_billing_cycle: "Mensalidades arena",
+                  sponsorship: "Patrocínios",
+                };
+                return (
+                  <div key={r.id} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
+                    <span className="text-sm font-medium">{labels[r.source_type] || r.source_type}</span>
+                    <div className="flex gap-2 text-xs">
+                      <Badge variant="outline">Plataforma {Number(r.platform_pct).toFixed(0)}%</Badge>
+                      <Badge variant="outline">Organizador {Number(r.organizer_pct).toFixed(0)}%</Badge>
+                      <Badge variant="outline">Arena {Number(r.arena_pct).toFixed(0)}%</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-xs text-muted-foreground mt-2">Somente leitura. Contate o admin para alterar.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
