@@ -68,6 +68,14 @@ import ArenaSponsors from "./pages/arena-dashboard/ArenaSponsors";
 import ArenasList from "./pages/arenas/ArenasList";
 import ArenaPublic from "./pages/arenas/ArenaPublic";
 import ArenaBooking from "./pages/arenas/ArenaBooking";
+import OrganizerOnboarding from "./pages/organizer/OrganizerOnboarding";
+import OrganizerLayout from "./pages/organizer/OrganizerLayout";
+import OrganizerSettings from "./pages/organizer/OrganizerSettings";
+import OrganizerMembers from "./pages/organizer/OrganizerMembers";
+import OrganizerArenas from "./pages/organizer/OrganizerArenas";
+import OrganizerDomains from "./pages/organizer/OrganizerDomains";
+import OrganizerPayment from "./pages/organizer/OrganizerPayment";
+import { Navigate } from "react-router-dom";
 
 const queryClient = new QueryClient();
 
@@ -128,6 +136,15 @@ const App = () => (
               <Route path="horarios" element={<ArenaSchedule />} />
               <Route path="reservas" element={<ArenaBookings />} />
               <Route path="patrocinios" element={<ArenaSponsors />} />
+            </Route>
+            <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
+            <Route path="/organizer" element={<OrganizerLayout />}>
+              <Route index element={<Navigate to="/organizer/settings" replace />} />
+              <Route path="settings" element={<OrganizerSettings />} />
+              <Route path="members" element={<OrganizerMembers />} />
+              <Route path="arenas" element={<OrganizerArenas />} />
+              <Route path="domains" element={<OrganizerDomains />} />
+              <Route path="payment" element={<OrganizerPayment />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
