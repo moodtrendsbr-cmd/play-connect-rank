@@ -1,214 +1,154 @@
 
 
-# Fase 4 — ORKYM Operational Layer + Recurring Operations + Occurrences
+# Fase 4.1 — Refinamentos pós-entrega (sem rebuild)
 
-Extensão limpa sobre Fase 3. Zero inteligência local. Zero duplicação. Tudo respeita `tenant_id` + `arena_id` + RLS pattern já consolidado.
+Ajustes cirúrgicos sobre a Fase 4. Zero nova feature. Zero quebra. Foco em clareza semântica, integridade do modelo e preparo de escala — atendendo aos 4 pontos levantados.
 
 ---
 
-## 1. Auditoria — reuso obrigatório
+## 1. Nomenclatura — desambiguar "events"
 
-| Existente | Reuso Fase 4 |
+Risco real: já existem `tournaments` (eventos esportivos) e agora `arena_operational_events` (eventos operacionais).
+
+**Estado atual:** a tabela já se chama `arena_operational_events` (prefixo `arena_operational_` torna a semântica inequívoca). Nenhum rename necessário.
+
+**Ação preventiva:**
+- Adicionar `COMMENT ON TABLE arena_operational_events` deixando explícito: "Trilha operacional interna da arena. Não confundir com `tournaments` (eventos esportivos públicos)."
+- Padronizar `event_type` com namespace por domínio: `attendance.*`, `billing.*`, `class.*`, `student.*`, `booking.*`, `task.*`. Documentar no memory.
+- Adicionar `CHECK` leve em `event_type` exigindo formato `dominio.acao` (regex `^[a-z_]+\.[a-z_]+$`) — evita poluição futura.
+
+---
+
+## 2. Tasks vs Occurrences — fronteira semântica
+
+**Estado atual:** as duas tabelas existem com propósitos distintos, mas sem garantia formal.
+
+**Definição oficial (a documentar em memory):**
+
+| Conceito | Tabela | Significado | Estados |
+|---|---|---|---|
+| **Occurrence** | `arena_occurrences` | **Problema/registro de fato** ocorrido (incidente, manutenção, conflito). Tem `severity`. | open / in_progress / resolved / closed |
+| **Task** | `arena_operational_tasks` | **Ação a executar** (pendência, follow-up, sugestão). Tem `priority`. | open / dismissed / done |
+
+**Hardening estrutural:**
+- `arena_occurrences`: adicionar coluna nullable `task_id uuid` apontando para `arena_operational_tasks` — opcional, vincula a ação derivada do problema. Sem FK rígida (ambas sobrevivem isoladas).
+- `arena_operational_tasks`: adicionar coluna nullable `occurrence_id uuid` — quando a tarefa nasceu de uma ocorrência, fica explícito.
+- `CHECK` em `arena_operational_tasks.status` IN (open, dismissed, done) e `arena_occurrences.status` IN (open, in_progress, resolved, closed). Evita estados misturados.
+- `COMMENT ON TABLE` em ambas explicitando a regra ("problema" vs "ação").
+
+UI: nenhuma mudança forçada agora — relacionamento é foundation.
+
+---
+
+## 3. Billing future-proof — garantir hooks de split
+
+**Estado atual:** `arena_student_subscriptions.payment_account_id` já existe (FK lógica para `payment_accounts`). `arena_billing_cycles` já tem `payment_method` + `payment_reference`. Base de split presente.
+
+**Hardening estrutural:**
+- `arena_billing_cycles`: adicionar 3 colunas nullable, sem efeito atual:
+  - `payment_account_id uuid` — copiada da subscription no momento do INSERT do ciclo (snapshot do destino do split). Permite mudar a conta da subscription sem reescrever histórico.
+  - `provider_preference_id text` — id da preference Mercado Pago (Fase 5).
+  - `gross_amount numeric(10,2)`, `fee_amount numeric(10,2) default 0`, `net_amount numeric(10,2)` — preparam split. `amount` continua sendo o cobrado total; `net_amount = gross - fee` quando o gateway responder. Hoje, todos populados com cópia de `amount` e `fee=0`.
+- Atualizar RPC `arena_generate_billing_cycle` para popular `payment_account_id` e os campos `gross/net` no INSERT.
+- Atualizar RPC `arena_mark_cycle_paid` para aceitar `_fee_amount numeric default 0` opcional e recalcular `net_amount`.
+
+UI: opcional — mostrar `net_amount` apenas se `fee > 0` (default escondido). Sem redesign.
+
+---
+
+## 4. Volume de events — TTL/arquivamento + índices
+
+**Estado atual:** triggers já populam `arena_operational_events` automaticamente (presença ausente, billing overdue/paid). Sem política de retenção.
+
+**Hardening:**
+- Confirmar índices essenciais (criar se faltar):
+  - `idx_arena_op_events_arena_created ON arena_operational_events (arena_id, created_at DESC)`
+  - `idx_arena_op_events_unprocessed ON arena_operational_events (arena_id, processed_at) WHERE processed_at IS NULL` — partial index, eficiente para ORKYM consumir backlog.
+  - `idx_arena_op_events_type ON arena_operational_events (arena_id, event_type, created_at DESC)`
+- Política de TTL via função SQL **on-demand** (sem cron — Fase 5):
+  ```sql
+  CREATE FUNCTION arena_archive_old_events(_arena_id uuid, _older_than_days int default 180) RETURNS integer
+  -- DELETE FROM arena_operational_events
+  -- WHERE arena_id = _arena_id AND processed_at IS NOT NULL AND created_at < now() - (_older_than_days || ' days')::interval
+  -- RETURNS count. SECURITY DEFINER + checagem owner/admin.
+  ```
+  Nunca apaga eventos não processados. Política conservadora.
+- Adicionar coluna `archived_at timestamptz` (nullable) — alternativa a hard delete: marca arquivamento sem perder histórico. RPC marca em vez de deletar. UI esconde `archived_at IS NOT NULL`.
+- Documentar em memory: padrão recomendado é `archive` (soft) para auditoria; `delete` reservado para limpeza pesada manual.
+
+---
+
+## 5. Migração — arquivo único idempotente
+
+`supabase/migrations/<ts>_phase4_1_refinements.sql`:
+
+1. `COMMENT ON TABLE` em `arena_operational_events`, `arena_operational_tasks`, `arena_occurrences` (semântica oficial).
+2. `ALTER TABLE arena_operational_events ADD CONSTRAINT event_type_format CHECK (event_type ~ '^[a-z_]+\.[a-z_]+$') NOT VALID;` (NOT VALID = não revalida histórico, válido para inserts futuros).
+3. `ALTER TABLE arena_operational_tasks ADD COLUMN occurrence_id uuid;`
+4. `ALTER TABLE arena_occurrences ADD COLUMN task_id uuid;`
+5. `ALTER TABLE arena_operational_tasks ADD CONSTRAINT tasks_status_chk CHECK (status IN ('open','dismissed','done'));`
+6. `ALTER TABLE arena_occurrences ADD CONSTRAINT occ_status_chk CHECK (status IN ('open','in_progress','resolved','closed'));`
+7. `ALTER TABLE arena_billing_cycles ADD COLUMN payment_account_id uuid, ADD COLUMN provider_preference_id text, ADD COLUMN gross_amount numeric(10,2), ADD COLUMN fee_amount numeric(10,2) DEFAULT 0, ADD COLUMN net_amount numeric(10,2);`
+8. Backfill: `UPDATE arena_billing_cycles SET gross_amount = amount, net_amount = amount, fee_amount = 0 WHERE gross_amount IS NULL;`
+9. `ALTER TABLE arena_operational_events ADD COLUMN archived_at timestamptz;`
+10. CREATE 3 indexes faltantes em `arena_operational_events`.
+11. CREATE OR REPLACE `arena_generate_billing_cycle` (popula novos campos).
+12. CREATE OR REPLACE `arena_mark_cycle_paid` (aceita `_fee_amount`).
+13. CREATE FUNCTION `arena_archive_old_events(_arena_id uuid, _older_than_days int)` SECURITY DEFINER.
+
+Idempotente: todos os ALTERs com `IF NOT EXISTS` quando aplicável; CREATE INDEX `IF NOT EXISTS`.
+
+---
+
+## 6. Frontend — ajustes mínimos
+
+| Arquivo | Mudança |
 |---|---|
-| `arena_students`, `arena_classes`, `arena_class_enrollments`, `arena_attendance` | Origem de eventos e alvo de planos/assinaturas |
-| `payment_accounts` (Fase 1) | Referenciada por `arena_student_subscriptions.payment_account_id` |
-| `arenas`, `courts`, `bookings` | Referenciados por ocorrências (related_entity_*) |
-| `is_arena_owner`, `is_tenant_admin`, `is_admin`, `set_arena_child_tenant_default` | Reusados em todas as policies/triggers — zero função nova de utilidade |
-| `orkym-invoke` + `src/lib/orkym.ts` | Único canal para qualquer "inteligência" futura. Esta fase só registra dados e expõe inbox. |
-| `ArenaLayout` nav + `ArenaDashboard` | Estendidos com 3 abas + 1 seção, sem reescrever |
+| `src/pages/arena-dashboard/ArenaBilling.tsx` | Mostrar coluna "Líquido" só quando `fee_amount > 0`. Sem redesign. |
+| `src/pages/arena-dashboard/ArenaOccurrences.tsx` | Botão opcional "Gerar tarefa" que cria `arena_operational_tasks` com `occurrence_id` preenchido. |
+| `src/pages/arena-dashboard/ArenaDashboard.tsx` | Inbox: badge extra "do incidente" quando task tem `occurrence_id`. |
 
-**Não criar:** sistema próprio de pagamentos, motor de regras, scheduler local, scoring, priorização automática.
+Total: 3 edits triviais. Nada novo de UX, apenas amarração.
 
 ---
 
-## 2. Modelo de dados — 6 tabelas novas
+## 7. Memory update
 
-Padrão fixo: `id uuid PK`, `tenant_id NOT NULL`, `arena_id NOT NULL`, `created_at`, `updated_at`. Triggers `set_arena_child_tenant_default` em todas.
-
-### BLOCO A — ORKYM hooks
-
-| Tabela | Campos | Função |
-|---|---|---|
-| **arena_operational_events** | `entity_type text, entity_id uuid, event_type text, payload jsonb, source text default 'system', processed_at timestamptz` | Trilha bruta de eventos operacionais (aluno faltou, aula lotada, cobrança vencida, check-in, etc). Append-only. ORKYM lê daqui. |
-| **arena_operational_tasks** | `related_entity_type text, related_entity_id uuid, task_type text, title text, description text, priority smallint default 2, status text default 'open' (open/dismissed/done), source text default 'manual' (manual/orkym/system), due_at timestamptz, resolved_at timestamptz, resolved_by uuid` | Inbox de pendências/sugestões. ORKYM grava aqui via `orkym-invoke`. Arena owner consome. |
-
-### BLOCO B — Recorrência/Billing
-
-| Tabela | Campos | Função |
-|---|---|---|
-| **arena_membership_plans** | `name, description, billing_frequency text (monthly/quarterly/yearly/one_time), amount numeric(10,2), currency text default 'BRL', features jsonb, is_active bool default true` | Catálogo de planos da arena. |
-| **arena_student_subscriptions** | `student_id uuid FK, plan_id uuid FK, payment_account_id uuid FK nullable, status text (active/paused/canceled/past_due), started_at, current_period_start, current_period_end, next_due_at, canceled_at, metadata jsonb` | Vínculo aluno↔plano com ciclo. |
-| **arena_billing_cycles** | `subscription_id uuid FK, period_start, period_end, amount numeric, due_at, paid_at, status text (pending/paid/overdue/canceled), payment_reference text, payment_method text` | Linha por ciclo (mês). Geração manual nesta fase + RPC auxiliar. |
-
-### BLOCO C — Ocorrências
-
-| Tabela | Campos | Função |
-|---|---|---|
-| **arena_occurrences** | `related_entity_type text, related_entity_id uuid, title, description, category text (court/class/instructor/booking/student/event/other), severity text (low/medium/high/critical), status text (open/in_progress/resolved/closed), reported_by uuid, assigned_to uuid nullable, resolved_at, resolution_notes` | Registro de incidentes/manutenção/conflitos. |
-
-**Indexes essenciais:** `(arena_id, status, created_at DESC)` em events/tasks/occurrences; `(subscription_id, due_at)` em billing_cycles; `(arena_id, next_due_at)` em subscriptions.
+`mem://features/arena-management` — anexar seção **"Convenções Fase 4.1"**:
+- Glossário oficial: `event` (trilha) ≠ `task` (ação) ≠ `occurrence` (problema) ≠ `tournament` (evento esportivo).
+- Namespace de `event_type`: `dominio.acao`.
+- Política de retenção: archive soft via `arena_archive_old_events`, hard delete proibido sem operação manual.
+- Billing: `payment_account_id` snapshotted no ciclo; `gross/fee/net` preparam split Mercado Pago.
 
 ---
 
-## 3. RLS — padrão único replicável
-
-Para todas as 6 tabelas:
-
-```sql
--- SELECT/ALL: arena owner + tenant admin + admin
-CREATE POLICY "arena_op_view" ON <tabela> FOR SELECT
-  USING (is_arena_owner(arena_id, auth.uid())
-         OR is_tenant_admin(tenant_id, auth.uid())
-         OR is_admin(auth.uid()));
-CREATE POLICY "arena_op_manage" ON <tabela> FOR ALL
-  USING (is_arena_owner(arena_id, auth.uid())
-         OR is_tenant_admin(tenant_id, auth.uid())
-         OR is_admin(auth.uid()));
-```
-
-**Exceção `arena_student_subscriptions` + `arena_billing_cycles`:** o aluno (via `profile_user_id` em `arena_students`) pode ler **só sua própria** assinatura/ciclos via JOIN. Sem UPDATE/DELETE pelo aluno.
-
-**Exceção `arena_operational_events`:** INSERT permitido também via `service_role` (edge functions/triggers internos). Sem leitura pública.
-
----
-
-## 4. RPCs auxiliares (3 funções, sem inteligência)
-
-```sql
--- Gera o próximo ciclo de cobrança a partir da subscription
-CREATE FUNCTION arena_generate_billing_cycle(_subscription_id uuid) RETURNS uuid
-  -- valida owner/admin, calcula period_start/end + due_at conforme billing_frequency,
-  -- INSERT arena_billing_cycles, UPDATE next_due_at na subscription.
-
--- Marca ciclo como pago manualmente
-CREATE FUNCTION arena_mark_cycle_paid(_cycle_id uuid, _payment_method text, _payment_reference text) RETURNS void
-
--- Marca ciclos vencidos como overdue (chamada pelo frontend on-demand ou cron futuro)
-CREATE FUNCTION arena_mark_overdue_cycles(_arena_id uuid) RETURNS integer
-```
-
-Todas `SECURITY DEFINER` + `SET search_path = public` + checagem de owner/admin no início. Zero lógica preditiva.
-
-**Trigger leve** em `arena_billing_cycles`: ao mudar status para `overdue` ou `paid`, INSERT em `arena_operational_events` (`event_type='billing.overdue'` / `'billing.paid'`). Zero decisão — só registro.
-
-**Trigger leve** em `arena_attendance`: ao INSERT com `status='absent'`, INSERT em `arena_operational_events` (`event_type='attendance.absent'`). ORKYM decide depois se vira tarefa.
-
----
-
-## 5. Frontend — 4 telas novas + 1 extensão dashboard
-
-| Rota | Arquivo | Conteúdo |
-|---|---|---|
-| `/arena/dashboard/planos` | `ArenaPlans.tsx` | Lista/cria/edita `arena_membership_plans`. Form: nome, valor, frequência, descrição. |
-| `/arena/dashboard/assinaturas` | `ArenaSubscriptions.tsx` | Lista assinaturas (aluno, plano, status, próximo vencimento). Ações: pausar/cancelar/gerar próximo ciclo. Criar nova vinculando student↔plan. |
-| `/arena/dashboard/cobrancas` | `ArenaBilling.tsx` | Lista de `arena_billing_cycles` (filtros: status, mês). Ação: marcar como pago manualmente. Botão "Atualizar vencidos" → chama `arena_mark_overdue_cycles`. |
-| `/arena/dashboard/ocorrencias` | `ArenaOccurrences.tsx` | Lista + filtros (categoria/severity/status). Modal: abrir/editar ocorrência. Mudança de status inline. |
-
-**Extensão `ArenaLayout.tsx`:** adicionar 4 itens ao `navItems` (Planos, Assinaturas, Cobranças, Ocorrências) + ícones lucide (`Tag`, `RefreshCw`, `Receipt`, `AlertTriangle`).
-
-**Extensão `ArenaDashboard.tsx`:** nova seção **"Operação"** acima dos atalhos:
-- Card "Vencimentos próximos (7 dias)" — count de `arena_billing_cycles WHERE due_at <= now()+7d AND status='pending'`
-- Card "Cobranças vencidas" — count `status='overdue'`
-- Card "Ocorrências abertas" — count `arena_occurrences WHERE status IN ('open','in_progress')`
-- Card "Pendências (tasks)" — count `arena_operational_tasks WHERE status='open'`
-- Lista das 5 tarefas mais recentes (`arena_operational_tasks` open) com badge de `source` (orkym/manual/system) + ações dismiss/done
-
-UI minimal, segue o design system existente. Sem redesign.
-
----
-
-## 6. Rotas em `App.tsx`
-
-Adicionar 4 rotas dentro de `<Route path="arena/dashboard" element={<ArenaLayout />}>`:
-- `planos` → `<ArenaPlans />`
-- `assinaturas` → `<ArenaSubscriptions />`
-- `cobrancas` → `<ArenaBilling />`
-- `ocorrencias` → `<ArenaOccurrences />`
-
----
-
-## 7. Hook ORKYM (canal, não cérebro)
-
-`src/lib/orkym.ts` já existe (Fase 1). Esta fase **não chama** ORKYM — apenas garante que os dados (events + inbox) estão prontos para ela ler/gravar via `orkym-invoke` futuramente.
-
-Documentar em `mem://features/arena-management` (atualizar): tabelas que ORKYM lê (`arena_operational_events`, `arena_attendance`, `arena_billing_cycles`, `arena_class_enrollments`) e onde ela grava (`arena_operational_tasks`).
-
----
-
-## 8. Migração — arquivo único
-
-`supabase/migrations/<ts>_phase4_orkym_ops_billing.sql`:
-
-1. CREATE 6 tables com FKs/UNIQUEs/CHECKs
-2. ENABLE RLS + policies (padrão único + exceções aluno)
-3. Triggers `set_arena_child_tenant_default` (6×) + `update_updated_at_column` (4×)
-4. CREATE FUNCTION `arena_generate_billing_cycle`, `arena_mark_cycle_paid`, `arena_mark_overdue_cycles`
-5. Triggers leves: `arena_billing_cycles → events`, `arena_attendance → events`
-6. Indexes operacionais
-
----
-
-## 9. Arquivos tocados
+## 8. Arquivos tocados
 
 | Tipo | Arquivo |
 |---|---|
-| Migration | `supabase/migrations/<ts>_phase4_orkym_ops_billing.sql` |
-| Frontend novo | `src/pages/arena-dashboard/ArenaPlans.tsx` |
-| Frontend novo | `src/pages/arena-dashboard/ArenaSubscriptions.tsx` |
-| Frontend novo | `src/pages/arena-dashboard/ArenaBilling.tsx` |
-| Frontend novo | `src/pages/arena-dashboard/ArenaOccurrences.tsx` |
-| Frontend edit | `src/pages/arena-dashboard/ArenaLayout.tsx` (+4 navItems) |
-| Frontend edit | `src/pages/arena-dashboard/ArenaDashboard.tsx` (+seção Operação + lista de tasks) |
-| Frontend edit | `src/App.tsx` (+4 rotas) |
-| Memory edit | `mem://features/arena-management` (anexa Fase 4) |
+| Migration | `supabase/migrations/<ts>_phase4_1_refinements.sql` |
+| Frontend edit | `src/pages/arena-dashboard/ArenaBilling.tsx` |
+| Frontend edit | `src/pages/arena-dashboard/ArenaOccurrences.tsx` |
+| Frontend edit | `src/pages/arena-dashboard/ArenaDashboard.tsx` |
+| Memory edit | `mem/features/arena-management.md` |
 
-**Total:** 1 migration + 4 telas + 3 edits triviais. Zero módulo existente reescrito.
+**Total:** 1 migration + 3 edits triviais + 1 memory. Zero módulo reescrito.
 
 ---
 
-## ENTREGA B — Relatório esperado
+## ENTREGA — Resultado
 
-| Item | Resultado |
+| Ponto levantado | Como foi resolvido |
 |---|---|
-| Tabelas criadas | 6 (`arena_operational_events`, `arena_operational_tasks`, `arena_membership_plans`, `arena_student_subscriptions`, `arena_billing_cycles`, `arena_occurrences`) |
-| Reaproveitado | `arena_students`, `arena_classes`, `arena_attendance`, `payment_accounts`, helpers RLS, triggers tenant default |
-| Estendido | `ArenaLayout` (+4 abas), `ArenaDashboard` (+seção Operação) |
-| Hooks ORKYM | `arena_operational_events` (entrada) + `arena_operational_tasks` (saída/inbox), source flag distingue origem |
-| Recorrência | Plans → Subscriptions → Billing Cycles, com 3 RPCs operacionais e marcação manual de pagamento |
-| Ocorrências | Tabela única + UI de gestão simples + categorização |
-| RLS | 100% privado operacional; aluno só lê suas assinaturas/ciclos |
-
----
-
-## ENTREGA C — Riscos / Pendências (Fase 5+)
-
-**Pendente:**
-- Cobrança automática via Mercado Pago (gerar preference por ciclo) — Fase 5
-- Cron real para `arena_mark_overdue_cycles` por tenant — Fase 5
-- ORKYM consumindo events e populando tasks (rotas concretas em `orkym-invoke`)
-- Notificação ao aluno (mensalidade vencendo) — Fase 5/6
-- View de aluno: minhas assinaturas / meus pagamentos
-- Workflow de ocorrência (assignees, comentários, anexos)
-- Marketplace interno arena (Fase 4 anterior pendente — não entra agora)
-
-**Simplificações deliberadas:**
-- Pagamento manual nesta fase (status atualizado por owner)
-- Geração de ciclo manual (botão na UI) — sem cron
-- Ocorrências sem comentários/timeline
-- Tasks sem categorização avançada nem SLA
-
-**Compatibilidade preservada:**
-- Bookings, tournaments, marketplace, organizer admin, Fase 3 — todos intocados
-- Zero mudança em RLS de tabelas existentes
-- Zero campo novo em tabelas existentes
+| Nomenclatura "events" | Comentário oficial + namespace forçado por CHECK + glossário em memory |
+| Tasks vs Occurrences | Separação reforçada por CHECK de status + ligação opcional bidirecional + glossário |
+| Billing future-proof | `payment_account_id` snapshot no ciclo + `gross/fee/net` preparam split + RPCs atualizadas |
+| Volume de events | 3 índices (incl. partial p/ unprocessed) + `archived_at` + RPC `arena_archive_old_events` |
 
 **Critérios de sucesso:**
-- ✅ Arena cria planos, assinaturas e ciclos de cobrança
-- ✅ Arena marca cobranças como pagas e visualiza vencimentos
-- ✅ Arena abre e acompanha ocorrências
-- ✅ Dashboard mostra operação contínua (vencimentos, ocorrências, tarefas)
-- ✅ Eventos operacionais registrados automaticamente (presença, billing)
-- ✅ Inbox de tarefas pronto para ORKYM gravar
-- ✅ Zero IA local
-- ✅ Sistema 100% funcional
+- ✅ Zero ambiguidade entre `tournaments` e `arena_operational_events`
+- ✅ Tasks e Occurrences com fronteira formalizada (CHECKs + relação opcional)
+- ✅ Billing pronta para split sem alterar UI
+- ✅ Trilha de eventos com índices corretos e política de arquivamento disponível
+- ✅ Sistema 100% funcional, zero IA local, zero quebra
 
