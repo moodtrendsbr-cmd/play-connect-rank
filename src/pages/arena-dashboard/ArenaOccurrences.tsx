@@ -90,6 +90,25 @@ const ArenaOccurrences = () => {
     setOpen(false); load();
   };
 
+  const generateTask = async (o: any) => {
+    if (o.task_id) { toast.info("Já existe uma tarefa vinculada"); return; }
+    const { data: task, error } = await supabase.from("arena_operational_tasks").insert({
+      arena_id: arena.id,
+      task_type: "occurrence_followup",
+      title: `Resolver: ${o.title}`,
+      description: o.description || null,
+      priority: o.severity === "critical" ? 1 : o.severity === "high" ? 2 : 3,
+      source: "manual",
+      occurrence_id: o.id,
+      related_entity_type: o.related_entity_type,
+      related_entity_id: o.related_entity_id,
+    }).select("id").single();
+    if (error) { toast.error(error.message); return; }
+    await supabase.from("arena_occurrences").update({ task_id: task.id }).eq("id", o.id);
+    toast.success("Tarefa gerada na caixa de pendências");
+    load();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
