@@ -47,20 +47,27 @@ const TabMatches = ({ modalityId, tournamentId, isOrganizer }: TabMatchesProps) 
         .order("round_number")
         .order("match_number"),
       supabase.from("modality_groups").select("*").eq("modality_id", modalityId).order("group_name"),
-      supabase.from("tournaments").select("arena_id").eq("id", tournamentId).maybeSingle(),
+      supabase.from("tournaments").select("organizer_id").eq("id", tournamentId).maybeSingle(),
     ]);
 
     setMatches(matchData || []);
     setGroups(groupData || []);
 
-    // Try to fetch courts from tournament's arena (if linked)
-    if (tData?.arena_id) {
-      const { data: courtsData } = await supabase
-        .from("courts")
-        .select("id, name")
-        .eq("arena_id", tData.arena_id)
-        .eq("is_active", true);
-      setCourts(courtsData || []);
+    // Fetch courts from arenas owned by tournament's organizer (if any)
+    if (tData?.organizer_id) {
+      const { data: arenas } = await supabase
+        .from("arenas")
+        .select("id")
+        .eq("owner_user_id", tData.organizer_id);
+      const arenaIds = (arenas || []).map((a) => a.id);
+      if (arenaIds.length > 0) {
+        const { data: courtsData } = await supabase
+          .from("courts")
+          .select("id, name")
+          .in("arena_id", arenaIds)
+          .eq("is_active", true);
+        setCourts(courtsData || []);
+      }
     }
 
     setLoading(false);
