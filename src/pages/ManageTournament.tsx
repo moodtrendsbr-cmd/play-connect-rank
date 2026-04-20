@@ -9,6 +9,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { toast } from "@/hooks/use-toast";
 import { AlertCircle, ArrowLeft, ChevronDown, Pencil } from "lucide-react";
 import EditTournamentForm from "@/components/tournament/EditTournamentForm";
+import TabCategorias from "@/components/tournament/TabCategorias";
+import TabCheckin from "@/components/tournament/TabCheckin";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const MOOD_COMMISSION_PERCENT = 10;
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
@@ -167,47 +170,65 @@ const ManageTournament = () => {
           </CollapsibleContent>
         </Collapsible>
 
-        {/* Paid */}
-        <h2 className="text-2xl font-display text-foreground mb-4">✅ PAGOS</h2>
-        {paid.length === 0 ? <p className="text-muted-foreground mb-6">Nenhum pagamento confirmado.</p> : (
-          <div className="space-y-2 mb-8">
-            {paid.map((e) => (
-              <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-                <span>{getName(e)}</span>
-                <Badge className="bg-primary/20 text-primary">✅ Pago</Badge>
-              </div>
-            ))}
-          </div>
-        )}
+        <Tabs defaultValue="enrollments" className="w-full">
+          <TabsList className="bg-card border border-border mb-6 flex-wrap h-auto">
+            <TabsTrigger value="enrollments">Inscrições</TabsTrigger>
+            <TabsTrigger value="categorias">Categorias</TabsTrigger>
+            <TabsTrigger value="checkin">Check-in</TabsTrigger>
+          </TabsList>
 
-        {/* Pending */}
-        <h2 className="text-2xl font-display text-foreground mb-4">⏳ PENDENTES</h2>
-        {pending.length === 0 ? <p className="text-muted-foreground mb-6">Nenhum pendente.</p> : (
-          <div className="space-y-2 mb-8">
-            {pending.map((e) => (
-              <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-                <div>
-                  <span>{getName(e)}</span>
-                  <p className="text-xs text-muted-foreground">Vence: {e.expires_at ? new Date(e.expires_at).toLocaleDateString("pt-BR") : "—"}</p>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => sendReminder(e)}>Enviar lembrete</Button>
+          <TabsContent value="enrollments">
+            {/* Paid */}
+            <h2 className="text-2xl font-display text-foreground mb-4">✅ PAGOS</h2>
+            {paid.length === 0 ? <p className="text-muted-foreground mb-6">Nenhum pagamento confirmado.</p> : (
+              <div className="space-y-2 mb-8">
+                {paid.map((e) => (
+                  <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+                    <span>{getName(e)}</span>
+                    <Badge className="bg-primary/20 text-primary">✅ Pago</Badge>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        {/* Expired */}
-        <h2 className="text-2xl font-display text-foreground mb-4">❌ EXPIRADOS</h2>
-        {expired.length === 0 ? <p className="text-muted-foreground mb-6">Nenhum expirado.</p> : (
-          <div className="space-y-2 mb-8">
-            {expired.map((e) => (
-              <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3 opacity-60">
-                <span>{getName(e)}</span>
-                <Badge variant="destructive">Expirado</Badge>
+            {/* Pending */}
+            <h2 className="text-2xl font-display text-foreground mb-4">⏳ PENDENTES</h2>
+            {pending.length === 0 ? <p className="text-muted-foreground mb-6">Nenhum pendente.</p> : (
+              <div className="space-y-2 mb-8">
+                {pending.map((e) => (
+                  <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+                    <div>
+                      <span>{getName(e)}</span>
+                      <p className="text-xs text-muted-foreground">Vence: {e.expires_at ? new Date(e.expires_at).toLocaleDateString("pt-BR") : "—"}</p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => sendReminder(e)}>Enviar lembrete</Button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )}
+
+            {/* Expired */}
+            <h2 className="text-2xl font-display text-foreground mb-4">❌ EXPIRADOS</h2>
+            {expired.length === 0 ? <p className="text-muted-foreground mb-6">Nenhum expirado.</p> : (
+              <div className="space-y-2 mb-8">
+                {expired.map((e) => (
+                  <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3 opacity-60">
+                    <span>{getName(e)}</span>
+                    <Badge variant="destructive">Expirado</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="categorias">
+            <TabCategorias tournamentId={id!} />
+          </TabsContent>
+
+          <TabsContent value="checkin">
+            <TabCheckin tournamentId={id!} />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

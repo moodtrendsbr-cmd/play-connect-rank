@@ -9,9 +9,18 @@ import { toast } from "sonner";
 
 const ArenaDashboard = () => {
   const { arena } = useOutletContext<{ arena: any }>();
-  const [stats, setStats] = useState({ today: 0, week: 0, revenue: 0, courts: 0, students: 0, classesToday: 0, dueSoon: 0, overdue: 0, openOcc: 0, openTasks: 0 });
+  const [stats, setStats] = useState({ today: 0, week: 0, revenue: 0, courts: 0, students: 0, classesToday: 0, dueSoon: 0, overdue: 0, openOcc: 0, openTasks: 0, activeTournaments: 0, monthRevenue: 0 });
   const [upcoming, setUpcoming] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
+
+  const load = async () => {
+    if (!arena) return;
+    const today = format(new Date(), "yyyy-MM-dd");
+    const weekEnd = format(new Date(Date.now() + 7 * 86400000), "yyyy-MM-dd");
+    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(); dayEnd.setHours(23, 59, 59, 999);
+    const sevenDaysAhead = new Date(Date.now() + 7 * 86400000).toISOString();
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
 
   const load = async () => {
     if (!arena) return;
