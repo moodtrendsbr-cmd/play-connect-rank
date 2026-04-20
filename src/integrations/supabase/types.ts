@@ -1716,12 +1716,15 @@ export type Database = {
       }
       enrollments: {
         Row: {
+          amount_paid: number | null
           athlete_email: string | null
           athlete_name: string | null
           athlete_whatsapp: string | null
+          checked_in_at: string | null
           created_at: string
           expires_at: string | null
           id: string
+          modality_id: string | null
           payer_id: string | null
           payment_id: string | null
           status: Database["public"]["Enums"]["enrollment_status"]
@@ -1731,12 +1734,15 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          amount_paid?: number | null
           athlete_email?: string | null
           athlete_name?: string | null
           athlete_whatsapp?: string | null
+          checked_in_at?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string
+          modality_id?: string | null
           payer_id?: string | null
           payment_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
@@ -1746,12 +1752,15 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          amount_paid?: number | null
           athlete_email?: string | null
           athlete_name?: string | null
           athlete_whatsapp?: string | null
+          checked_in_at?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string
+          modality_id?: string | null
           payer_id?: string | null
           payment_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
@@ -1827,6 +1836,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      financial_transactions: {
+        Row: {
+          arena_id: string | null
+          created_at: string
+          currency: string
+          id: string
+          metadata: Json
+          organizer_id: string | null
+          paid_at: string | null
+          payment_provider: string | null
+          payment_reference: string | null
+          source_id: string
+          source_type: string
+          status: string
+          tenant_id: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          arena_id?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          metadata?: Json
+          organizer_id?: string | null
+          paid_at?: string | null
+          payment_provider?: string | null
+          payment_reference?: string | null
+          source_id: string
+          source_type: string
+          status?: string
+          tenant_id: string
+          total_amount: number
+          updated_at?: string
+        }
+        Update: {
+          arena_id?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          metadata?: Json
+          organizer_id?: string | null
+          paid_at?: string | null
+          payment_provider?: string | null
+          payment_reference?: string | null
+          source_id?: string
+          source_type?: string
+          status?: string
+          tenant_id?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       follows: {
         Row: {
@@ -2434,6 +2497,7 @@ export type Database = {
       }
       modality_matches: {
         Row: {
+          arena_id: string | null
           court_id: string | null
           created_at: string
           entry_a_id: string | null
@@ -2443,6 +2507,7 @@ export type Database = {
           match_number: number
           modality_id: string
           round_number: number
+          scheduled_at: string | null
           score_a: number | null
           score_b: number | null
           status: string
@@ -2450,6 +2515,7 @@ export type Database = {
           winner_entry_id: string | null
         }
         Insert: {
+          arena_id?: string | null
           court_id?: string | null
           created_at?: string
           entry_a_id?: string | null
@@ -2459,6 +2525,7 @@ export type Database = {
           match_number?: number
           modality_id: string
           round_number?: number
+          scheduled_at?: string | null
           score_a?: number | null
           score_b?: number | null
           status?: string
@@ -2466,6 +2533,7 @@ export type Database = {
           winner_entry_id?: string | null
         }
         Update: {
+          arena_id?: string | null
           court_id?: string | null
           created_at?: string
           entry_a_id?: string | null
@@ -2475,6 +2543,7 @@ export type Database = {
           match_number?: number
           modality_id?: string
           round_number?: number
+          scheduled_at?: string | null
           score_a?: number | null
           score_b?: number | null
           status?: string
@@ -3032,6 +3101,48 @@ export type Database = {
         }
         Relationships: []
       }
+      split_rules: {
+        Row: {
+          affiliate_pct: number
+          arena_pct: number
+          company_pct: number
+          created_at: string
+          id: string
+          is_active: boolean
+          organizer_pct: number
+          platform_pct: number
+          source_type: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          affiliate_pct?: number
+          arena_pct?: number
+          company_pct?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          organizer_pct?: number
+          platform_pct?: number
+          source_type: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          affiliate_pct?: number
+          arena_pct?: number
+          company_pct?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          organizer_pct?: number
+          platform_pct?: number
+          source_type?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sponsored_posts: {
         Row: {
           active: boolean
@@ -3470,11 +3581,14 @@ export type Database = {
           max_entries: number | null
           name: string
           num_groups: number | null
+          phase: string
           points_per_set: number | null
+          rules_json: Json
           sets_to_win: number | null
           sport: string | null
           start_time: string | null
           status: string
+          team_size: number
           tenant_id: string | null
           tournament_id: string
           type: string
@@ -3488,11 +3602,14 @@ export type Database = {
           max_entries?: number | null
           name: string
           num_groups?: number | null
+          phase?: string
           points_per_set?: number | null
+          rules_json?: Json
           sets_to_win?: number | null
           sport?: string | null
           start_time?: string | null
           status?: string
+          team_size?: number
           tenant_id?: string | null
           tournament_id: string
           type?: string
@@ -3506,11 +3623,14 @@ export type Database = {
           max_entries?: number | null
           name?: string
           num_groups?: number | null
+          phase?: string
           points_per_set?: number | null
+          rules_json?: Json
           sets_to_win?: number | null
           sport?: string | null
           start_time?: string | null
           status?: string
+          team_size?: number
           tenant_id?: string | null
           tournament_id?: string
           type?: string
@@ -3720,6 +3840,7 @@ export type Database = {
           category: Database["public"]["Enums"]["tournament_category"]
           city: string
           created_at: string
+          default_split_config: Json | null
           end_date: string
           entry_fee: number
           entry_fee_2: number | null
@@ -3754,6 +3875,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["tournament_category"]
           city?: string
           created_at?: string
+          default_split_config?: Json | null
           end_date: string
           entry_fee?: number
           entry_fee_2?: number | null
@@ -3788,6 +3910,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["tournament_category"]
           city?: string
           created_at?: string
+          default_split_config?: Json | null
           end_date?: string
           entry_fee?: number
           entry_fee_2?: number | null
@@ -3814,6 +3937,62 @@ export type Database = {
           zip_code?: string | null
         }
         Relationships: []
+      }
+      transaction_splits: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          metadata: Json
+          payment_account_id: string | null
+          percentage: number
+          recipient_id: string | null
+          recipient_type: string
+          settled_at: string | null
+          settlement_reference: string | null
+          status: string
+          tenant_id: string
+          transaction_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          metadata?: Json
+          payment_account_id?: string | null
+          percentage: number
+          recipient_id?: string | null
+          recipient_type: string
+          settled_at?: string | null
+          settlement_reference?: string | null
+          status?: string
+          tenant_id: string
+          transaction_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          metadata?: Json
+          payment_account_id?: string | null
+          percentage?: number
+          recipient_id?: string | null
+          recipient_type?: string
+          settled_at?: string | null
+          settlement_reference?: string | null
+          status?: string
+          tenant_id?: string
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transaction_splits_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "financial_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -4187,6 +4366,21 @@ export type Database = {
       }
       current_tenant_id: { Args: never; Returns: string }
       expire_pending_enrollments: { Args: never; Returns: number }
+      finance_mark_split_settled: {
+        Args: { _reference?: string; _split_id: string }
+        Returns: undefined
+      }
+      finance_record_payment: {
+        Args: {
+          _paid_at?: string
+          _provider?: string
+          _reference?: string
+          _source_id: string
+          _source_type: string
+          _total: number
+        }
+        Returns: string
+      }
       get_arena_id_from_court: { Args: { _court_id: string }; Returns: string }
       get_arena_id_from_instructor: {
         Args: { _instructor_id: string }
