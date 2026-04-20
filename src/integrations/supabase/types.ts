@@ -22,6 +22,7 @@ export type Database = {
           id: string
           is_active: boolean
           position_order: number
+          tenant_id: string | null
           title: string
           url: string
         }
@@ -32,6 +33,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           position_order?: number
+          tenant_id?: string | null
           title: string
           url: string
         }
@@ -42,6 +44,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           position_order?: number
+          tenant_id?: string | null
           title?: string
           url?: string
         }
@@ -67,6 +70,7 @@ export type Database = {
           name: string
           physical_space_included: boolean
           position_order: number
+          tenant_id: string | null
           tier: string
         }
         Insert: {
@@ -80,6 +84,7 @@ export type Database = {
           name: string
           physical_space_included?: boolean
           position_order?: number
+          tenant_id?: string | null
           tier?: string
         }
         Update: {
@@ -93,6 +98,7 @@ export type Database = {
           name?: string
           physical_space_included?: boolean
           position_order?: number
+          tenant_id?: string | null
           tier?: string
         }
         Relationships: [
@@ -121,6 +127,7 @@ export type Database = {
           is_available: boolean
           price_monthly: number | null
           space_type: string
+          tenant_id: string | null
         }
         Insert: {
           arena_id: string
@@ -130,6 +137,7 @@ export type Database = {
           is_available?: boolean
           price_monthly?: number | null
           space_type?: string
+          tenant_id?: string | null
         }
         Update: {
           arena_id?: string
@@ -139,6 +147,7 @@ export type Database = {
           is_available?: boolean
           price_monthly?: number | null
           space_type?: string
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -168,6 +177,7 @@ export type Database = {
           rules: string | null
           slug: string
           state: string
+          tenant_id: string | null
           updated_at: string
           zip_code: string | null
         }
@@ -188,6 +198,7 @@ export type Database = {
           rules?: string | null
           slug: string
           state?: string
+          tenant_id?: string | null
           updated_at?: string
           zip_code?: string | null
         }
@@ -208,10 +219,19 @@ export type Database = {
           rules?: string | null
           slug?: string
           state?: string
+          tenant_id?: string | null
           updated_at?: string
           zip_code?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "arenas_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       athlete_sponsors: {
         Row: {
@@ -267,6 +287,7 @@ export type Database = {
           payment_ref: string | null
           start_time: string
           status: string
+          tenant_id: string | null
           user_id: string | null
         }
         Insert: {
@@ -284,6 +305,7 @@ export type Database = {
           payment_ref?: string | null
           start_time: string
           status?: string
+          tenant_id?: string | null
           user_id?: string | null
         }
         Update: {
@@ -301,6 +323,7 @@ export type Database = {
           payment_ref?: string | null
           start_time?: string
           status?: string
+          tenant_id?: string | null
           user_id?: string | null
         }
         Relationships: [
@@ -328,6 +351,7 @@ export type Database = {
           expires_at: string
           id: string
           media_url: string
+          tenant_id: string | null
           thumbnail_url: string | null
         }
         Insert: {
@@ -337,6 +361,7 @@ export type Database = {
           expires_at?: string
           id?: string
           media_url: string
+          tenant_id?: string | null
           thumbnail_url?: string | null
         }
         Update: {
@@ -346,6 +371,7 @@ export type Database = {
           expires_at?: string
           id?: string
           media_url?: string
+          tenant_id?: string | null
           thumbnail_url?: string | null
         }
         Relationships: []
@@ -404,6 +430,7 @@ export type Database = {
           plan_id: string | null
           state: string | null
           status: string
+          tenant_id: string | null
           tournament_visibility: boolean
           updated_at: string
           whatsapp: string | null
@@ -430,6 +457,7 @@ export type Database = {
           plan_id?: string | null
           state?: string | null
           status?: string
+          tenant_id?: string | null
           tournament_visibility?: boolean
           updated_at?: string
           whatsapp?: string | null
@@ -456,6 +484,7 @@ export type Database = {
           plan_id?: string | null
           state?: string | null
           status?: string
+          tenant_id?: string | null
           tournament_visibility?: boolean
           updated_at?: string
           whatsapp?: string | null
@@ -527,6 +556,7 @@ export type Database = {
           id: string
           slot_duration_minutes: number
           start_time: string
+          tenant_id: string | null
           weekday: number
         }
         Insert: {
@@ -536,6 +566,7 @@ export type Database = {
           id?: string
           slot_duration_minutes?: number
           start_time: string
+          tenant_id?: string | null
           weekday: number
         }
         Update: {
@@ -545,6 +576,7 @@ export type Database = {
           id?: string
           slot_duration_minutes?: number
           start_time?: string
+          tenant_id?: string | null
           weekday?: number
         }
         Relationships: [
@@ -566,6 +598,7 @@ export type Database = {
           id: string
           reason: string | null
           start_time: string | null
+          tenant_id: string | null
         }
         Insert: {
           block_date: string
@@ -575,6 +608,7 @@ export type Database = {
           id?: string
           reason?: string | null
           start_time?: string | null
+          tenant_id?: string | null
         }
         Update: {
           block_date?: string
@@ -584,6 +618,7 @@ export type Database = {
           id?: string
           reason?: string | null
           start_time?: string | null
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -604,6 +639,7 @@ export type Database = {
           modalities: string[]
           name: string
           price_per_hour: number | null
+          tenant_id: string | null
         }
         Insert: {
           arena_id: string
@@ -613,6 +649,7 @@ export type Database = {
           modalities?: string[]
           name?: string
           price_per_hour?: number | null
+          tenant_id?: string | null
         }
         Update: {
           arena_id?: string
@@ -622,6 +659,7 @@ export type Database = {
           modalities?: string[]
           name?: string
           price_per_hour?: number | null
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -644,6 +682,7 @@ export type Database = {
           payer_id: string | null
           payment_id: string | null
           status: Database["public"]["Enums"]["enrollment_status"]
+          tenant_id: string | null
           tournament_id: string
           updated_at: string
           user_id: string | null
@@ -658,6 +697,7 @@ export type Database = {
           payer_id?: string | null
           payment_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
+          tenant_id?: string | null
           tournament_id: string
           updated_at?: string
           user_id?: string | null
@@ -672,6 +712,7 @@ export type Database = {
           payer_id?: string | null
           payment_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
+          tenant_id?: string | null
           tournament_id?: string
           updated_at?: string
           user_id?: string | null
@@ -696,6 +737,7 @@ export type Database = {
           mood_share: number
           source: string
           source_id: string | null
+          tenant_id: string | null
         }
         Insert: {
           amount: number
@@ -706,6 +748,7 @@ export type Database = {
           mood_share?: number
           source: string
           source_id?: string | null
+          tenant_id?: string | null
         }
         Update: {
           amount?: number
@@ -716,6 +759,7 @@ export type Database = {
           mood_share?: number
           source?: string
           source_id?: string | null
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -851,6 +895,7 @@ export type Database = {
           shipping_cost: number | null
           shipping_zip: string | null
           status: string
+          tenant_id: string | null
           total_amount: number
         }
         Insert: {
@@ -869,6 +914,7 @@ export type Database = {
           shipping_cost?: number | null
           shipping_zip?: string | null
           status?: string
+          tenant_id?: string | null
           total_amount: number
         }
         Update: {
@@ -887,6 +933,7 @@ export type Database = {
           shipping_cost?: number | null
           shipping_zip?: string | null
           status?: string
+          tenant_id?: string | null
           total_amount?: number
         }
         Relationships: [
@@ -1212,6 +1259,7 @@ export type Database = {
           modality_id: string
           name: string
           seed: number | null
+          tenant_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1219,6 +1267,7 @@ export type Database = {
           modality_id: string
           name?: string
           seed?: number | null
+          tenant_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1226,6 +1275,7 @@ export type Database = {
           modality_id?: string
           name?: string
           seed?: number | null
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -1301,16 +1351,19 @@ export type Database = {
           group_name: string
           id: string
           modality_id: string
+          tenant_id: string | null
         }
         Insert: {
           group_name?: string
           id?: string
           modality_id: string
+          tenant_id?: string | null
         }
         Update: {
           group_name?: string
           id?: string
           modality_id?: string
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -1336,6 +1389,7 @@ export type Database = {
           score_a: number | null
           score_b: number | null
           status: string
+          tenant_id: string | null
           winner_entry_id: string | null
         }
         Insert: {
@@ -1351,6 +1405,7 @@ export type Database = {
           score_a?: number | null
           score_b?: number | null
           status?: string
+          tenant_id?: string | null
           winner_entry_id?: string | null
         }
         Update: {
@@ -1366,6 +1421,7 @@ export type Database = {
           score_a?: number | null
           score_b?: number | null
           status?: string
+          tenant_id?: string | null
           winner_entry_id?: string | null
         }
         Relationships: [
@@ -1412,18 +1468,21 @@ export type Database = {
           id: string
           modality_id: string
           position: number
+          tenant_id: string | null
         }
         Insert: {
           entry_id: string
           id?: string
           modality_id: string
           position: number
+          tenant_id?: string | null
         }
         Update: {
           entry_id?: string
           id?: string
           modality_id?: string
           position?: number
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -1449,6 +1508,7 @@ export type Database = {
           id: string
           modality_id: string
           position: number
+          tenant_id: string | null
         }
         Insert: {
           amount?: number
@@ -1456,6 +1516,7 @@ export type Database = {
           id?: string
           modality_id: string
           position: number
+          tenant_id?: string | null
         }
         Update: {
           amount?: number
@@ -1463,6 +1524,7 @@ export type Database = {
           id?: string
           modality_id?: string
           position?: number
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -1483,6 +1545,7 @@ export type Database = {
           organizer_id: string
           payment_id: string | null
           status: string
+          tenant_id: string | null
           tournament_id: string
           withdrawn_at: string | null
         }
@@ -1494,6 +1557,7 @@ export type Database = {
           organizer_id: string
           payment_id?: string | null
           status?: string
+          tenant_id?: string | null
           tournament_id: string
           withdrawn_at?: string | null
         }
@@ -1505,6 +1569,7 @@ export type Database = {
           organizer_id?: string
           payment_id?: string | null
           status?: string
+          tenant_id?: string | null
           tournament_id?: string
           withdrawn_at?: string | null
         }
@@ -1514,6 +1579,50 @@ export type Database = {
             columns: ["tournament_id"]
             isOneToOne: false
             referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_accounts: {
+        Row: {
+          arena_id: string | null
+          config: Json
+          created_at: string
+          external_id: string
+          id: string
+          provider: string
+          status: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          arena_id?: string | null
+          config?: Json
+          created_at?: string
+          external_id: string
+          id?: string
+          provider?: string
+          status?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          arena_id?: string | null
+          config?: Json
+          created_at?: string
+          external_id?: string
+          id?: string
+          provider?: string
+          status?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_accounts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -1619,6 +1728,7 @@ export type Database = {
           created_at: string
           id: string
           pinned_at: string | null
+          tenant_id: string | null
           tournament_id: string | null
           type: string
           updated_at: string
@@ -1629,6 +1739,7 @@ export type Database = {
           created_at?: string
           id?: string
           pinned_at?: string | null
+          tenant_id?: string | null
           tournament_id?: string | null
           type?: string
           updated_at?: string
@@ -1639,6 +1750,7 @@ export type Database = {
           created_at?: string
           id?: string
           pinned_at?: string | null
+          tenant_id?: string | null
           tournament_id?: string | null
           type?: string
           updated_at?: string
@@ -1666,6 +1778,7 @@ export type Database = {
           price: number
           status: string
           stock: number | null
+          tenant_id: string | null
           video_url: string | null
         }
         Insert: {
@@ -1680,6 +1793,7 @@ export type Database = {
           price: number
           status?: string
           stock?: number | null
+          tenant_id?: string | null
           video_url?: string | null
         }
         Update: {
@@ -1694,6 +1808,7 @@ export type Database = {
           price?: number
           status?: string
           stock?: number | null
+          tenant_id?: string | null
           video_url?: string | null
         }
         Relationships: [
@@ -1948,6 +2063,7 @@ export type Database = {
           plan_id: string
           started_at: string
           status: string
+          tenant_id: string | null
         }
         Insert: {
           canceled_at?: string | null
@@ -1958,6 +2074,7 @@ export type Database = {
           plan_id: string
           started_at?: string
           status?: string
+          tenant_id?: string | null
         }
         Update: {
           canceled_at?: string | null
@@ -1968,6 +2085,7 @@ export type Database = {
           plan_id?: string
           started_at?: string
           status?: string
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -1985,6 +2103,74 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tenant_memberships: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_memberships_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenants: {
+        Row: {
+          branding: Json
+          created_at: string
+          custom_domain: string | null
+          id: string
+          is_active: boolean
+          name: string
+          owner_user_id: string | null
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          branding?: Json
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          owner_user_id?: string | null
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          branding?: Json
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          owner_user_id?: string | null
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       tournament_match_pool: {
         Row: {
@@ -2051,6 +2237,7 @@ export type Database = {
           sport: string | null
           start_time: string | null
           status: string
+          tenant_id: string | null
           tournament_id: string
           type: string
         }
@@ -2068,6 +2255,7 @@ export type Database = {
           sport?: string | null
           start_time?: string | null
           status?: string
+          tenant_id?: string | null
           tournament_id: string
           type?: string
         }
@@ -2085,6 +2273,7 @@ export type Database = {
           sport?: string | null
           start_time?: string | null
           status?: string
+          tenant_id?: string | null
           tournament_id?: string
           type?: string
         }
@@ -2284,6 +2473,7 @@ export type Database = {
           slot_config: Json | null
           start_date: string
           state: string
+          tenant_id: string | null
           type: Database["public"]["Enums"]["tournament_type"]
           types: string[] | null
           updated_at: string
@@ -2317,6 +2507,7 @@ export type Database = {
           slot_config?: Json | null
           start_date: string
           state?: string
+          tenant_id?: string | null
           type?: Database["public"]["Enums"]["tournament_type"]
           types?: string[] | null
           updated_at?: string
@@ -2350,6 +2541,7 @@ export type Database = {
           slot_config?: Json | null
           start_date?: string
           state?: string
+          tenant_id?: string | null
           type?: Database["public"]["Enums"]["tournament_type"]
           types?: string[] | null
           updated_at?: string
@@ -2375,6 +2567,33 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_events: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          payload: Json | null
+          processed_at: string | null
+          provider: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          provider: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          provider?: string
+        }
+        Relationships: []
+      }
       withdrawal_requests: {
         Row: {
           amount: number
@@ -2384,6 +2603,7 @@ export type Database = {
           pix_key: string
           processed_at: string | null
           status: string
+          tenant_id: string | null
         }
         Insert: {
           amount: number
@@ -2393,6 +2613,7 @@ export type Database = {
           pix_key: string
           processed_at?: string | null
           status?: string
+          tenant_id?: string | null
         }
         Update: {
           amount?: number
@@ -2402,6 +2623,7 @@ export type Database = {
           pix_key?: string
           processed_at?: string | null
           status?: string
+          tenant_id?: string | null
         }
         Relationships: []
       }
@@ -2410,6 +2632,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      current_tenant_id: { Args: never; Returns: string }
+      expire_pending_enrollments: { Args: never; Returns: number }
       get_arena_id_from_court: { Args: { _court_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -2443,10 +2667,19 @@ export type Database = {
         Args: { _sponsorship_id: string; _user_id: string }
         Returns: boolean
       }
+      is_tenant_admin: {
+        Args: { _tenant_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_tenant_member: {
+        Args: { _tenant_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_tournament_owner: {
         Args: { _tournament_id: string; _user_id: string }
         Returns: boolean
       }
+      set_current_tenant: { Args: { _tenant_id: string }; Returns: undefined }
     }
     Enums: {
       app_role: "organizer" | "athlete" | "admin" | "arena" | "company"
