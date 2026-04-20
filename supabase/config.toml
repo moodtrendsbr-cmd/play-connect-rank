@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.booking-webhook]
 verify_jwt = false
+
+[functions.orkym-invoke]
+verify_jwt = true
+
+[functions.expire-pending-payments]
+verify_jwt = true
