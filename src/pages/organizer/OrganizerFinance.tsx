@@ -17,22 +17,27 @@ const OrganizerFinance = () => {
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      // All splits where I'm the organizer recipient
+      // Fonte canônica: view derivada de transaction_splits
+      const { data: balance } = await supabase
+        .from("v_organizer_balances_canonical" as any)
+        .select("*")
+        .eq("organizer_id", user.id)
+        .maybeSingle();
+
+      // Detalhe e agregação por torneio: ainda lê splits diretos
       const { data: mySplits } = await supabase
         .from("transaction_splits")
-        .select("*, financial_transactions(source_type, source_id, total_amount, paid_at)")
+        .select("*, financial_transactions(source_type, source_id, total_amount, paid_at, status, refunded_amount)")
         .eq("recipient_type", "organizer")
         .eq("recipient_id", user.id)
         .order("created_at", { ascending: false })
         .limit(200);
 
       const list = mySplits || [];
-      let total = 0, settled = 0, pending = 0;
-      list.forEach((s: any) => {
-        total += Number(s.amount);
-        if (s.status === "settled") settled += Number(s.amount);
-        else pending += Number(s.amount);
-      });
+      const b: any = balance || {};
+      const total = Number(b.gross_total || 0);
+      const settled = Number(b.settled_total || 0);
+      const pending = Number(b.pending_total || 0);
 
       // Per tournament aggregation (only enrollment-source splits)
       const enrollmentSplits = list.filter(
@@ -75,7 +80,7 @@ const OrganizerFinance = () => {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <DollarSign className="h-6 w-6" /> Financeiro do Organizador
         </h1>
-        <p className="text-sm text-muted-foreground">Receita dos seus torneios e splits a receber.</p>
+        <p className="text-sm text-muted-foreground">Receita dos seus torneios e splits a receber. <span className="text-xs">(fonte canônica: <code>v_organizer_balances_canonical</code>)</span></p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
