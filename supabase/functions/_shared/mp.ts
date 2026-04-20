@@ -69,3 +69,54 @@ export async function getMpPayment(paymentId: string | number): Promise<any> {
   if (!res.ok) throw new Error(`MP fetch error: ${JSON.stringify(data)}`);
   return data;
 }
+
+/**
+ * Resolve the Mercado Pago collector_id for a payment recipient.
+ * Priority: payment_accounts (canonical) → arenas.mp_collector_id → profiles.mp_collector_id (legacy fallback).
+ */
+export async function resolveCollectorId(
+  supabase: SupabaseClient,
+  opts: { tenantId?: string | null; arenaId?: string | null; organizerId?: string | null },
+): Promise<string | null> {
+  // 1. Canonical source: payment_accounts
+  if (opts.arenaId) {
+    const { data } = await supabase
+      .from("payment_accounts")
+      .select("external_id")
+      .eq("provider", "mercadopago")
+      .eq("status", "active")
+      .eq("arena_id", opts.arenaId)
+      .maybeSingle();
+    if (data?.external_id) return data.external_id;
+  }
+  if (opts.tenantId) {
+    const { data } = await supabase
+      .from("payment_accounts")
+      .select("external_id")
+      .eq("provider", "mercadopago")
+      .eq("status", "active")
+      .eq("tenant_id", opts.tenantId)
+      .is("arena_id", null)
+      .maybeSingle();
+    if (data?.external_id) return data.external_id;
+  }
+  // 2. Legacy fallback: arenas.mp_collector_id
+  if (opts.arenaId) {
+    const { data } = await supabase
+      .from("arenas")
+      .select("mp_collector_id, mp_connected")
+      .eq("id", opts.arenaId)
+      .maybeSingle();
+    if (data?.mp_connected && data?.mp_collector_id) return data.mp_collector_id;
+  }
+  // 3. Legacy fallback: profiles.mp_collector_id
+  if (opts.organizerId) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("mp_collector_id")
+      .eq("user_id", opts.organizerId)
+      .maybeSingle();
+    return data?.mp_collector_id ?? null;
+  }
+  return null;
+}
