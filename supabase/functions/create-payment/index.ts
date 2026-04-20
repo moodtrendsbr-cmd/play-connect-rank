@@ -42,23 +42,23 @@ serve(async (req) => {
     const totalAmount = Number(entry_fee) * enrollment_ids.length;
     const commissionAmount = Math.round(totalAmount * MOOD_COMMISSION_PERCENT) / 100;
 
-    // Lookup organizer's mp_collector_id
+    // Lookup organizer's collector_id (canonical via payment_accounts, fallback to legacy)
     let mpCollectorId: string | null = null;
+    let tenantId: string | null = null;
     if (tournament_id) {
       const { data: tournament } = await supabase
         .from("tournaments")
-        .select("organizer_id")
+        .select("organizer_id, tenant_id")
         .eq("id", tournament_id)
         .single();
 
       if (tournament) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("mp_collector_id")
-          .eq("user_id", tournament.organizer_id)
-          .single();
-
-        mpCollectorId = profile?.mp_collector_id || null;
+        tenantId = tournament.tenant_id ?? null;
+        const { resolveCollectorId } = await import("../_shared/mp.ts");
+        mpCollectorId = await resolveCollectorId(supabase, {
+          tenantId,
+          organizerId: tournament.organizer_id,
+        });
       }
     }
 

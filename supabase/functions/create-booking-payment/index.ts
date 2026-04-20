@@ -57,8 +57,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Create MP payment
+    // Resolve collector via canonical payment_accounts (with legacy fallback)
     const arena = booking.arenas;
+    const { resolveCollectorId } = await import("../_shared/mp.ts");
+    const collectorId = await resolveCollectorId(supabase, {
+      tenantId: booking.tenant_id ?? arena?.tenant_id ?? null,
+      arenaId: booking.arena_id,
+    });
+
     const paymentBody: any = {
       transaction_amount: Number(booking.amount),
       description: `Reserva ${arena?.name || "Arena"}`,
@@ -69,8 +75,8 @@ Deno.serve(async (req) => {
       },
     };
 
-    // If arena has MP connected, use split (marketplace)
-    if (arena?.mp_connected && arena?.mp_collector_id) {
+    // If a collector is configured, use split (marketplace)
+    if (collectorId) {
       paymentBody.marketplace_fee = Number(booking.amount) * 0.1; // 10% Mood commission
       // In production, use application_id and collector_id for split
     }
