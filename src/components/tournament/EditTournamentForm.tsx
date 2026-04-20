@@ -59,6 +59,9 @@ const EditTournamentForm = ({ tournament, userId, onSaved }: EditTournamentFormP
     rules: tournament.rules || "",
     rules_file_url: tournament.rules_file_url || "",
     match_enabled: tournament.match_enabled ?? true,
+    split_platform: String(tournament.default_split_config?.platform_pct ?? ""),
+    split_organizer: String(tournament.default_split_config?.organizer_pct ?? ""),
+    split_arena: String(tournament.default_split_config?.arena_pct ?? ""),
   });
 
   const [slotConfig, setSlotConfig] = useState<SlotConfig[]>(
@@ -195,6 +198,13 @@ const EditTournamentForm = ({ tournament, userId, onSaved }: EditTournamentFormP
       rules: form.rules,
       rules_file_url: form.rules_file_url || null,
       match_enabled: form.match_enabled,
+      default_split_config: (form.split_platform || form.split_organizer || form.split_arena)
+        ? {
+            platform_pct: parseFloat(form.split_platform) || 0,
+            organizer_pct: parseFloat(form.split_organizer) || 0,
+            arena_pct: parseFloat(form.split_arena) || 0,
+          }
+        : null,
     } as any).eq("id", tournament.id).select("*").single();
 
     setLoading(false);
@@ -460,6 +470,28 @@ const EditTournamentForm = ({ tournament, userId, onSaved }: EditTournamentFormP
           <p className="text-sm text-muted-foreground mt-0.5">Permitir que atletas encontrem duplas/times</p>
         </div>
         <Switch checked={form.match_enabled} onCheckedChange={(v) => setForm((f) => ({ ...f, match_enabled: v }))} />
+      </div>
+
+      {/* Split Override */}
+      <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+        <div>
+          <Label className="text-base">Override de Repartição (opcional)</Label>
+          <p className="text-sm text-muted-foreground mt-0.5">Deixe em branco para herdar as regras do tenant. Soma dos % deve dar 100.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <Label className="text-xs">Plataforma %</Label>
+            <Input type="number" step="0.01" min={0} max={100} value={form.split_platform} onChange={(e) => update("split_platform", e.target.value)} className="mt-1" placeholder="10" />
+          </div>
+          <div>
+            <Label className="text-xs">Organizador %</Label>
+            <Input type="number" step="0.01" min={0} max={100} value={form.split_organizer} onChange={(e) => update("split_organizer", e.target.value)} className="mt-1" placeholder="80" />
+          </div>
+          <div>
+            <Label className="text-xs">Arena %</Label>
+            <Input type="number" step="0.01" min={0} max={100} value={form.split_arena} onChange={(e) => update("split_arena", e.target.value)} className="mt-1" placeholder="10" />
+          </div>
+        </div>
       </div>
 
       <Button onClick={handleSave} className="w-full h-12 text-lg font-bold box-glow gap-2" disabled={loading}>
