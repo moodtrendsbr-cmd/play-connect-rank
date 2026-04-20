@@ -99,6 +99,86 @@ export type Database = {
           },
         ]
       }
+      arena_billing_cycles: {
+        Row: {
+          amount: number
+          arena_id: string
+          created_at: string
+          due_at: string
+          id: string
+          paid_at: string | null
+          payment_method: string | null
+          payment_reference: string | null
+          period_end: string
+          period_start: string
+          status: string
+          subscription_id: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          arena_id: string
+          created_at?: string
+          due_at: string
+          id?: string
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+          subscription_id: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          arena_id?: string
+          created_at?: string
+          due_at?: string
+          id?: string
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+          subscription_id?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arena_billing_cycles_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_billing_cycles_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_billing_cycles_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "arena_student_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_billing_cycles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       arena_checkin_tokens: {
         Row: {
           arena_id: string
@@ -488,6 +568,292 @@ export type Database = {
           },
         ]
       }
+      arena_membership_plans: {
+        Row: {
+          amount: number
+          arena_id: string
+          billing_frequency: string
+          created_at: string
+          currency: string
+          description: string | null
+          features: Json
+          id: string
+          is_active: boolean
+          name: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          arena_id: string
+          billing_frequency?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          features?: Json
+          id?: string
+          is_active?: boolean
+          name: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          arena_id?: string
+          billing_frequency?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          features?: Json
+          id?: string
+          is_active?: boolean
+          name?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arena_membership_plans_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_membership_plans_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_membership_plans_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arena_occurrences: {
+        Row: {
+          arena_id: string
+          assigned_to: string | null
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          related_entity_id: string | null
+          related_entity_type: string | null
+          reported_by: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          severity: string
+          status: string
+          tenant_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          arena_id: string
+          assigned_to?: string | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          reported_by?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          tenant_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          arena_id?: string
+          assigned_to?: string | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          reported_by?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          tenant_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arena_occurrences_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_occurrences_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_occurrences_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arena_operational_events: {
+        Row: {
+          arena_id: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          event_type: string
+          id: string
+          payload: Json
+          processed_at: string | null
+          source: string
+          tenant_id: string | null
+        }
+        Insert: {
+          arena_id: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          event_type: string
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          source?: string
+          tenant_id?: string | null
+        }
+        Update: {
+          arena_id?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          source?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arena_operational_events_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_operational_events_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_operational_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arena_operational_tasks: {
+        Row: {
+          arena_id: string
+          created_at: string
+          description: string | null
+          due_at: string | null
+          id: string
+          priority: number
+          related_entity_id: string | null
+          related_entity_type: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          source: string
+          status: string
+          task_type: string
+          tenant_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          arena_id: string
+          created_at?: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          priority?: number
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source?: string
+          status?: string
+          task_type: string
+          tenant_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          arena_id?: string
+          created_at?: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          priority?: number
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source?: string
+          status?: string
+          task_type?: string
+          tenant_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arena_operational_tasks_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_operational_tasks_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_operational_tasks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       arena_partners: {
         Row: {
           arena_id: string
@@ -613,6 +979,103 @@ export type Database = {
             columns: ["arena_id"]
             isOneToOne: false
             referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arena_student_subscriptions: {
+        Row: {
+          arena_id: string
+          canceled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          metadata: Json
+          next_due_at: string | null
+          payment_account_id: string | null
+          plan_id: string
+          started_at: string
+          status: string
+          student_id: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          arena_id: string
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          metadata?: Json
+          next_due_at?: string | null
+          payment_account_id?: string | null
+          plan_id: string
+          started_at?: string
+          status?: string
+          student_id: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          arena_id?: string
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          metadata?: Json
+          next_due_at?: string | null
+          payment_account_id?: string | null
+          plan_id?: string
+          started_at?: string
+          status?: string
+          student_id?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arena_student_subscriptions_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_student_subscriptions_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_student_subscriptions_payment_account_id_fkey"
+            columns: ["payment_account_id"]
+            isOneToOne: false
+            referencedRelation: "payment_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_student_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "arena_membership_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_student_subscriptions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "arena_students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_student_subscriptions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -3664,6 +4127,22 @@ export type Database = {
     }
     Functions: {
       arena_checkin_validate: { Args: { _token: string }; Returns: Json }
+      arena_generate_billing_cycle: {
+        Args: { _subscription_id: string }
+        Returns: string
+      }
+      arena_mark_cycle_paid: {
+        Args: {
+          _cycle_id: string
+          _payment_method?: string
+          _payment_reference?: string
+        }
+        Returns: undefined
+      }
+      arena_mark_overdue_cycles: {
+        Args: { _arena_id: string }
+        Returns: number
+      }
       create_organizer_tenant: {
         Args: { _display_name?: string; _name: string; _slug: string }
         Returns: string
