@@ -6,6 +6,7 @@ import ProfileHeader from "@/components/profile/ProfileHeader";
 import { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
 import PostGrid from "@/components/profile/PostGrid";
+import AthleteActivities from "@/components/profile/AthleteActivities";
 
 const UserProfile = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -156,6 +157,11 @@ const UserProfile = () => {
         isOwnProfile={user?.id === userId}
         onFollowToggle={handleFollowToggle}
       />
+
+      <div>
+        <h2 className="text-lg font-display text-white mb-3">Atividades recentes</h2>
+        <AthleteActivities athleteId={userId!} />
+      </div>
 
       <h2 className="text-lg font-display text-white">Posts</h2>
       {posts.length === 0 ? (

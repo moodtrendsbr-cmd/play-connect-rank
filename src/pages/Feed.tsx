@@ -7,6 +7,7 @@ import PostSkeleton from "@/components/feed/PostSkeleton";
 import ClipsBar from "@/components/feed/ClipsBar";
 import FriendSuggestions from "@/components/feed/FriendSuggestions";
 import SponsoredPostCard from "@/components/feed/SponsoredPostCard";
+import AdSlot from "@/components/ads/AdSlot";
 
 const PAGE_SIZE = 20;
 
@@ -271,6 +272,7 @@ const Feed = () => {
       <FeedTopBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
       <main ref={mainRef} className="pt-16 pb-20 px-4 max-w-xl mx-auto space-y-4">
         <ClipsBar />
+        <AdSlot code="feed.inline" />
         {loading ? (
           <><PostSkeleton /><PostSkeleton /><PostSkeleton /></>
         ) : posts.length === 0 ? (

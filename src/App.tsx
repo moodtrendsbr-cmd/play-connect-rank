@@ -80,6 +80,9 @@ import ArenaTransactions from "./pages/arena-dashboard/ArenaTransactions";
 import OrganizerFinance from "./pages/organizer/OrganizerFinance";
 import AdminSplitRules from "./pages/admin/AdminSplitRules";
 import AdminAdjustments from "./pages/admin/AdminAdjustments";
+import AdminAdCampaigns from "./pages/admin/AdminAdCampaigns";
+import Explore from "./pages/Explore";
+import AthletesList from "./pages/AthletesList";
 import ArenasList from "./pages/arenas/ArenasList";
 import ArenaPublic from "./pages/arenas/ArenaPublic";
 import ArenaBooking from "./pages/arenas/ArenaBooking";
@@ -133,6 +136,8 @@ const App = () => (
               <Route path="/marketplace/cart" element={<Cart />} />
               <Route path="/marketplace/checkout" element={<MarketplaceCheckout />} />
               <Route path="/marketplace/tournaments" element={<MarketplaceTournaments />} />
+              <Route path="/explore" element={<Explore />} />
+              <Route path="/athletes" element={<AthletesList />} />
               <Route path="/arenas" element={<ArenasList />} />
               <Route path="/arenas/:arenaSlug" element={<ArenaPublic />} />
               <Route path="/arenas/:arenaSlug/reservar" element={<ArenaBooking />} />
@@ -201,6 +206,7 @@ const App = () => (
               <Route path="arenas" element={<AdminArenas />} />
               <Route path="split-rules" element={<AdminSplitRules />} />
               <Route path="adjustments" element={<AdminAdjustments />} />
+              <Route path="ad-campaigns" element={<AdminAdCampaigns />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
