@@ -29,7 +29,7 @@ const TenantShell = () => {
           <header className="h-12 flex items-center border-b border-border px-2">
             <SidebarTrigger />
             <div className="ml-3">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground leading-none">Tenant</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground leading-none">Rede white-label</p>
               <p className="text-sm font-medium leading-tight truncate">{tenant.name}</p>
             </div>
           </header>

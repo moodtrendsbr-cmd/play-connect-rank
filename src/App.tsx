@@ -102,6 +102,7 @@ import OrganizerDomains from "./pages/organizer/OrganizerDomains";
 import OrganizerPayment from "./pages/organizer/OrganizerPayment";
 import AdminShell from "./layouts/AdminShell";
 import TenantShell from "./layouts/TenantShell";
+import TenantDashboard from "./pages/tenant/TenantDashboard";
 import ArenaShell from "./layouts/ArenaShell";
 import OrganizerShell from "./layouts/OrganizerShell";
 import AthleteShell from "./layouts/AthleteShell";
@@ -215,7 +216,8 @@ const App = () => (
               <Route path="performance" element={<SponsorDashboard />} />
             </Route>
             <Route path="/tenant" element={<TenantShell />}>
-              <Route index element={<Navigate to="/tenant/overview" replace />} />
+              <Route index element={<Navigate to="/tenant/dashboard" replace />} />
+              <Route path="dashboard" element={<TenantDashboard />} />
               <Route path="overview" element={<OrganizerSettings />} />
               <Route path="arenas" element={<OrganizerArenas />} />
               <Route path="membros" element={<OrganizerMembers />} />

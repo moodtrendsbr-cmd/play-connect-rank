@@ -10,36 +10,50 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Building2, Users, Store, DollarSign, Palette, Globe, ShieldCheck, CreditCard } from "lucide-react";
+import {
+  Gauge, Building2, Users, Store, DollarSign, CreditCard,
+  Activity, Sparkles, Palette, Globe,
+} from "lucide-react";
 
 const groups = [
   {
+    label: "Control Tower",
+    items: [
+      { title: "Dashboard", url: "/tenant/dashboard", icon: Gauge, end: true },
+    ],
+  },
+  {
     label: "Rede",
     items: [
-      { title: "Overview", url: "/tenant/overview", icon: LayoutDashboard, end: true },
       { title: "Arenas", url: "/tenant/arenas", icon: Building2 },
-      { title: "Membros", url: "/tenant/membros", icon: Users },
+      { title: "Organizadores", url: "/tenant/membros", icon: Users },
       { title: "Empresas", url: "/tenant/empresas", icon: Store },
     ],
   },
   {
-    label: "Financeiro",
+    label: "Monetização",
     items: [
       { title: "Financeiro", url: "/tenant/financeiro", icon: DollarSign },
-      { title: "Pagamento", url: "/tenant/pagamento", icon: CreditCard },
+      { title: "Conta de pagamento", url: "/tenant/pagamento", icon: CreditCard },
     ],
   },
   {
-    label: "Identidade",
+    label: "Operações",
+    items: [
+      { title: "Eventos", url: "/tenant/dashboard#operacoes", icon: Activity },
+    ],
+  },
+  {
+    label: "IA / Autonomia",
+    items: [
+      { title: "Autonomia", url: "/tenant/autonomia", icon: Sparkles },
+    ],
+  },
+  {
+    label: "Configurações",
     items: [
       { title: "Branding", url: "/tenant/branding", icon: Palette },
       { title: "Domínios", url: "/tenant/dominios", icon: Globe },
-    ],
-  },
-  {
-    label: "Autonomia",
-    items: [
-      { title: "Autonomia", url: "/tenant/autonomia", icon: ShieldCheck },
     ],
   },
 ];
