@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, Grid3X3, Clock, CalendarCheck, Handshake, Zap, ArrowLeft, Users, GraduationCap, CalendarClock, ClipboardList, Tag, RefreshCw, Receipt, AlertTriangle, Trophy, DollarSign, ListOrdered, Sparkles } from "lucide-react";
+import { LayoutDashboard, Grid3X3, Clock, CalendarCheck, Handshake, Zap, ArrowLeft, Users, GraduationCap, CalendarClock, ClipboardList, Tag, RefreshCw, Receipt, AlertTriangle, Trophy, DollarSign, ListOrdered, Sparkles, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const navItems = [
@@ -23,6 +23,7 @@ const navItems = [
   { to: "/arena/dashboard/reservas", label: "Reservas", icon: CalendarCheck },
   { to: "/arena/dashboard/patrocinios", label: "Patrocínios", icon: Handshake },
   { to: "/arena/dashboard/acoes-ia", label: "Ações IA", icon: Sparkles },
+  { to: "/arena/dashboard/autonomia", label: "Autonomia", icon: ShieldCheck },
 ];
 
 const ArenaLayout = () => {

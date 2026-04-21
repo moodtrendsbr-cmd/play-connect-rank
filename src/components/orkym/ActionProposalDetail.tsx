@@ -2,6 +2,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Badge } from "@/components/ui/badge";
 import { Bot, Calendar, User, Tag, AlertCircle } from "lucide-react";
 import type { OrkymActionProposal } from "@/lib/orkym";
+import { PolicyDecisionBadge } from "@/components/autonomy/PolicyDecisionBadge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -32,10 +33,15 @@ export const ActionProposalDetail = ({ proposal, onClose }: Props) => {
     <Sheet open={!!proposal} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader className="space-y-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Bot className="h-4 w-4 text-primary" />
             <Badge variant="outline" className={`text-xs ${s.cls}`}>{s.label}</Badge>
             <Badge variant="outline" className="text-xs">{proposal.priority}</Badge>
+            <PolicyDecisionBadge
+              mode={proposal.execution_mode ?? null}
+              source={proposal.policy_source ?? null}
+              autoExecuted={proposal.auto_executed ?? false}
+            />
           </div>
           <SheetTitle className="text-left">{proposal.title}</SheetTitle>
           {proposal.description && (
