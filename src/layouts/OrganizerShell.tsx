@@ -26,7 +26,7 @@ const OrganizerShell = () => {
         <div className="flex-1 flex flex-col">
           <header className="h-12 flex items-center border-b border-border px-2">
             <SidebarTrigger />
-            <span className="ml-3 text-sm font-medium text-muted-foreground">Organizador</span>
+            <span className="ml-3 text-sm font-medium text-muted-foreground">Organizador de eventos</span>
           </header>
           <main className="flex-1 p-6">
             <Outlet />
