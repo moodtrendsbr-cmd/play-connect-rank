@@ -10,28 +10,47 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Store, Package, ShoppingBag, Megaphone, Trophy, BarChart3 } from "lucide-react";
+import {
+  LayoutDashboard, Store, Package, ShoppingBag, ExternalLink,
+  Megaphone, Trophy, LineChart, Eye, Compass, Rss,
+} from "lucide-react";
 
 const groups = [
   {
+    label: "Control Tower",
+    items: [
+      { title: "Dashboard", url: "/company/dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
     label: "Marketplace",
     items: [
-      { title: "Minha Empresa", url: "/company/marketplace", icon: Store },
+      { title: "Minha empresa", url: "/company/marketplace", icon: Store },
       { title: "Produtos", url: "/company/produtos", icon: Package },
       { title: "Pedidos", url: "/company/pedidos", icon: ShoppingBag },
+      { title: "Ver loja pública", url: "/marketplace", icon: ExternalLink },
     ],
   },
   {
     label: "Campanhas",
     items: [
-      { title: "Sponsor Dashboard", url: "/company/campanhas", icon: Megaphone },
-      { title: "Torneios Patrocinados", url: "/company/torneios-patrocinados", icon: Trophy },
+      { title: "Visão geral", url: "/company/campanhas", icon: Megaphone },
+      { title: "Patrocinar torneio", url: "/company/sponsor/torneios", icon: Trophy },
+      { title: "Meus patrocínios", url: "/company/sponsor/resumo", icon: Megaphone },
     ],
   },
   {
     label: "Performance",
     items: [
-      { title: "Métricas", url: "/company/performance", icon: BarChart3 },
+      { title: "Resultados", url: "/company/performance", icon: LineChart },
+    ],
+  },
+  {
+    label: "Visibilidade",
+    items: [
+      { title: "Como apareço", url: "/company/visibilidade", icon: Eye },
+      { title: "Explore", url: "/explore", icon: Compass },
+      { title: "Feed", url: "/feed", icon: Rss },
     ],
   },
 ];
