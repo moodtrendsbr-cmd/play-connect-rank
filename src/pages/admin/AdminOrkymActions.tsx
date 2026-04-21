@@ -83,7 +83,7 @@ const AdminOrkymActions = () => {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [statusFilter, domainFilter]);
+  useEffect(() => { load(); }, [statusFilter, domainFilter, modeFilter]);
 
   const fmtMs = (v: number | null) => v == null ? "—" : v < 60000 ? `${(v/1000).toFixed(1)}s` : `${(v/60000).toFixed(1)}min`;
 
