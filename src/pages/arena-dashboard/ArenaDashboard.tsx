@@ -7,6 +7,7 @@ import { CalendarCheck, Grid3X3, DollarSign, ArrowRight, Users, CalendarClock, R
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { OrkymInsightsCard } from "@/components/orkym/InsightsCard";
+import { OrkymActionsCard } from "@/components/orkym/OrkymActionsCard";
 
 const ArenaDashboard = () => {
   const { arena } = useOutletContext<{ arena: any }>();
