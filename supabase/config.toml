@@ -21,5 +21,8 @@ verify_jwt = false
 [functions.orkym-invoke]
 verify_jwt = true
 
+[functions.orkym-cron-tick]
+verify_jwt = false
+
 [functions.expire-pending-payments]
 verify_jwt = true

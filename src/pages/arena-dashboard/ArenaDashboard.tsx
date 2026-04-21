@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarCheck, Grid3X3, DollarSign, ArrowRight, Users, CalendarClock, Receipt, AlertTriangle, Inbox, Bot, User as UserIcon, Cog, Trophy, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { OrkymInsightsCard } from "@/components/orkym/InsightsCard";
 
 const ArenaDashboard = () => {
   const { arena } = useOutletContext<{ arena: any }>();
@@ -125,6 +126,10 @@ const ArenaDashboard = () => {
           ))}
         </div>
       </div>
+
+      {arena?.id && arena?.tenant_id && (
+        <OrkymInsightsCard tenantId={arena.tenant_id} arenaId={arena.id} />
+      )}
 
       <Card id="tasks" className="bg-card border-border">
         <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
