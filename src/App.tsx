@@ -195,14 +195,36 @@ const App = () => (
               <Route path="payment" element={<OrganizerPayment />} />
               <Route path="finance" element={<OrganizerFinance />} />
             </Route>
-            <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
-            <Route path="/organizer" element={<OrganizerLayout />}>
-              <Route index element={<Navigate to="/organizer/settings" replace />} />
-              <Route path="settings" element={<OrganizerSettings />} />
-              <Route path="members" element={<OrganizerMembers />} />
+            {/* Phase 11.1 — alias shells (additive, do not break legacy routes) */}
+            <Route path="/arena" element={<Navigate to="/arena/dashboard" replace />} />
+            <Route path="/athlete" element={<AthleteShell />}>
+              <Route index element={<Navigate to="/athlete/perfil" replace />} />
+              <Route path="perfil" element={<Profile />} />
+              <Route path="feed" element={<Feed />} />
+              <Route path="torneios" element={<Tournaments />} />
+              <Route path="ranking" element={<Ranking />} />
+              <Route path="mensagens" element={<Messages />} />
+            </Route>
+            <Route path="/company" element={<CompanyShell />}>
+              <Route index element={<Navigate to="/company/marketplace" replace />} />
+              <Route path="marketplace" element={<MyCompany />} />
+              <Route path="produtos" element={<MyCompany />} />
+              <Route path="pedidos" element={<MyCompany />} />
+              <Route path="campanhas" element={<SponsorDashboard />} />
+              <Route path="torneios-patrocinados" element={<SponsorTournaments />} />
+              <Route path="performance" element={<SponsorDashboard />} />
+            </Route>
+            <Route path="/tenant" element={<TenantShell />}>
+              <Route index element={<Navigate to="/tenant/overview" replace />} />
+              <Route path="overview" element={<OrganizerSettings />} />
               <Route path="arenas" element={<OrganizerArenas />} />
-              <Route path="domains" element={<OrganizerDomains />} />
-              <Route path="payment" element={<OrganizerPayment />} />
+              <Route path="membros" element={<OrganizerMembers />} />
+              <Route path="empresas" element={<OrganizerArenas />} />
+              <Route path="financeiro" element={<OrganizerFinance />} />
+              <Route path="pagamento" element={<OrganizerPayment />} />
+              <Route path="branding" element={<OrganizerSettings />} />
+              <Route path="dominios" element={<OrganizerDomains />} />
+              <Route path="autonomia" element={<AdminAutonomy />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
