@@ -1,109 +1,109 @@
 
 
-# Fase 11.4 — Organizer Event Engine (UX-only)
+# Fase 11.5 — Athlete Experience (UX-only)
 
-> **Princípio**: zero banco, zero edge, zero RLS, zero ORKYM. Apenas reorganizar `/organizer/*` para que o Organizer deixe de parecer "tenant admin" e passe a ser o motor de eventos. Toda rota legacy (`/organizer/settings`, `/organizer/members`, `/organizer/arenas`, `/organizer/domains`, `/organizer/payment`, `/organizer/finance`) permanece intacta.
-
----
-
-## Diagnóstico atual (resumido)
-
-- `OrganizerShell` (Fase 11.1) existe mas **não está montado em `App.tsx`** — `/organizer` ainda usa `OrganizerLayout` (tenant-flavored: branding, domínios, pagamento).
-- `OrganizerSidebar` lista itens para `/organizer/torneios`, `/organizer/inscricoes`, `/organizer/jogos` que **não existem como rota**.
-- Não há `OrganizerDashboard` próprio — fluxo cai em `OrganizerSettings`.
-- Lógica de eventos do organizer já existe espalhada: `Dashboard.tsx` (tourns por `organizer_id`), `ManageTournament` (enrollments/check-in), `Brackets`, `TabCheckin`, `Tournaments`.
+> **Princípio**: zero banco, zero edge, zero RLS, zero ORKYM. Apenas reorganizar `/athlete/*` para que o atleta tenha um perfil esportivo vivo, mobile-first e orientado à ação. Toda rota legacy (`/profile`, `/feed`, `/tournaments`, `/ranking`, `/messages`) permanece intacta.
 
 ---
 
-## 1. Os 5 blocos do Organizer Dashboard
+## Diagnóstico atual
 
-Nova página `src/pages/organizer/OrganizerDashboard.tsx` (única tela nova — wrapper de leitura, reusa queries de `Dashboard.tsx` e `ManageTournament`):
+- `AthleteShell` já existe (Fase 11.1) e está montado em `/athlete/*` em `App.tsx`.
+- `AthleteSidebar` tem apenas 1 grupo plano com 5 itens (Meu Perfil, Feed, Torneios, Ranking, Mensagens) — todos apontando para reuso direto de páginas legacy.
+- Não há `AthleteDashboard` próprio: `/athlete/perfil` cai em `Profile.tsx` (que mistura organizer/wallet — pesado para atleta).
+- Lógica esportiva já existe espalhada: `AthleteActivities` (componente), `enrollments`, `match_results`, `tournament_modalities`, `athlete_activities`, `Explore`, `AthletesList`, `Ranking`.
+
+---
+
+## 1. Os 5 blocos do Athlete Dashboard
+
+Nova página `src/pages/athlete/AthleteDashboard.tsx` (única tela nova — wrapper de leitura, mobile-first, reusa queries existentes):
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│ HEADER — "Event Control Tower" + nome organizer + ↻         │
-├─────────────────────────────────────────────────────────────┤
-│ BLOCO 1 — EVENT CONTROL TOWER (DOMINANTE)                   │
-│ ├─ KPI grid: Eventos ativos · Próximos · Inscritos hoje ·   │
-│ │   Check-ins pendentes · Partidas próximas · Alertas       │
-│ └─ Strip alertas (eventos sem categorias, sem partidas etc) │
-├─────────────────────────────────────────────────────────────┤
-│ BLOCO 2 — MEUS EVENTOS                                      │
-│ ├─ Cards (top 6): nome, arena, datas, status, inscrições    │
-│ └─ Atalhos: Ver · Editar (manage) · Brackets · Inscrições   │
-├─────────────────────────────────────────────────────────────┤
-│ BLOCO 3 — INSCRIÇÕES (resumo agregado)                      │
-│ ├─ KPIs: Total · Pendentes · Pagas · Confirmadas · Check-in │
-│ └─ Lista 5 últimas inscrições (todas tourns do organizer)   │
-├─────────────────────────────────────────────────────────────┤
-│ BLOCO 4 — OPERAÇÃO DE JOGOS                                 │
-│ ├─ Eventos em andamento → atalho Brackets / Match / Resul.  │
-│ └─ Próximas partidas (se já houver match_results agendado)  │
-├─────────────────────────────────────────────────────────────┤
-│ BLOCO 5 — PERFORMANCE                                       │
-│ ├─ KPIs por evento: ocupação · receita estimada (já exists) │
-│ └─ Atalho: Financeiro do organizer                          │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ BLOCO 1 — ATHLETE HERO (DOMINANTE)                      │
+│ ├─ Avatar grande · Nome · Nickname · Cidade/Time/Arena  │
+│ ├─ Mini KPIs: Torneios · Vitórias · Check-ins · Posição │
+│ └─ CTAs: Ver torneios · Check-in · Meus jogos           │
+├─────────────────────────────────────────────────────────┤
+│ BLOCO 2 — MEU ESPORTE HOJE                              │
+│ ├─ Próximo jogo (se houver) com hora/quadra             │
+│ ├─ Check-ins pendentes (torneios já inscrito)           │
+│ └─ Torneios futuros (próximos 7d, max 3)                │
+├─────────────────────────────────────────────────────────┤
+│ BLOCO 3 — TORNEIOS E JOGOS                              │
+│ ├─ Torneios em andamento · Inscrições pagas             │
+│ ├─ Partidas recentes (últimas 5)                        │
+│ └─ Atalhos: Todos torneios · Meus jogos                 │
+├─────────────────────────────────────────────────────────┤
+│ BLOCO 4 — RANKING E HISTÓRICO                           │
+│ ├─ Posição atual no ranking · Pontos                    │
+│ └─ AthleteActivities (últimas 10) [reuso componente]    │
+├─────────────────────────────────────────────────────────┤
+│ BLOCO 5 — DISCOVERY                                     │
+│ ├─ Arenas próximas · Torneios abertos · Atletas         │
+│ └─ Atalhos: Explore · Feed · Marketplace                │
+└─────────────────────────────────────────────────────────┘
 ```
 
-**Queries (todas já existem em outras telas)**:
-- `tournaments` filtrado por `organizer_id = user.id`
-- `enrollments` agregado por torneios do organizer
-- `tournament_modalities` / `match_results` para jogos próximos (mesmo padrão de `Brackets.tsx`)
-- `arena_operational_tasks` filtradas por arena vinculada (opcional, leve)
+**Queries (todas já existem)**:
+- `profiles` + `athlete_profiles` (athlete-specific)
+- `enrollments` filtrado por `user_id = user.id` + join `tournaments`
+- `match_results` filtrado por `winner_id`/`loser_id` ou via `tournament_entries`
+- `athlete_activities` (componente já pronto)
+- `arenas_public`, `tournaments` open enrollment, `athletes_public` para discovery
 
-**Helpers locais ao arquivo** (não exportados): `SectionHeader`, `KpiCard`, `EventCard`, `ShortcutLink` — mesmo padrão visual das Fases 11.2 e 11.3.
+**Helpers locais ao arquivo** (não exportados): `SectionHeader`, `KpiPill`, `MatchCard`, `TournamentRow`, `ShortcutLink` — mesmo padrão visual das Fases 11.2/11.3/11.4 mas adaptado para mobile-first (cards verticais, CTAs grandes).
 
 ---
 
-## 2. Montar `OrganizerShell` no roteamento (aditivo)
+## 2. Novas rotas (aditivas) em `App.tsx`
 
-Em `src/App.tsx`, adicionar **bloco paralelo** `/organizer/dashboard/*` que usa `OrganizerShell` (a sidebar nova). O bloco legacy `/organizer/*` (com `OrganizerLayout` tenant-flavored) **permanece intacto**.
+Reorganizar bloco `/athlete`:
 
 ```text
-+ <Route path="/organizer/dashboard" element={<OrganizerShell />}>
-+   <Route index element={<OrganizerDashboard />} />
-+   <Route path="eventos" element={<Tournaments />} />
-+   <Route path="criar" element={<CreateTournament />} />
-+   <Route path="inscricoes" element={<OrganizerDashboard />} />  /* âncora #inscricoes */
-+   <Route path="jogos" element={<OrganizerDashboard />} />        /* âncora #jogos */
-+   <Route path="performance" element={<OrganizerDashboard />} />  /* âncora #performance */
-+   <Route path="financeiro" element={<OrganizerFinance />} />
-+ </Route>
-  /* legacy bloco /organizer permanece intacto */
+<Route path="/athlete" element={<AthleteShell />}>
++ <Route index element={<Navigate to="/athlete/dashboard" replace />} />
++ <Route path="dashboard" element={<AthleteDashboard />} />
+  <Route path="perfil" element={<Profile />} />          /* mantém */
++ <Route path="meu-dia" element={<AthleteDashboard />} /> /* âncora #hoje */
+  <Route path="torneios" element={<Tournaments />} />     /* mantém */
++ <Route path="jogos" element={<AthleteDashboard />} />   /* âncora #jogos */
+  <Route path="ranking" element={<Ranking />} />          /* mantém */
++ <Route path="historico" element={<AthleteDashboard />}/> /* âncora #historico */
++ <Route path="descobrir" element={<Explore />} />
+  <Route path="feed" element={<Feed />} />                /* mantém */
+  <Route path="mensagens" element={<Messages />} />       /* mantém */
+</Route>
 ```
 
-Sem rota nova de página real além do dashboard. "Inscrições/Jogos/Performance" são âncoras dentro do mesmo dashboard (mesmo padrão da Fase 11.3 para `/tenant`).
+Inscrições/Jogos/Histórico são **âncoras dentro do dashboard** (mesmo padrão das fases anteriores). `Explore` é reusado para Descobrir.
 
 ---
 
-## 3. Nova `OrganizerSidebar` (substitui a atual)
-
-Reescrever `src/layouts/sidebars/OrganizerSidebar.tsx` removendo qualquer eco de tenant admin (sem branding, domínios, membros, arenas globais, pagamento global) e refletindo missão "operador de eventos":
+## 3. Nova `AthleteSidebar` (substitui a atual — 5 grupos)
 
 | Grupo | Itens | Destino |
 |---|---|---|
-| **Event Control Tower** | Dashboard | `/organizer/dashboard` |
-| **Eventos** | Meus eventos · Criar evento | `/organizer/dashboard` (#eventos) · `/tournaments/create` |
-| **Inscrições** | Inscrições | `/organizer/dashboard/inscricoes` |
-| **Jogos** | Jogos & Brackets | `/organizer/dashboard/jogos` |
-| **Check-in** | Check-in | `/organizer/dashboard#checkin` |
-| **Performance** | Performance | `/organizer/dashboard/performance` |
-| **Financeiro** | Financeiro do evento | `/organizer/dashboard/financeiro` |
+| **Meu Perfil** | Dashboard · Meu perfil | `/athlete/dashboard` · `/athlete/perfil` |
+| **Meu Dia** | Hoje · Mensagens | `/athlete/meu-dia` · `/athlete/mensagens` |
+| **Torneios** | Torneios · Meus jogos | `/athlete/torneios` · `/athlete/jogos` |
+| **Ranking & Histórico** | Ranking · Histórico | `/athlete/ranking` · `/athlete/historico` |
+| **Descobrir** | Descobrir · Feed | `/athlete/descobrir` · `/athlete/feed` |
 
-Configurações administrativas (settings/branding/dominios/payment/members/arenas) **não aparecem** nesta sidebar — elas continuam acessíveis em `/organizer/*` legacy se o usuário for também tenant admin.
+Ícones: `LayoutDashboard`, `User`, `Sun`, `MessageSquare`, `Trophy`, `Swords`, `Medal`, `History`, `Compass`, `Rss`.
 
 ---
 
-## 4. Pequeno ajuste no `OrganizerShell`
+## 4. Polimento `AthleteShell`
 
-`src/layouts/OrganizerShell.tsx` — trocar legenda do header "Organizador" por "Organizador de eventos" (1 string). Guard de role (`organizer` | `admin`) permanece.
+`src/layouts/AthleteShell.tsx` — trocar legenda do header "Atleta" por "Atleta · Mood Play" (1 string). Guard intacto.
 
 ---
 
 ## 5. Convergência opcional do `ProfileSwitcher`
 
-`src/components/feed/ProfileSwitcher.tsx` — atalho `organizer` muda destino de `/organizer` para `/organizer/dashboard` (1 linha). Legacy `/organizer` continua respondendo (cai em `/organizer/settings`).
+`src/components/feed/ProfileSwitcher.tsx` — atalho `athlete` aponta para `/athlete/dashboard` (1 linha). Legacy continua respondendo via redirect do index.
 
 ---
 
@@ -111,12 +111,11 @@ Configurações administrativas (settings/branding/dominios/payment/members/aren
 
 | Antes | Depois |
 |---|---|
-| "Meus Torneios" (sidebar) | "Meus eventos" |
-| "Todos Torneios" | (removido da sidebar do organizer; vive em `/tournaments` público) |
-| "Criar Torneio" | "Criar evento" |
-| "Jogos / Brackets" | "Jogos & Brackets" |
-| "Configurações" (sidebar) | (removido do shell de eventos) |
-| Header "Organizador" | "Organizador de eventos" |
+| Header "Atleta" | "Atleta · Mood Play" |
+| "Meu Perfil" (sidebar único item) | grupo "Meu Perfil" com Dashboard + Perfil |
+| "Feed" como item top | movido para grupo "Descobrir" |
+| "Mensagens" | movido para grupo "Meu Dia" |
+| (não existia) | "Hoje", "Meus jogos", "Histórico", "Descobrir" |
 
 URLs legacy não mudam.
 
@@ -126,12 +125,12 @@ URLs legacy não mudam.
 
 | Tipo | Arquivo |
 |---|---|
-| Novo | `src/pages/organizer/OrganizerDashboard.tsx` (~280 linhas, leitura) |
-| Edit | `src/App.tsx` — adicionar bloco `/organizer/dashboard/*` (legacy `/organizer/*` intacto) |
-| Edit | `src/layouts/sidebars/OrganizerSidebar.tsx` — reescrever 6 grupos focados em eventos |
-| Edit | `src/layouts/OrganizerShell.tsx` — relabel header (1 string) |
-| Edit | `src/components/feed/ProfileSwitcher.tsx` — 1 linha (atalho organizer) |
-| Memory | `mem/features/organizer-event-engine.md` (novo) |
+| Novo | `src/pages/athlete/AthleteDashboard.tsx` (~280 linhas, mobile-first, leitura) |
+| Edit | `src/App.tsx` — adicionar 5 rotas dentro do bloco `/athlete` (sem remover existentes) + import |
+| Edit | `src/layouts/sidebars/AthleteSidebar.tsx` — reescrever em 5 grupos |
+| Edit | `src/layouts/AthleteShell.tsx` — relabel header (1 string) |
+| Edit | `src/components/feed/ProfileSwitcher.tsx` — 1 linha (atalho athlete) |
+| Memory | `mem/features/athlete-experience.md` (novo) |
 
 **Total**: 1 arquivo novo, 4 edits mínimos, 1 memory.
 
@@ -139,11 +138,12 @@ URLs legacy não mudam.
 
 ## 8. Garantias de não-regressão
 
-- `/organizer`, `/organizer/settings`, `/organizer/members`, `/organizer/arenas`, `/organizer/domains`, `/organizer/payment`, `/organizer/finance` — todos intocados.
-- `/tournaments/:id/manage`, `/tournaments/:id/brackets`, `/tournaments/:id/results`, `/tournaments/create` — intocados.
-- `/tenant/*`, `/arena/*`, `/admin/*`, `/athlete/*`, `/company/*` — intocados.
+- `/profile`, `/feed`, `/tournaments`, `/ranking`, `/messages`, `/explore` — todos intocados.
+- `/athlete/perfil`, `/athlete/feed`, `/athlete/torneios`, `/athlete/ranking`, `/athlete/mensagens` — todos continuam respondendo (rotas mantidas).
+- `/arena/*`, `/tenant/*`, `/organizer/*`, `/admin/*`, `/company/*` — intocados.
 - Nenhuma migration, nenhuma RLS, nenhum edge, nenhum tipo Supabase novo.
-- Build TS: limpo (mesmo padrão de cast `as any` para joins quando necessário).
+- Componente `AthleteActivities` reusado sem alteração.
+- Build TS limpo (mesmo padrão de cast `as any` para tabelas/views quando necessário).
 
 ---
 
@@ -151,27 +151,27 @@ URLs legacy não mudam.
 
 | Item | Resultado |
 |---|---|
-| Reaproveitado | Queries de `Dashboard.tsx` (organizer_id), `ManageTournament` (enrollments), `Brackets` (modalities/matches), `Tournaments`, `OrganizerFinance`, padrão visual das Fases 11.2/11.3 |
-| Reorganizado | Shell `/organizer/dashboard` montado pela primeira vez; sidebar reescrita com missão "event engine" |
-| Renomeado | "Torneios" → "Eventos"; header "Organizador" → "Organizador de eventos"; "Configurações" removido do shell de eventos |
-| Deixou de parecer tenant admin | Sidebar agora não tem branding/domínios/membros/arenas globais/pagamento; apenas operação de eventos |
-| Para subfases | Inscrições/Jogos/Performance ainda são âncoras — viram páginas dedicadas em 11.5+ |
+| Reaproveitado | `AthleteActivities`, queries de `enrollments`/`match_results`/`tournaments`/`athlete_profiles`, `Explore`, `Ranking`, padrão visual das Fases 11.2/11.3/11.4 |
+| Reorganizado | Sidebar de 1 grupo plano → 5 grupos contextuais; index do `/athlete` aponta para dashboard |
+| Renomeado | Header "Atleta" → "Atleta · Mood Play"; novos labels: "Hoje", "Meus jogos", "Histórico", "Descobrir" |
+| Deixou de parecer genérico | Hero esportivo com KPIs reais (vitórias, check-ins, ranking) ao invés de só nome+avatar; bloco "Hoje" com próximo jogo + check-in |
+| Para subfases | Dashboard é leitura — edição continua em `/athlete/perfil` (Profile.tsx); jogos/histórico ainda são âncoras (viram páginas dedicadas em 11.6+) |
 
 ## 10. ENTREGA C — Pendências
 
-- **11.5**: rota dedicada `/organizer/dashboard/inscricoes` com tabela completa (não só resumo)
-- **11.6**: rota dedicada `/organizer/dashboard/jogos` com agenda visual e conflitos de quadra
-- **11.7**: rota dedicada `/organizer/dashboard/performance` com gráficos 30d
-- **11.8**: WhatsApp para organizer (lembrete de check-in, alerta de inscrições paradas, briefing pré-evento)
-- **11.9**: separar definitivamente `/organizer` legacy do tenant admin via redirect 301 para `/tenant/*` quando user for tenant admin
-- **11.10**: deprecar `/dashboard` legacy (que ainda é usado por organizer simples)
+- **11.6**: rota dedicada `/athlete/jogos` com agenda visual real (calendário) e filtros
+- **11.7**: rota dedicada `/athlete/historico` com timeline + estatísticas por modalidade
+- **11.8**: WhatsApp para atleta (lembrete de check-in 2h antes, próximo jogo, resultado de partida)
+- **11.9**: split do `Profile.tsx` — separar campos organizer/wallet do perfil de atleta puro
+- **11.10**: gamificação leve (badges baseados em `athlete_activities` agregado — depende de view nova)
+- **11.11**: feed personalizado para atleta (foco em arenas/torneios seguidos)
 
 ## 11. Critério de sucesso
 
-- ✅ `/organizer/dashboard` existe e mostra os 5 blocos (Event Control Tower dominante)
-- ✅ Organizer entende rapidamente: eventos ativos, inscrições, jogos próximos, check-ins pendentes
-- ✅ Sidebar do `OrganizerShell` reflete missão "operador de eventos" (sem branding/domínios/etc)
-- ✅ Todas as rotas legacy `/organizer/*` continuam funcionando
+- ✅ `/athlete/dashboard` mostra os 5 blocos (Hero dominante + Hoje + Torneios + Ranking + Discovery)
+- ✅ Atleta entende rapidamente: identidade esportiva, próximos jogos, check-ins pendentes, ranking, descobrir
+- ✅ Sidebar do `AthleteShell` reflete missão "perfil esportivo vivo"
+- ✅ Mobile-first (cards verticais, CTAs grandes, sem scroll horizontal)
+- ✅ Todas as rotas legacy continuam funcionando
 - ✅ Zero migration, zero edge, zero RLS, zero ORKYM bridge alterado
-- ✅ Build limpo
 
