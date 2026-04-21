@@ -31,7 +31,8 @@ const navItems = [
 const marketplaceNavItems = [
   { title: "Empresas", url: "/admin/companies", icon: Store },
   { title: "Produtos", url: "/admin/products", icon: Package },
-  { title: "Publicidade", url: "/admin/ads", icon: Megaphone },
+  { title: "Publicidade (legado)", url: "/admin/ads", icon: Megaphone },
+  { title: "Campanhas Ads", url: "/admin/ad-campaigns", icon: Megaphone },
   { title: "Patrocínios Atleta", url: "/admin/sponsors", icon: Heart },
   { title: "Patrocínios Torneio", url: "/admin/sponsorships", icon: Handshake },
   { title: "Planos", url: "/admin/plans", icon: Layers },
