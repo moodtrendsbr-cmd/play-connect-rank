@@ -190,7 +190,7 @@ const AthleteDashboard = () => {
       setLoading(true);
 
       // 1. Profile
-      const { data: profile } = await supabase
+      const { data: profile } = await (supabase as any)
         .from("profiles")
         .select("full_name, nickname, avatar_url, city, state, team, arena")
         .eq("user_id", user.id)
