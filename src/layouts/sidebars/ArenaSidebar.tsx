@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard, Gauge, Sparkles, ShieldCheck,
-  Grid3x3, CalendarDays, BookOpen, GraduationCap, ClipboardList, AlertCircle, QrCode,
+  QrCode, Grid3x3, CalendarDays, BookOpen, GraduationCap, ClipboardList, AlertCircle,
   Users, UserCog,
   DollarSign, Receipt, Layers, Repeat, FileText,
   Trophy, Handshake,
@@ -20,31 +20,26 @@ import {
 
 const groups = [
   {
-    label: "Control Tower",
+    label: "Central de Operação",
     items: [
-      { title: "Dashboard", url: "/arena/dashboard", icon: LayoutDashboard, end: true },
-      { title: "Control Tower", url: "/arena/dashboard/control-tower", icon: Gauge },
-      { title: "Ações IA", url: "/arena/dashboard/acoes-ia", icon: Sparkles },
-      { title: "Autonomia", url: "/arena/dashboard/autonomia", icon: ShieldCheck },
+      { title: "Control Tower", url: "/arena/dashboard", icon: LayoutDashboard, end: true },
+      { title: "Visão geral", url: "/arena/dashboard/control-tower", icon: Gauge },
+      { title: "Ações sugeridas", url: "/arena/dashboard/acoes-ia", icon: Sparkles },
+      { title: "Controle automático", url: "/arena/dashboard/autonomia", icon: ShieldCheck },
     ],
   },
   {
     label: "Operação",
     items: [
+      { title: "Check-in", url: "/arena/checkin", icon: QrCode },
       { title: "Quadras", url: "/arena/dashboard/quadras", icon: Grid3x3 },
       { title: "Horários", url: "/arena/dashboard/horarios", icon: CalendarDays },
       { title: "Reservas", url: "/arena/dashboard/reservas", icon: BookOpen },
       { title: "Aulas", url: "/arena/dashboard/aulas", icon: GraduationCap },
       { title: "Matrículas", url: "/arena/dashboard/matriculas", icon: ClipboardList },
-      { title: "Ocorrências", url: "/arena/dashboard/ocorrencias", icon: AlertCircle },
-      { title: "Check-in", url: "/arena/checkin", icon: QrCode },
-    ],
-  },
-  {
-    label: "Pessoas",
-    items: [
       { title: "Alunos", url: "/arena/dashboard/alunos", icon: Users },
       { title: "Professores", url: "/arena/dashboard/professores", icon: UserCog },
+      { title: "Ocorrências", url: "/arena/dashboard/ocorrencias", icon: AlertCircle },
     ],
   },
   {
@@ -54,13 +49,18 @@ const groups = [
       { title: "Transações", url: "/arena/dashboard/transacoes", icon: Receipt },
       { title: "Planos", url: "/arena/dashboard/planos", icon: Layers },
       { title: "Assinaturas", url: "/arena/dashboard/assinaturas", icon: Repeat },
-      { title: "Cobranças", url: "/arena/dashboard/cobrancas", icon: FileText },
+      { title: "Cobranças (mensalidades)", url: "/arena/dashboard/cobrancas", icon: FileText },
+    ],
+  },
+  {
+    label: "Torneios",
+    items: [
+      { title: "Torneios", url: "/arena/dashboard/torneios", icon: Trophy },
     ],
   },
   {
     label: "Growth",
     items: [
-      { title: "Torneios", url: "/arena/dashboard/torneios", icon: Trophy },
       { title: "Patrocínios", url: "/arena/dashboard/patrocinios", icon: Handshake },
     ],
   },
