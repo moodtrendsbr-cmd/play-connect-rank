@@ -128,6 +128,15 @@ const AdminOrkymActions = () => {
                 <SelectItem value="growth">Crescimento</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={modeFilter} onValueChange={setModeFilter}>
+              <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos modos</SelectItem>
+                <SelectItem value="suggest">Sugerir</SelectItem>
+                <SelectItem value="approve">Aprovar</SelectItem>
+                <SelectItem value="auto">Auto</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="icon" variant="ghost" onClick={load} disabled={loading} className="h-8 w-8">
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
