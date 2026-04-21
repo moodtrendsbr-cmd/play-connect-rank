@@ -1,8 +1,8 @@
 
 
-# Fase 8 — Controlled Autonomy: Auto-Actions com Aprovação
+# Fase 9 — Autonomy Policies: SUGGEST → APPROVE → AUTO
 
-ORKYM passa a propor **ações executáveis**. MoodPlay apenas registra, exibe, aprova/rejeita, executa via fluxos existentes e audita. Zero IA local. Zero auto-execução irreversível. Modelo: **SUGERIR → APROVAR → EXECUTAR → AUDITAR**.
+Camada oficial de **políticas de autonomia** sobre a Fase 8. Decide o modo de execução (suggest/approve/auto) por tenant + arena + domain + action_type. Auto-execução só para ações low-risk reversíveis. Kill switch global. Zero IA local. Fallback sempre seguro = `approve`.
 
 ---
 
@@ -10,270 +10,267 @@ ORKYM passa a propor **ações executáveis**. MoodPlay apenas registra, exibe, 
 
 | Existe | Decisão |
 |---|---|
-| `orkym-invoke` (Fase 7) | Estender para também ingerir `actions[]` |
-| `orkym_ingest_tasks` RPC | Adicionar irmã `orkym_ingest_actions` |
-| `arena_operational_tasks` | Reusar como sink quando ação = `create_followup`/`create_reminder` |
-| `arena_occurrences` | Reusar quando ação = `create_occurrence` |
-| `arena_billing_cycles` (manual mark) | Reusar quando ação = `propose_manual_charge` (apenas cria cycle pending — nunca cobra) |
-| `ad_campaigns` (status pending) | Reusar quando ação = `propose_promotion` |
-| `arena_operational_events` | Trilha de execução |
-| `orkym_api_calls` | Continua logando inbound; adicionar correlation com action |
+| `orkym_action_proposals` (Fase 8) | Adicionar colunas `execution_mode`, `policy_id`, `policy_decision` |
+| `orkym_ingest_actions` RPC | Estender para resolver policy ANTES de inserir, decidir mode, gravar decisão |
+| `orkym-execute-action` edge | Reusar como executor — chamado também pelo dispatcher de auto-execução |
+| `orkym_action_executions` | Trilha já cobre auto vs manual (campo `executed_by` + novo `triggered_by`) |
+| `arena_operational_events` | Continua sendo trilha lateral |
 
-**Não criar**: nova engine de tasks, novo motor de cobrança, novo sistema de eventos.
+**Não criar**: novo executor, novo motor de tasks, lógica inteligente local.
 
 ---
 
-## 1. Migration `_phase8_orkym_action_proposals.sql`
+## 1. Migration `_phase9_autonomy_policies.sql`
 
-### 1.1 Tabela `orkym_action_proposals` (única tabela do bloco)
+### 1.1 Tabela `autonomy_policies`
 ```
 id uuid PK,
-tenant_id uuid NOT NULL,
-arena_id uuid,                                  -- null para ações tenant-wide
-domain text NOT NULL,                           -- arena_operations|finance|tournaments|growth
-action_type text NOT NULL,                      -- whitelisted (ver §2)
-title text NOT NULL,
-description text,
-priority text CHECK IN ('low','medium','high') DEFAULT 'medium',
-status text CHECK IN (
-  'proposed','approved','rejected','executing','executed','failed','expired','canceled'
-) DEFAULT 'proposed',
-
-related_entity_type text,
-related_entity_id uuid,
-
-proposed_payload jsonb DEFAULT '{}',           -- payload bruto da ORKYM (server-only)
-human_summary jsonb DEFAULT '{}',              -- resumo seguro p/ exibir (sanitizado)
-
-source text DEFAULT 'orkym',                   -- só 'orkym' nesta fase
-orkym_request_id text,
-correlation_id text,
-
-approved_by uuid,                              -- profiles.user_id
-approved_at timestamptz,
-rejected_by uuid,
-rejected_at timestamptz,
-rejection_reason text,
-
-executed_at timestamptz,
-execution_result jsonb,                        -- ids gerados, refs, etc
-failed_at timestamptz,
-failure_reason text,
-
-expires_at timestamptz DEFAULT (now() + interval '7 days'),
+scope_level text CHECK IN ('global','tenant','arena') NOT NULL,
+tenant_id uuid,                              -- NULL quando scope=global
+arena_id uuid,                               -- NULL quando scope=global|tenant
+domain text,                                 -- NULL = aplica a todos os domains do escopo
+action_type text,                            -- NULL = aplica a todos action_types do domain
+execution_mode text CHECK IN ('suggest','approve','auto') NOT NULL DEFAULT 'approve',
+risk_level text CHECK IN ('low','medium','high','critical') NOT NULL DEFAULT 'medium',
+is_enabled boolean NOT NULL DEFAULT true,
+conditions jsonb DEFAULT '{}',               -- max_amount, time_window, max_per_hour, etc
+priority int NOT NULL DEFAULT 100,           -- menor = maior precedência (tie-breaker)
+created_by uuid, updated_by uuid,
 created_at timestamptz DEFAULT now(),
 updated_at timestamptz DEFAULT now()
 ```
-**Indexes**: `(tenant_id, status, created_at DESC)`, `(arena_id, status)`, `(orkym_request_id)`, partial `(status) WHERE status='proposed'`.
+**Indexes**: `(tenant_id, arena_id, domain, action_type) WHERE is_enabled`, `(scope_level, priority)`.
+**Constraints**: scope_level=`global` ⇒ tenant_id+arena_id NULL; `tenant` ⇒ tenant_id NOT NULL, arena_id NULL; `arena` ⇒ ambos NOT NULL.
 
-**Idempotência**: UNIQUE parcial em `(orkym_request_id, action_type, related_entity_id)` quando `orkym_request_id IS NOT NULL` — impede ORKYM duplicar a mesma proposta.
+### 1.2 Tabela `autonomy_kill_switches` (emergency stop)
+```
+id uuid PK,
+scope_level text CHECK IN ('global','tenant','arena','domain','action_type') NOT NULL,
+tenant_id uuid, arena_id uuid, domain text, action_type text,
+is_active boolean DEFAULT true,
+reason text NOT NULL,
+activated_by uuid, activated_at timestamptz DEFAULT now(),
+deactivated_by uuid, deactivated_at timestamptz
+```
+Quando match → força mode=`suggest` (registra apenas, não cria proposta executável).
 
-### 1.2 RLS
-- SELECT: admin global, `is_tenant_admin(tenant_id)`, `is_arena_owner(arena_id)` (quando arena_id setado).
-- INSERT: bloqueado para clients — só via SECURITY DEFINER `orkym_ingest_actions` (chamado pelo edge `orkym-invoke` com service role).
-- UPDATE: bloqueado para clients — só via RPCs `orkym_action_approve` / `orkym_action_reject` / executor edge function.
-
-### 1.3 Tabela `orkym_action_executions` (trilha append-only)
+### 1.3 Tabela `autonomy_policy_logs` (auditoria de decisões)
 ```
 id uuid PK,
 proposal_id uuid REFERENCES orkym_action_proposals,
-attempt_number int DEFAULT 1,
-status text CHECK IN ('started','succeeded','failed') NOT NULL,
-result jsonb,
-error_message text,
-executed_by uuid,                              -- aprovador / sistema
-duration_ms int,
+tenant_id uuid, arena_id uuid,
+domain text, action_type text,
+resolved_mode text NOT NULL,                 -- suggest|approve|auto
+policy_id uuid REFERENCES autonomy_policies, -- NULL se fallback
+policy_source text NOT NULL,                 -- 'arena_specific'|'tenant_action'|'tenant_domain'|'global_default'|'fallback'|'kill_switch'|'guardrail_block'
+guardrail_blocked text,                      -- NULL ou nome do guardrail que bloqueou auto
+metadata jsonb DEFAULT '{}',
 created_at timestamptz DEFAULT now()
 ```
-Append-only. SELECT mesmas regras que `orkym_action_proposals`. INSERT só via service role.
+INDEX `(tenant_id, created_at DESC)`, `(resolved_mode, created_at DESC)`.
 
-### 1.4 RPCs
+### 1.4 ALTER `orkym_action_proposals`
+```
+ADD execution_mode text CHECK IN ('suggest','approve','auto') DEFAULT 'approve',
+ADD policy_id uuid REFERENCES autonomy_policies,
+ADD policy_source text,
+ADD auto_executed boolean DEFAULT false,
+ADD initial_status text                      -- p/ trilha: o status que entrou
+```
+Para retro-compat: defaults garantem que registros antigos viram `approve`.
 
-**`orkym_ingest_actions(_payload jsonb)`** SECURITY DEFINER, service-role only.
-Recebe `{ tenant_id, arena_id, request_id, correlation_id, actions: [...] }`. Para cada action:
-- Valida `action_type` está no allowlist (§2)
-- Sanitiza `proposed_payload` (remove keys com `_secret`, `password`, `cpf`, `email`, `phone`)
-- Constroi `human_summary` = `{ title, description, related_entity_type, related_entity_id, priority }`
-- INSERT com `ON CONFLICT (orkym_request_id, action_type, related_entity_id) DO NOTHING`
-- Retorna count.
+### 1.5 RPCs
 
-**`orkym_action_approve(_proposal_id uuid)`** SECURITY DEFINER.
-Valida permissão (matriz §4). Valida estado = `proposed` e `expires_at > now()`. UPDATE para `approved` + `approved_by`/`approved_at`. Retorna proposal.
+**`autonomy_resolve_policy(_tenant uuid, _arena uuid, _domain text, _action_type text, _risk text)`** RETURNS TABLE(execution_mode, policy_id, policy_source).
+Precedência (primeira que casar e `is_enabled=true`):
+1. Kill switch ativo aplicável → `suggest` + source `kill_switch`
+2. `arena` + action_type específico
+3. `arena` + domain (action_type NULL)
+4. `tenant` + action_type específico
+5. `tenant` + domain
+6. `tenant` (catch-all, domain NULL action_type NULL)
+7. `global` + action_type
+8. `global` + domain
+9. Hard-coded risk fallback: `low`→`approve`, `medium`→`approve`, `high`/`critical`→`approve` (nunca `auto` por fallback)
+10. Última fallback: `approve` + source `fallback`
 
-**`orkym_action_reject(_proposal_id uuid, _reason text)`** idem, status `rejected`.
+**Hardcoded risk map** (no resolver, não em tabela — evita alteração acidental):
+```
+low: create_followup, create_reminder, schedule_operational_review, open_communication_thread
+medium: create_occurrence, flag_enrollment_attention, propose_manual_charge, recovery_campaign_draft
+high: propose_promotion
+critical: (futuro: refund, cancel_payment, change_split — bloqueados no ingest)
+```
 
-**`orkym_action_mark_executing(_proposal_id uuid)`** SECURITY DEFINER, service role only. Estado: `approved → executing` (com check-and-set para evitar dupla execução).
+**`autonomy_check_guardrails(_tenant uuid, _arena uuid, _action_type text, _payload jsonb)`** RETURNS TABLE(allowed boolean, reason text).
+Aplica defaults conservadores quando `execution_mode='auto'`:
+- `high`/`critical` → block (force approve)
+- `action_type` em blocklist hardcoded (refund/cancel/change_split/delete_*) → block
+- max 10 auto-executions/hora por (tenant, action_type)
+- max 30 auto-executions/hora por tenant total
+- cooldown 60s entre auto-executions do mesmo action_type+entity_id
+- `conditions.max_amount` na policy: se payload.amount > max → block
+- `conditions.allowed_hours` ex `[8,22]`: fora da janela → block
 
-**`orkym_action_mark_executed(_proposal_id uuid, _result jsonb)`** / **`orkym_action_mark_failed(_proposal_id uuid, _reason text)`** — idem, append em `orkym_action_executions`.
+Bloqueio NÃO falha — rebaixa para `approve` e loga `guardrail_blocked`.
 
-**`orkym_action_expire_stale()`** — cron: marca `proposed` com `expires_at < now()` como `expired`.
+**`autonomy_log_decision(_proposal_id, _resolved_mode, _policy_id, _source, _guardrail)`** SECURITY DEFINER.
 
-### 1.5 View `v_orkym_action_metrics`
-Agrega por dia/domain/action_type: proposed, approved, rejected, executed, failed, avg_time_to_approval_ms, avg_execution_ms. SELECT admin + tenant_admin.
+### 1.6 RLS
+
+`autonomy_policies`:
+- SELECT: admin global, `is_tenant_admin(tenant_id)` (vê tenant + global), `is_arena_owner(arena_id)` (vê arena + tenant pai + global)
+- INSERT/UPDATE/DELETE: admin global (qualquer); tenant_admin (scope tenant/arena dentro do seu tenant); arena_owner (somente scope=`arena` da sua arena, NUNCA pode setar mode=`auto` para risk≥`high`)
+
+`autonomy_kill_switches`:
+- SELECT mesmo padrão
+- INSERT/UPDATE: admin global, tenant_admin (escopo do seu tenant)
+
+`autonomy_policy_logs`: SELECT mesmo padrão; INSERT só via SECURITY DEFINER.
+
+### 1.7 View `v_autonomy_metrics`
+Agrega `autonomy_policy_logs` por dia/tenant/mode/action_type: total, by_mode, auto_executed_count, blocked_by_guardrail, blocked_by_kill_switch.
+
+### 1.8 Seed defaults (no migration)
+- 1 policy global por action_type da allowlist Phase 8 → mode `approve`, risk conforme map
+- 0 kill switches ativos
 
 ---
 
-## 2. Allowlist de `action_type` (matriz controlada)
+## 2. Edge Function — extensão `orkym-invoke` / `orkym_ingest_actions`
 
-| action_type | Domain | Reuso | Reversível? | Risco |
-|---|---|---|---|---|
-| `create_followup` | arena_operations | INSERT em `arena_operational_tasks` (source=`orkym`) | sim | baixo |
-| `create_reminder` | arena_operations | INSERT em `arena_operational_tasks` com due_at | sim | baixo |
-| `create_occurrence` | arena_operations | INSERT em `arena_occurrences` (status=`open`) | sim | baixo |
-| `propose_manual_charge` | finance | INSERT em `arena_billing_cycles` (status=`pending`, marca `metadata.proposed_by=orkym`). **Não cobra** | sim | médio |
-| `flag_enrollment_attention` | arena_operations | UPDATE arena_class_enrollments.metadata.flagged_at + cria task | sim | baixo |
-| `propose_promotion` | growth | INSERT em `ad_campaigns` (status=`pending`, aguarda admin) | sim | baixo |
-| `schedule_operational_review` | arena_operations | INSERT task com priority=high + due_at futuro | sim | baixo |
-| `open_communication_thread` | arena_operations | INSERT task com `task_type='outreach'` + metadata target | sim | baixo |
-| `recovery_campaign_draft` | finance | INSERT task com checklist em metadata | sim | médio |
+Modificar RPC `orkym_ingest_actions` para que cada action recebida passe por:
+```
+1. Resolve risk_level (hardcoded por action_type)
+2. Chama autonomy_resolve_policy → (mode, policy_id, source)
+3. Se mode='auto': chama autonomy_check_guardrails. Se bloqueia → mode='approve', source='guardrail_block'
+4. Determina initial_status:
+   - mode='suggest'  → status='canceled' + grava só human_summary (não vira proposta executável); ainda assim insere em autonomy_policy_logs
+   - mode='approve'  → status='proposed' (fluxo Phase 8 inalterado)
+   - mode='auto'     → status='approved' + auto_executed=false (será marcado true após exec)
+5. INSERT proposal com execution_mode, policy_id, policy_source, initial_status, status
+6. INSERT autonomy_policy_logs
+7. Se mode='auto': retorna lista de proposals para auto-execução pelo edge
+```
 
-**Bloqueado (rejeita no ingest)**: refund, cancel_payment, change_split, delete_*, suspend_user, force_*, automatic_charge.
-
-Implementação: array `ALLOWED_ACTION_TYPES` em `orkym_ingest_actions` + função `_handler_for(action_type)` no executor.
+Edge `orkym-invoke` ao receber `actions_proposed > 0`, lê propostas com `execution_mode='auto' AND auto_executed=false` desta call e dispara em paralelo `orkym-execute-action` (com service role + special header `X-Orkym-Auto: true` + setando `executed_by=NULL` para indicar sistema). Falhas registram em `orkym_action_executions` normalmente.
 
 ---
 
-## 3. Edge Function `orkym-invoke` — extensão mínima
+## 3. Edge `orkym-execute-action` — extensão mínima
 
-Após bloco "8. Ingest tasks":
-```
-8b. if Array.isArray(parsed.actions) && parsed.actions.length > 0:
-      adminClient.rpc("orkym_ingest_actions", { _payload: { tenant_id, arena_id, request_id, correlation_id, actions } })
-      → actions_proposed = count
-```
-Response inclui `actions_proposed`. Sanitização já tratada no RPC.
+- Aceita autenticação por **service role** quando vem do auto-dispatcher (header `X-Orkym-Auto: true` + valida `SERVICE_ROLE_KEY` no body assinado). Nesse caso `executed_by=NULL`.
+- Validação extra: re-verifica `execution_mode` da proposal antes de executar (defesa em profundidade — se policy mudou entre ingest e exec, respeita o novo mode).
+- Após exec bem-sucedida com `execution_mode='auto'`: UPDATE `auto_executed=true`.
+- Se kill switch foi ativado entre proposed→execute para auto, aborta com status `canceled` + `failure_reason='kill_switch_activated'`.
 
 ---
 
-## 4. Edge Function nova `orkym-execute-action`
-
-`verify_jwt = true`. Fluxo:
-
-```
-1. Auth + getClaims
-2. Body: { proposal_id }
-3. Carrega proposal via service role
-4. Valida permissão (matriz):
-   - arena_owner(proposal.arena_id) → ações arena_operations
-   - tenant_admin(proposal.tenant_id) → todas exceto growth.propose_promotion (admin global)
-   - admin global → todas
-5. Valida status = 'approved' e expires_at > now() (CAS via mark_executing)
-6. Despacha por action_type para handler interno (cada handler usa adminClient + RPCs/INSERTs já existentes)
-7. handler retorna { ok, result }
-8. mark_executed(result) ou mark_failed(reason)
-9. Insere arena_operational_event 'orkym.action_executed' / 'orkym.action_failed'
-10. Retorna { ok, status, result, request_id }
-```
-
-Handlers internos (puros, sem novas tabelas):
-- `create_followup` / `create_reminder` / `schedule_operational_review` / `open_communication_thread` / `flag_enrollment_attention` / `recovery_campaign_draft` → INSERT `arena_operational_tasks`
-- `create_occurrence` → INSERT `arena_occurrences`
-- `propose_manual_charge` → INSERT `arena_billing_cycles` com status `pending`
-- `propose_promotion` → INSERT `ad_campaigns` com status `pending`
-
-**Idempotência runtime**: `mark_executing` faz `UPDATE WHERE status='approved' RETURNING` — se 0 rows, retorna `{ ok:false, error:'already_executing_or_invalid_state' }`.
-
-**Modo degradado**: handler nunca chama ORKYM externa — só lê DB. Se ORKYM cair, aprovações continuam executando normalmente.
-
----
-
-## 5. Frontend `src/lib/orkym.ts` — extensão de tipos
+## 4. Frontend `src/lib/autonomy.ts` (novo)
 
 ```typescript
-export type OrkymActionType =
-  | "create_followup" | "create_reminder" | "create_occurrence"
-  | "propose_manual_charge" | "flag_enrollment_attention"
-  | "propose_promotion" | "schedule_operational_review"
-  | "open_communication_thread" | "recovery_campaign_draft";
+export type ExecutionMode = "suggest" | "approve" | "auto";
+export type RiskLevel = "low" | "medium" | "high" | "critical";
 
-export interface OrkymActionProposal {
+export interface AutonomyPolicy {
   id: string;
-  tenant_id: string;
+  scope_level: "global"|"tenant"|"arena";
+  tenant_id: string | null;
   arena_id: string | null;
-  domain: OrkymDomain;
-  action_type: OrkymActionType;
-  title: string;
-  description: string | null;
-  priority: "low" | "medium" | "high";
-  status: "proposed"|"approved"|"rejected"|"executing"|"executed"|"failed"|"expired"|"canceled";
-  related_entity_type: string | null;
-  related_entity_id: string | null;
-  human_summary: Record<string, unknown>;     // safe-to-render
-  expires_at: string;
-  created_at: string;
-  approved_by?: string;
-  executed_at?: string;
-  failure_reason?: string;
+  domain: string | null;
+  action_type: string | null;
+  execution_mode: ExecutionMode;
+  risk_level: RiskLevel;
+  is_enabled: boolean;
+  conditions: Record<string, unknown>;
+  priority: number;
 }
 
-export interface OrkymResponse {
-  // ... campos existentes
-  actions_proposed?: number;
-}
+export async function listPolicies(filters): Promise<AutonomyPolicy[]>
+export async function upsertPolicy(input: Partial<AutonomyPolicy>): Promise<{ ok, error? }>
+export async function togglePolicy(id, enabled): Promise<{ ok }>
+export async function deletePolicy(id): Promise<{ ok }>
+
+export async function listKillSwitches(filters): Promise<KillSwitch[]>
+export async function activateKillSwitch(input): Promise<{ ok }>
+export async function deactivateKillSwitch(id): Promise<{ ok }>
+
+export async function fetchPolicyLogs(filters): Promise<PolicyLog[]>
 ```
 
-Helpers novos:
-- `listActionProposals(filters)` — query view-friendly
-- `approveAction(id)` / `rejectAction(id, reason)` — chama RPC
-- `executeAction(id)` — chama edge `orkym-execute-action`
+Estende `src/lib/orkym.ts` `OrkymActionProposal` com `execution_mode`, `policy_source`, `auto_executed`.
 
 ---
 
-## 6. Frontend — UI
+## 5. UI — 3 superfícies
 
-### 6.1 Componente novo `OrkymActionsCard.tsx` (reusable)
-Props: `tenantId`, `arenaId?`. Lista propostas `status='proposed'`. Cada item:
-- Badge prioridade + domain
-- Title + description curta (do `human_summary`)
-- Entidade relacionada (link clicável quando aplicável)
-- Botões "Aprovar" → modal confirmação → approveAction → executeAction (em sequência)
-- Botão "Rejeitar" → input motivo → rejectAction
-- Botão "Detalhes" → drawer mostrando `human_summary` formatado (nunca `proposed_payload` cru)
+### 5.1 `src/pages/admin/AdminAutonomy.tsx` (rota `/admin/autonomy`)
+- Tab "Políticas": tabela de todas policies com filtro por scope/tenant/arena/domain. Botões: New, Edit, Toggle, Delete. Form modal com select de mode + risk + scope + conditions JSON simplificado (campos: max_amount, max_per_hour, allowed_hours).
+- Tab "Kill Switches": ativos + histórico. Botão grande "Emergency Stop Global" → ativa kill_switch scope=global.
+- Tab "Métricas": cards lendo `v_autonomy_metrics` (total auto-executadas 7d, bloqueadas por guardrail, by mode, top action_types).
+- Tab "Logs": tabela `autonomy_policy_logs` com filtros, mostra source/mode/policy aplicada.
 
-Status badge para items não-`proposed`: ✅ Executada / ❌ Rejeitada / ⏱ Expirada / ⚠ Falhou.
+### 5.2 `src/pages/arena-dashboard/ArenaAutonomy.tsx` (rota `/arena/dashboard/autonomia`)
+- Apenas policies scope=`arena` da arena atual + visão read-only das policies tenant/global aplicáveis.
+- Arena owner pode criar/editar policies da própria arena, MAS:
+  - Mode `auto` apenas para risk `low`
+  - Botão claro: "Pause autonomy for this arena" → cria kill_switch scope=`arena`
 
-### 6.2 Página nova `src/pages/arena-dashboard/ArenaActions.tsx`
-Rota: `/arena/:slug/actions`. Lista completa com tabs: Pendentes / Aprovadas / Executadas / Rejeitadas+Falhas. Filtro por domain/action_type/priority.
-Adicionar à `ArenaLayout.tsx` sidebar: "Ações IA" com `Sparkles` icon.
+### 5.3 Componente novo `PolicyDecisionBadge.tsx`
+Usado em `OrkymActionsCard` e `ActionProposalDetail` (Fase 8): mostra como pill o `execution_mode` + tooltip com `policy_source` + link "Ver política aplicada". Para `auto_executed=true` mostra ícone ⚡ "Executada automaticamente".
 
-### 6.3 Página nova `src/pages/admin/AdminOrkymActions.tsx`
-Rota: `/admin/orkym-actions`. Visão global de todas propostas. Cards de métrica (total/approved/executed/failed/avg_time_to_approval) lendo `v_orkym_action_metrics`. Tabela com filtros por tenant/arena/domain.
-Adicionar a `AdminLayout.tsx`.
-
-### 6.4 Edits
-- `ArenaDashboard.tsx`: adicionar `<OrkymActionsCard tenantId={...} arenaId={arena.id} />` abaixo de `<OrkymInsightsCard />`. Mostra max 3 propostas + link "Ver todas".
-- `AdminOrkymMonitor.tsx` (Fase 7): adicionar tab "Ações" que linka para `/admin/orkym-actions`.
+### 5.4 Edits Fase 8
+- `OrkymActionsCard.tsx`: filtra por padrão `status='proposed'` (Phase 8 OK), mas adiciona seção colapsada "Executadas automaticamente (24h)" com items `auto_executed=true`.
+- `ArenaActions.tsx` / `AdminOrkymActions.tsx`: nova coluna "Mode" e filtro por `execution_mode`.
+- `AdminLayout.tsx` / `ArenaLayout.tsx`: link "Autonomia" (icon `ShieldCheck`).
 - `App.tsx`: 2 rotas novas.
 
 ---
 
-## 7. Matriz de permissão (resumo)
+## 6. Matriz de risco e modo permitido (hardcoded)
 
-| Role | Aprovar | Executar | Ver |
-|---|---|---|---|
-| arena_owner | ✅ ações com `arena_id` próprio | ✅ idem | ✅ idem |
-| tenant_admin/owner | ✅ todas do tenant exceto `propose_promotion` | ✅ idem | ✅ todas do tenant |
-| admin global | ✅ todas | ✅ todas | ✅ todas |
-| atleta/empresa comum | ❌ | ❌ | ❌ |
+| action_type | risk | auto permitido? |
+|---|---|---|
+| create_followup | low | ✅ |
+| create_reminder | low | ✅ |
+| schedule_operational_review | low | ✅ |
+| open_communication_thread | low | ✅ |
+| create_occurrence | medium | ⚠️ apenas via policy explícita admin/tenant_admin |
+| flag_enrollment_attention | medium | ⚠️ idem |
+| recovery_campaign_draft | medium | ⚠️ idem |
+| propose_manual_charge | medium | ❌ (sempre approve nesta fase — finance) |
+| propose_promotion | high | ❌ (sempre approve) |
+| refund/cancel/change_split/delete_* | critical | ❌ (bloqueado no ingest, não chega ao resolver) |
 
-Validação dupla: RLS no DB (RPC valida via `is_*`) + check no edge `orkym-execute-action`.
+Validado em `autonomy_check_guardrails`. Tentativa de configurar `auto` para `high`/`critical` rejeitada na RPC de upsert da policy (exceto admin global, e ainda assim guardrails rebaixam em runtime).
 
 ---
 
-## 8. Cron (reuso de `pg_cron` da Fase 7)
+## 7. Cron (reuso pg_cron Fase 7)
 
-Novo job 1×/dia: `SELECT public.orkym_action_expire_stale();`
+- Job existente `orkym_action_expire_stale` mantém-se
+- Novo job 1×/dia: cleanup `autonomy_policy_logs` > 90 dias (DELETE)
+
+---
+
+## 8. Compatibilidade Fase 8
+
+- Sem nenhuma policy criada → fallback retorna `approve` para tudo → comportamento **idêntico à Fase 8**
+- Propostas antigas (sem `execution_mode`) → backfill no migration setando `execution_mode='approve'`, `policy_source='legacy'`
+- `OrkymActionsCard` continua mostrando `status='proposed'` por default → auto-actions executadas não poluem a fila de aprovação
+- Usuário arena-owner sem permissão para gerir policies → vê apenas badge de decisão, sem botões
 
 ---
 
 ## 9. Segurança
 
-- `proposed_payload` nunca exposto no frontend — apenas `human_summary` (filtrado server-side no ingest).
-- Sanitização no ingest remove PII conhecida.
-- RLS bloqueia INSERT/UPDATE direto — tudo via RPC SECURITY DEFINER.
-- Idempotência tripla: UNIQUE no DB + dedup ORKYM (Fase 7) + CAS em `mark_executing`.
-- Allowlist hardcoded no RPC + handler dispatcher — `action_type` desconhecido rejeita silenciosamente com log.
-- Auditoria completa em `orkym_action_executions` + eventos em `arena_operational_events`.
+- RLS bloqueia leitura cross-tenant
+- Apenas SECURITY DEFINER pode escrever em `autonomy_policy_logs`
+- Arena owner NUNCA cria policies tenant/global; tentativa retorna `forbidden`
+- Auto-dispatcher chama `orkym-execute-action` com header autenticado por service role — verify_jwt continua true mas há branch `X-Orkym-Auto` validado contra `SUPABASE_SERVICE_ROLE_KEY` em body
+- Kill switch global é prioritário sobre TODAS as policies — checked first
+- Conditions `max_amount` validadas no DB, não no client
+- Allowlist e blocklist de action_types continuam hardcoded — policies só decidem o **mode** dentro da allowlist Fase 8
 
 ---
 
@@ -281,14 +278,14 @@ Novo job 1×/dia: `SELECT public.orkym_action_expire_stale();`
 
 | Tipo | Arquivo |
 |---|---|
-| Migration | `supabase/migrations/<ts>_phase8_orkym_action_proposals.sql` |
-| Edge functions | `supabase/functions/orkym-invoke/index.ts` (extensão actions[]), `supabase/functions/orkym-execute-action/index.ts` (novo) |
-| Frontend lib | `src/lib/orkym.ts` (tipos+helpers) |
-| Frontend novo | `src/components/orkym/OrkymActionsCard.tsx`, `src/components/orkym/ActionProposalDetail.tsx`, `src/pages/arena-dashboard/ArenaActions.tsx`, `src/pages/admin/AdminOrkymActions.tsx` |
-| Frontend edit | `src/pages/arena-dashboard/ArenaDashboard.tsx`, `src/pages/arena-dashboard/ArenaLayout.tsx`, `src/pages/admin/AdminLayout.tsx`, `src/pages/admin/AdminOrkymMonitor.tsx`, `src/App.tsx` |
-| Memory | `mem/integration/orkym.md` (atualizar contrato com `actions[]`), `mem/features/orkym-actions.md` (novo) |
+| Migration | `supabase/migrations/<ts>_phase9_autonomy_policies.sql` |
+| Edge | `supabase/functions/orkym-invoke/index.ts` (auto-dispatch loop), `supabase/functions/orkym-execute-action/index.ts` (auto branch + re-check policy) |
+| Frontend lib | `src/lib/autonomy.ts` (novo), `src/lib/orkym.ts` (extender tipos) |
+| Frontend novo | `src/pages/admin/AdminAutonomy.tsx`, `src/pages/arena-dashboard/ArenaAutonomy.tsx`, `src/components/autonomy/PolicyDecisionBadge.tsx`, `src/components/autonomy/PolicyFormDialog.tsx`, `src/components/autonomy/KillSwitchPanel.tsx` |
+| Frontend edit | `src/pages/admin/AdminLayout.tsx`, `src/pages/arena-dashboard/ArenaLayout.tsx`, `src/pages/admin/AdminOrkymActions.tsx`, `src/pages/arena-dashboard/ArenaActions.tsx`, `src/components/orkym/OrkymActionsCard.tsx`, `src/components/orkym/ActionProposalDetail.tsx`, `src/App.tsx` |
+| Memory | `mem/features/autonomy-policies.md` (novo), atualiza `mem/features/orkym-actions.md` |
 
-**Total**: 1 migration + 1 edge function nova + 1 estendida + 4 telas + 5 edits.
+**Total**: 1 migration + 2 edge functions estendidas + 1 lib nova + 5 componentes/páginas + 7 edits.
 
 ---
 
@@ -296,40 +293,45 @@ Novo job 1×/dia: `SELECT public.orkym_action_expire_stale();`
 
 | Item | Resultado |
 |---|---|
-| Tipos de ação permitidos | 9 (create_followup, create_reminder, create_occurrence, propose_manual_charge, flag_enrollment_attention, propose_promotion, schedule_operational_review, open_communication_thread, recovery_campaign_draft) |
-| Bloqueados | refund, cancel_payment, change_split, delete_*, suspend_user, automatic_charge |
-| Workflow aprovação | proposed → approve/reject (RPC, validação por role) → execute (edge) → executed/failed |
-| Auditoria | `orkym_action_proposals` (lifecycle) + `orkym_action_executions` (append-only) + eventos em `arena_operational_events` |
-| Anti-dupla-execução | UNIQUE no ingest + CAS em mark_executing + status transitions explícitas |
-| Reuso | tasks, occurrences, billing_cycles, ad_campaigns — zero estrutura paralela |
-| Modo degradado | aprovação/execução independem da ORKYM upstream |
+| Precedência | kill_switch → arena+action → arena+domain → tenant+action → tenant+domain → tenant catch-all → global+action → global+domain → risk fallback (sempre `approve`) → fallback `approve` |
+| Modos por risco | low: auto permitido / medium: auto só com policy explícita / high: sempre approve / critical: bloqueado upstream |
+| Kill switch | scope global/tenant/arena/domain/action_type — checagem antes de tudo, força `suggest` |
+| Guardrails | max 10/h por (tenant,action_type), max 30/h por tenant, cooldown 60s, max_amount, allowed_hours, blocklist hardcoded |
+| Fallback | sem policy → `approve`. Policy inválida → `approve`. action_type fora allowlist → bloqueado no ingest (Phase 8) |
+| Auditoria | `autonomy_policy_logs` por proposal + `auto_executed` flag + executions com `executed_by=NULL` para auto |
+| UI | `/admin/autonomy` (full), `/arena/dashboard/autonomia` (escopo arena), badges em todos cards |
 
 ---
 
 ## ENTREGA C — Riscos / Próximos passos
 
-**Pendente Fase 9+**:
-- Auto-actions sem aprovação (autonomy policies por tipo + arena)
-- Ações destrutivas (refund/cancel) com aprovação de 2 níveis
-- Workflow de aprovação multi-step (ex: arena → tenant → admin)
-- Streaming de execução longa (hoje síncrono no edge, ok p/ ações leves)
-- Notificação push quando proposta criada (hoje só aparece no dashboard)
-- Rollback automático de ação executada (hoje manual via UI das tasks/occurrences)
-- Schema Zod compartilhado para `actions[]` ORKYM↔MoodPlay
+**Continua obrigatoriamente approve nesta fase**:
+- propose_manual_charge (finance)
+- propose_promotion (growth, gasto real)
+- todas medium sem policy explícita opt-in
 
-**Compatibilidade**:
-- Sem `actions[]` na resposta ORKYM → sistema funciona idêntico à Fase 7
-- Tasks ORKYM existentes (Fase 7) seguem funcionando independentes
-- Sem ORKYM secrets → nenhuma proposta criada, mas UI de actions vazia funciona
+**Poderia virar auto futuramente (Fase 10+)**:
+- propose_manual_charge com confidence score da ORKYM > threshold
+- propose_promotion com cap de budget pequeno
+
+**Permanece crítico (nunca auto)**:
+- refund, cancel_payment, change_split, qualquer ação destrutiva
+- bloqueio de usuário, suspensão de tenant
+
+**Próximos passos**:
+- Score de confiança por action_type (ORKYM precisa enviar)
+- Policies por plano (free/pro/elite) — campo `applicable_plans` em conditions
+- Aprovação 2-níveis para high (futura — Fase 10)
+- Webhook para alertar admin quando guardrail bloqueia auto N vezes em janela
+- Dry-run mode: policy `auto` mas só registra "teria executado", não executa de fato
 
 **Critérios de sucesso**:
-- ✅ ORKYM consegue propor ações via response `actions[]`
-- ✅ Propostas aparecem no dashboard arena + página dedicada
-- ✅ Aprovar/rejeitar com validação de role
-- ✅ Execução chama fluxos existentes (tasks/occurrences/billing/ads)
-- ✅ Auditoria completa em proposals + executions + events
-- ✅ Idempotência tripla impede dupla execução
-- ✅ Allowlist hardcoded — ações destrutivas rejeitadas no ingest
-- ✅ Modo degradado: aprovação/execução não dependem da ORKYM
-- ✅ Zero IA local; toda decisão continua vindo da ORKYM
+- ✅ `autonomy_policies` + resolver + guardrails + kill switches operacionais
+- ✅ Cada action ORKYM passa pelo resolver e grava decisão em `autonomy_policy_logs`
+- ✅ Low-risk podem auto-executar quando policy permitir
+- ✅ Fallback sem policy = `approve` (Fase 8 inalterada)
+- ✅ Kill switch global desliga autonomy em 1 clique
+- ✅ Painéis admin + arena com edit + métricas
+- ✅ Badges mostram modo + fonte da decisão
+- ✅ Zero IA local, zero auto crítico, zero quebra de Fase 8
 
