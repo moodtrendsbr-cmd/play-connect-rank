@@ -10,34 +10,59 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Trophy, PlusCircle, ClipboardList, GitBranch, DollarSign, Settings } from "lucide-react";
+import {
+  LayoutDashboard,
+  Trophy,
+  PlusCircle,
+  ClipboardList,
+  GitBranch,
+  CheckCircle2,
+  TrendingUp,
+  DollarSign,
+} from "lucide-react";
 
 const groups = [
   {
-    label: "Eventos",
+    label: "Event Control Tower",
     items: [
-      { title: "Meus Torneios", url: "/organizer", icon: LayoutDashboard, end: true },
-      { title: "Todos Torneios", url: "/organizer/torneios", icon: Trophy },
-      { title: "Criar Torneio", url: "/organizer/criar", icon: PlusCircle },
+      { title: "Dashboard", url: "/organizer/dashboard", icon: LayoutDashboard, end: true },
     ],
   },
   {
-    label: "Operação",
+    label: "Eventos",
     items: [
-      { title: "Inscrições", url: "/organizer/inscricoes", icon: ClipboardList },
-      { title: "Jogos / Brackets", url: "/organizer/jogos", icon: GitBranch },
+      { title: "Meus eventos", url: "/organizer/dashboard/eventos", icon: Trophy },
+      { title: "Criar evento", url: "/tournaments/create", icon: PlusCircle },
+    ],
+  },
+  {
+    label: "Inscrições",
+    items: [
+      { title: "Inscrições", url: "/organizer/dashboard/inscricoes", icon: ClipboardList },
+    ],
+  },
+  {
+    label: "Jogos",
+    items: [
+      { title: "Jogos & Brackets", url: "/organizer/dashboard/jogos", icon: GitBranch },
+    ],
+  },
+  {
+    label: "Check-in",
+    items: [
+      { title: "Check-in", url: "/organizer/dashboard/jogos", icon: CheckCircle2 },
+    ],
+  },
+  {
+    label: "Performance",
+    items: [
+      { title: "Performance", url: "/organizer/dashboard/performance", icon: TrendingUp },
     ],
   },
   {
     label: "Financeiro",
     items: [
-      { title: "Financeiro", url: "/organizer/finance", icon: DollarSign },
-    ],
-  },
-  {
-    label: "Configurações",
-    items: [
-      { title: "Configurações", url: "/organizer/settings", icon: Settings },
+      { title: "Financeiro do evento", url: "/organizer/dashboard/financeiro", icon: DollarSign },
     ],
   },
 ];
@@ -54,7 +79,7 @@ export function OrganizerSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {g.items.map((it) => (
-                  <SidebarMenuItem key={it.url}>
+                  <SidebarMenuItem key={it.url + it.title}>
                     <SidebarMenuButton asChild>
                       <NavLink
                         to={it.url}

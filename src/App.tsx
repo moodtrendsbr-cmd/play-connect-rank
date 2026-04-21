@@ -100,6 +100,7 @@ import OrganizerMembers from "./pages/organizer/OrganizerMembers";
 import OrganizerArenas from "./pages/organizer/OrganizerArenas";
 import OrganizerDomains from "./pages/organizer/OrganizerDomains";
 import OrganizerPayment from "./pages/organizer/OrganizerPayment";
+import OrganizerDashboard from "./pages/organizer/OrganizerDashboard";
 import AdminShell from "./layouts/AdminShell";
 import TenantShell from "./layouts/TenantShell";
 import TenantDashboard from "./pages/tenant/TenantDashboard";
@@ -187,6 +188,15 @@ const App = () => (
               <Route path="control-tower" element={<ArenaControlTower />} />
             </Route>
             <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
+            {/* Phase 11.4 — Organizer Event Engine (additive shell) */}
+            <Route path="/organizer/dashboard" element={<OrganizerShell />}>
+              <Route index element={<OrganizerDashboard />} />
+              <Route path="eventos" element={<OrganizerDashboard />} />
+              <Route path="inscricoes" element={<OrganizerDashboard />} />
+              <Route path="jogos" element={<OrganizerDashboard />} />
+              <Route path="performance" element={<OrganizerDashboard />} />
+              <Route path="financeiro" element={<OrganizerFinance />} />
+            </Route>
             <Route path="/organizer" element={<OrganizerLayout />}>
               <Route index element={<Navigate to="/organizer/settings" replace />} />
               <Route path="settings" element={<OrganizerSettings />} />
