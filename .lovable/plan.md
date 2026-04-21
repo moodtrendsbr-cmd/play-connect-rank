@@ -1,8 +1,8 @@
 
 
-# Fase 7 — ORKYM Full: Conexão de Produção + Operations Deepening
+# Fase 8 — Controlled Autonomy: Auto-Actions com Aprovação
 
-Ativar a ORKYM como camada real de inteligência via API server-to-server. **Zero IA local.** MoodPlay monta contexto, chama, registra, exibe — nada decide.
+ORKYM passa a propor **ações executáveis**. MoodPlay apenas registra, exibe, aprova/rejeita, executa via fluxos existentes e audita. Zero IA local. Zero auto-execução irreversível. Modelo: **SUGERIR → APROVAR → EXECUTAR → AUDITAR**.
 
 ---
 
@@ -10,211 +10,270 @@ Ativar a ORKYM como camada real de inteligência via API server-to-server. **Zer
 
 | Existe | Decisão |
 |---|---|
-| `orkym-invoke` (placeholder 501) | Reescrever para chamar API externa real |
-| `src/lib/orkym.ts` (wrapper supabase.functions.invoke) | Estender com tipos canônicos de payload/response |
-| `arena_operational_events` (trilha bruta + `processed_at`) | Fonte de eventos — ORKYM consome via backlog |
-| `arena_operational_tasks` (open/done/dismissed, source `manual`/`orkym`/`system`) | Sink de output da ORKYM — sem mudanças estruturais |
-| Dashboard "Caixa de pendências" | Já lê tasks com badge ORKYM — apenas adicionar seção "Sugestões/Alertas" |
+| `orkym-invoke` (Fase 7) | Estender para também ingerir `actions[]` |
+| `orkym_ingest_tasks` RPC | Adicionar irmã `orkym_ingest_actions` |
+| `arena_operational_tasks` | Reusar como sink quando ação = `create_followup`/`create_reminder` |
+| `arena_occurrences` | Reusar quando ação = `create_occurrence` |
+| `arena_billing_cycles` (manual mark) | Reusar quando ação = `propose_manual_charge` (apenas cria cycle pending — nunca cobra) |
+| `ad_campaigns` (status pending) | Reusar quando ação = `propose_promotion` |
+| `arena_operational_events` | Trilha de execução |
+| `orkym_api_calls` | Continua logando inbound; adicionar correlation com action |
+
+**Não criar**: nova engine de tasks, novo motor de cobrança, novo sistema de eventos.
 
 ---
 
-## 1. Secrets (necessários antes da implementação)
+## 1. Migration `_phase8_orkym_action_proposals.sql`
 
-Solicitar ao usuário via `add_secret`:
-- `ORKYM_API_BASE_URL` — base da API ORKYM (ex: `https://api.orkym.com/v1`)
-- `ORKYM_SERVICE_TOKEN` — bearer token server-to-server
-- `ORKYM_HMAC_SECRET` — opcional, para assinatura adicional dos requests
-- `ORKYM_TIMEOUT_MS` — opcional, default 8000
-
-Sem estes secrets, `orkym-invoke` permanece em modo `degraded` (retorna `ok:false, degraded:true`, app não quebra).
-
----
-
-## 2. Migration — estrutura mínima
-
-`supabase/migrations/<ts>_phase7_orkym_integration.sql`:
-
-### 2.1 Tabela `orkym_api_calls` (log auditável)
+### 1.1 Tabela `orkym_action_proposals` (única tabela do bloco)
 ```
-id uuid PK, request_id text NOT NULL, correlation_id text,
-tenant_id uuid, arena_id uuid,
-domain text NOT NULL, action text NOT NULL,
-http_status int, status text CHECK IN ('success','failed','timeout','degraded','rate_limited'),
-duration_ms int,
-request_summary jsonb,    -- payload sanitizado (sem PII pesada)
-response_summary jsonb,   -- response sanitizado
+id uuid PK,
+tenant_id uuid NOT NULL,
+arena_id uuid,                                  -- null para ações tenant-wide
+domain text NOT NULL,                           -- arena_operations|finance|tournaments|growth
+action_type text NOT NULL,                      -- whitelisted (ver §2)
+title text NOT NULL,
+description text,
+priority text CHECK IN ('low','medium','high') DEFAULT 'medium',
+status text CHECK IN (
+  'proposed','approved','rejected','executing','executed','failed','expired','canceled'
+) DEFAULT 'proposed',
+
+related_entity_type text,
+related_entity_id uuid,
+
+proposed_payload jsonb DEFAULT '{}',           -- payload bruto da ORKYM (server-only)
+human_summary jsonb DEFAULT '{}',              -- resumo seguro p/ exibir (sanitizado)
+
+source text DEFAULT 'orkym',                   -- só 'orkym' nesta fase
+orkym_request_id text,
+correlation_id text,
+
+approved_by uuid,                              -- profiles.user_id
+approved_at timestamptz,
+rejected_by uuid,
+rejected_at timestamptz,
+rejection_reason text,
+
+executed_at timestamptz,
+execution_result jsonb,                        -- ids gerados, refs, etc
+failed_at timestamptz,
+failure_reason text,
+
+expires_at timestamptz DEFAULT (now() + interval '7 days'),
+created_at timestamptz DEFAULT now(),
+updated_at timestamptz DEFAULT now()
+```
+**Indexes**: `(tenant_id, status, created_at DESC)`, `(arena_id, status)`, `(orkym_request_id)`, partial `(status) WHERE status='proposed'`.
+
+**Idempotência**: UNIQUE parcial em `(orkym_request_id, action_type, related_entity_id)` quando `orkym_request_id IS NOT NULL` — impede ORKYM duplicar a mesma proposta.
+
+### 1.2 RLS
+- SELECT: admin global, `is_tenant_admin(tenant_id)`, `is_arena_owner(arena_id)` (quando arena_id setado).
+- INSERT: bloqueado para clients — só via SECURITY DEFINER `orkym_ingest_actions` (chamado pelo edge `orkym-invoke` com service role).
+- UPDATE: bloqueado para clients — só via RPCs `orkym_action_approve` / `orkym_action_reject` / executor edge function.
+
+### 1.3 Tabela `orkym_action_executions` (trilha append-only)
+```
+id uuid PK,
+proposal_id uuid REFERENCES orkym_action_proposals,
+attempt_number int DEFAULT 1,
+status text CHECK IN ('started','succeeded','failed') NOT NULL,
+result jsonb,
 error_message text,
-retried_count int DEFAULT 0,
+executed_by uuid,                              -- aprovador / sistema
+duration_ms int,
 created_at timestamptz DEFAULT now()
 ```
-INDEX `(tenant_id, created_at DESC)`, `(domain, action, created_at DESC)`, `(status, created_at DESC)`.
-RLS: SELECT só admin + tenant_admin. INSERT só via SECURITY DEFINER (edge function via service role).
+Append-only. SELECT mesmas regras que `orkym_action_proposals`. INSERT só via service role.
 
-### 2.2 Tabela `orkym_dedup` (anti-loop / debounce)
-```
-id uuid PK, dedup_key text UNIQUE NOT NULL,    -- hash(domain|action|entity_id|window)
-tenant_id uuid, expires_at timestamptz NOT NULL,
-created_at timestamptz DEFAULT now()
-```
-INDEX `(expires_at)`. Cleanup via RPC `orkym_purge_dedup()`.
+### 1.4 RPCs
 
-### 2.3 RPC `orkym_ingest_tasks(_payload jsonb)`
-SECURITY DEFINER, chamada **apenas** por `orkym-invoke` (com service role). Recebe `tasks[]` da resposta ORKYM e faz INSERT em `arena_operational_tasks` com `source='orkym'`, mapeando `priority`, `correlation_id` em metadata.
+**`orkym_ingest_actions(_payload jsonb)`** SECURITY DEFINER, service-role only.
+Recebe `{ tenant_id, arena_id, request_id, correlation_id, actions: [...] }`. Para cada action:
+- Valida `action_type` está no allowlist (§2)
+- Sanitiza `proposed_payload` (remove keys com `_secret`, `password`, `cpf`, `email`, `phone`)
+- Constroi `human_summary` = `{ title, description, related_entity_type, related_entity_id, priority }`
+- INSERT com `ON CONFLICT (orkym_request_id, action_type, related_entity_id) DO NOTHING`
+- Retorna count.
 
-### 2.4 ALTER `arena_operational_tasks` ADD `correlation_id text`, `metadata jsonb DEFAULT '{}'`
-Já tem `source` — só falta correlação com chamada ORKYM.
+**`orkym_action_approve(_proposal_id uuid)`** SECURITY DEFINER.
+Valida permissão (matriz §4). Valida estado = `proposed` e `expires_at > now()`. UPDATE para `approved` + `approved_by`/`approved_at`. Retorna proposal.
 
-### 2.5 View `v_orkym_metrics` (observabilidade simples)
-Agrega `orkym_api_calls` por dia/domain: total, success, failed, avg_duration. SELECT admin + tenant_admin.
+**`orkym_action_reject(_proposal_id uuid, _reason text)`** idem, status `rejected`.
+
+**`orkym_action_mark_executing(_proposal_id uuid)`** SECURITY DEFINER, service role only. Estado: `approved → executing` (com check-and-set para evitar dupla execução).
+
+**`orkym_action_mark_executed(_proposal_id uuid, _result jsonb)`** / **`orkym_action_mark_failed(_proposal_id uuid, _reason text)`** — idem, append em `orkym_action_executions`.
+
+**`orkym_action_expire_stale()`** — cron: marca `proposed` com `expires_at < now()` como `expired`.
+
+### 1.5 View `v_orkym_action_metrics`
+Agrega por dia/domain/action_type: proposed, approved, rejected, executed, failed, avg_time_to_approval_ms, avg_execution_ms. SELECT admin + tenant_admin.
 
 ---
 
-## 3. Edge Function `orkym-invoke` — reescrita completa
+## 2. Allowlist de `action_type` (matriz controlada)
 
-Fluxo:
-```
-1. CORS + auth (getClaims) — JWT do usuário MoodPlay
-2. Valida body: { domain, action, payload: { tenant_id, arena_id?, context?, entity?, metadata? } }
-3. Verifica secrets ORKYM_* — se faltam → retorna { ok:false, degraded:true } + log status='degraded'
-4. Verifica dedup: gera dedup_key, consulta orkym_dedup; se existe → retorna { ok:true, deduped:true }
-5. Verifica rate-limit por tenant (in-memory simples + log) — 60 calls/min/tenant
-6. Gera request_id (uuid) + correlation_id (do body ou novo)
-7. Monta headers: Authorization Bearer ORKYM_SERVICE_TOKEN, X-Request-Id, X-Tenant-Id, X-HMAC (opcional)
-8. fetch ORKYM com AbortController + timeout (ORKYM_TIMEOUT_MS)
-9. Retry: max 2 retries para 5xx/timeout, com backoff exponencial (200ms, 800ms). Nunca retry para 4xx.
-10. Parse response (espera contrato: { ok, tasks?, suggestions?, alerts?, meta? })
-11. Se tasks[] presente: chama RPC orkym_ingest_tasks com service role
-12. Insere orkym_dedup (TTL 5min default)
-13. INSERT orkym_api_calls com sumário sanitizado
-14. Retorna { ok, tasks_created, suggestions, alerts, meta, request_id }
-```
+| action_type | Domain | Reuso | Reversível? | Risco |
+|---|---|---|---|---|
+| `create_followup` | arena_operations | INSERT em `arena_operational_tasks` (source=`orkym`) | sim | baixo |
+| `create_reminder` | arena_operations | INSERT em `arena_operational_tasks` com due_at | sim | baixo |
+| `create_occurrence` | arena_operations | INSERT em `arena_occurrences` (status=`open`) | sim | baixo |
+| `propose_manual_charge` | finance | INSERT em `arena_billing_cycles` (status=`pending`, marca `metadata.proposed_by=orkym`). **Não cobra** | sim | médio |
+| `flag_enrollment_attention` | arena_operations | UPDATE arena_class_enrollments.metadata.flagged_at + cria task | sim | baixo |
+| `propose_promotion` | growth | INSERT em `ad_campaigns` (status=`pending`, aguarda admin) | sim | baixo |
+| `schedule_operational_review` | arena_operations | INSERT task com priority=high + due_at futuro | sim | baixo |
+| `open_communication_thread` | arena_operations | INSERT task com `task_type='outreach'` + metadata target | sim | baixo |
+| `recovery_campaign_draft` | finance | INSERT task com checklist em metadata | sim | médio |
 
-Em caso de erro (timeout, 5xx pós-retries, parse fail):
-- Retorna `{ ok:false, degraded:true, error: <safe_msg>, request_id }` com **HTTP 200** (app não trata como falha crítica)
-- Loga em `orkym_api_calls` com status apropriado
+**Bloqueado (rejeita no ingest)**: refund, cancel_payment, change_split, delete_*, suspend_user, force_*, automatic_charge.
 
-**Service role client** criado dentro da função para `orkym_ingest_tasks` e `orkym_api_calls` INSERT (via `SUPABASE_SERVICE_ROLE_KEY`).
+Implementação: array `ALLOWED_ACTION_TYPES` em `orkym_ingest_actions` + função `_handler_for(action_type)` no executor.
 
 ---
 
-## 4. Frontend `src/lib/orkym.ts` — tipos canônicos
+## 3. Edge Function `orkym-invoke` — extensão mínima
+
+Após bloco "8. Ingest tasks":
+```
+8b. if Array.isArray(parsed.actions) && parsed.actions.length > 0:
+      adminClient.rpc("orkym_ingest_actions", { _payload: { tenant_id, arena_id, request_id, correlation_id, actions } })
+      → actions_proposed = count
+```
+Response inclui `actions_proposed`. Sanitização já tratada no RPC.
+
+---
+
+## 4. Edge Function nova `orkym-execute-action`
+
+`verify_jwt = true`. Fluxo:
+
+```
+1. Auth + getClaims
+2. Body: { proposal_id }
+3. Carrega proposal via service role
+4. Valida permissão (matriz):
+   - arena_owner(proposal.arena_id) → ações arena_operations
+   - tenant_admin(proposal.tenant_id) → todas exceto growth.propose_promotion (admin global)
+   - admin global → todas
+5. Valida status = 'approved' e expires_at > now() (CAS via mark_executing)
+6. Despacha por action_type para handler interno (cada handler usa adminClient + RPCs/INSERTs já existentes)
+7. handler retorna { ok, result }
+8. mark_executed(result) ou mark_failed(reason)
+9. Insere arena_operational_event 'orkym.action_executed' / 'orkym.action_failed'
+10. Retorna { ok, status, result, request_id }
+```
+
+Handlers internos (puros, sem novas tabelas):
+- `create_followup` / `create_reminder` / `schedule_operational_review` / `open_communication_thread` / `flag_enrollment_attention` / `recovery_campaign_draft` → INSERT `arena_operational_tasks`
+- `create_occurrence` → INSERT `arena_occurrences`
+- `propose_manual_charge` → INSERT `arena_billing_cycles` com status `pending`
+- `propose_promotion` → INSERT `ad_campaigns` com status `pending`
+
+**Idempotência runtime**: `mark_executing` faz `UPDATE WHERE status='approved' RETURNING` — se 0 rows, retorna `{ ok:false, error:'already_executing_or_invalid_state' }`.
+
+**Modo degradado**: handler nunca chama ORKYM externa — só lê DB. Se ORKYM cair, aprovações continuam executando normalmente.
+
+---
+
+## 5. Frontend `src/lib/orkym.ts` — extensão de tipos
 
 ```typescript
-export type OrkymDomain = "arena_operations" | "finance" | "tournaments" | "growth";
+export type OrkymActionType =
+  | "create_followup" | "create_reminder" | "create_occurrence"
+  | "propose_manual_charge" | "flag_enrollment_attention"
+  | "propose_promotion" | "schedule_operational_review"
+  | "open_communication_thread" | "recovery_campaign_draft";
 
-export interface OrkymPayload {
+export interface OrkymActionProposal {
+  id: string;
   tenant_id: string;
-  arena_id?: string;
-  context?: Record<string, unknown>;
-  entity?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
+  arena_id: string | null;
+  domain: OrkymDomain;
+  action_type: OrkymActionType;
+  title: string;
+  description: string | null;
+  priority: "low" | "medium" | "high";
+  status: "proposed"|"approved"|"rejected"|"executing"|"executed"|"failed"|"expired"|"canceled";
+  related_entity_type: string | null;
+  related_entity_id: string | null;
+  human_summary: Record<string, unknown>;     // safe-to-render
+  expires_at: string;
+  created_at: string;
+  approved_by?: string;
+  executed_at?: string;
+  failure_reason?: string;
 }
-
-export interface OrkymTask { title: string; description?: string; priority?: 1|2|3; task_type?: string; related_entity_type?: string; related_entity_id?: string; }
-export interface OrkymSuggestion { id: string; title: string; body: string; cta?: { label: string; href?: string }; }
-export interface OrkymAlert { id: string; severity: "info"|"warning"|"critical"; title: string; body?: string; }
 
 export interface OrkymResponse {
-  ok: boolean;
-  degraded?: boolean;
-  deduped?: boolean;
-  tasks_created?: number;
-  suggestions?: OrkymSuggestion[];
-  alerts?: OrkymAlert[];
-  meta?: Record<string, unknown>;
-  request_id?: string;
-  error?: string;
+  // ... campos existentes
+  actions_proposed?: number;
 }
-
-export async function invokeOrkym(domain: OrkymDomain, action: string, payload: OrkymPayload): Promise<OrkymResponse>
 ```
 
-Wrapper trata `degraded:true` silenciosamente (sem toast de erro), apenas loga em console.
+Helpers novos:
+- `listActionProposals(filters)` — query view-friendly
+- `approveAction(id)` / `rejectAction(id, reason)` — chama RPC
+- `executeAction(id)` — chama edge `orkym-execute-action`
 
 ---
 
-## 5. Context Resolver `src/lib/orkymContext.ts` (novo)
+## 6. Frontend — UI
 
-Funções helper que **lêem do banco** (não decidem nada) e montam context blocks reutilizáveis:
+### 6.1 Componente novo `OrkymActionsCard.tsx` (reusable)
+Props: `tenantId`, `arenaId?`. Lista propostas `status='proposed'`. Cada item:
+- Badge prioridade + domain
+- Title + description curta (do `human_summary`)
+- Entidade relacionada (link clicável quando aplicável)
+- Botões "Aprovar" → modal confirmação → approveAction → executeAction (em sequência)
+- Botão "Rejeitar" → input motivo → rejectAction
+- Botão "Detalhes" → drawer mostrando `human_summary` formatado (nunca `proposed_payload` cru)
 
-- `buildArenaOperationsContext(arenaId)` → alunos ativos, aulas próximas, presença 7d, billing pending/overdue, ocorrências abertas, eventos não processados
-- `buildFinanceContext(tenantId, arenaId?)` → transações 30d, splits pendentes, billing cycles, refunds recentes
-- `buildTournamentsContext(tournamentId)` → enrollments, categorias, brackets, check-ins
-- `buildGrowthContext(tenantId)` → ads ativos, top produtos, atividades recentes do feed
+Status badge para items não-`proposed`: ✅ Executada / ❌ Rejeitada / ⏱ Expirada / ⚠ Falhou.
 
-Cada uma retorna jsonb pronto para injetar em `payload.context`. Sem ranking, sem score — apenas dados crus organizados.
+### 6.2 Página nova `src/pages/arena-dashboard/ArenaActions.tsx`
+Rota: `/arena/:slug/actions`. Lista completa com tabs: Pendentes / Aprovadas / Executadas / Rejeitadas+Falhas. Filtro por domain/action_type/priority.
+Adicionar à `ArenaLayout.tsx` sidebar: "Ações IA" com `Sparkles` icon.
+
+### 6.3 Página nova `src/pages/admin/AdminOrkymActions.tsx`
+Rota: `/admin/orkym-actions`. Visão global de todas propostas. Cards de métrica (total/approved/executed/failed/avg_time_to_approval) lendo `v_orkym_action_metrics`. Tabela com filtros por tenant/arena/domain.
+Adicionar a `AdminLayout.tsx`.
+
+### 6.4 Edits
+- `ArenaDashboard.tsx`: adicionar `<OrkymActionsCard tenantId={...} arenaId={arena.id} />` abaixo de `<OrkymInsightsCard />`. Mostra max 3 propostas + link "Ver todas".
+- `AdminOrkymMonitor.tsx` (Fase 7): adicionar tab "Ações" que linka para `/admin/orkym-actions`.
+- `App.tsx`: 2 rotas novas.
 
 ---
 
-## 6. Hooks operacionais (triggers de chamada)
+## 7. Matriz de permissão (resumo)
 
-Adicionar ganchos que chamam `invokeOrkym` em pontos-chave (não automático em DB — chamado do client/edge para manter controle):
-
-| Hook | Onde | Quando | Domain.action |
+| Role | Aprovar | Executar | Ver |
 |---|---|---|---|
-| Dashboard load | `ArenaDashboard.tsx` | mount + pull-to-refresh | `arena_operations.daily_briefing` |
-| Aluno faltou 3+ vezes | edge function `orkym-evaluate-attendance` (cron diário) | scheduled | `arena_operations.absent_pattern` |
-| Mensalidade overdue | trigger DB já emite event → cron lê backlog | a cada 1h | `finance.overdue_review` |
-| Torneio publicado | `ManageTournament.tsx` post-publish | on action | `tournaments.launch_review` |
-| Marketplace order | já tem trigger event → cron processa | a cada 30min | `growth.purchase_signal` |
+| arena_owner | ✅ ações com `arena_id` próprio | ✅ idem | ✅ idem |
+| tenant_admin/owner | ✅ todas do tenant exceto `propose_promotion` | ✅ idem | ✅ todas do tenant |
+| admin global | ✅ todas | ✅ todas | ✅ todas |
+| atleta/empresa comum | ❌ | ❌ | ❌ |
 
-Edge function nova `orkym-cron-tick`: roda a cada 15min, lê `arena_operational_events` com `processed_at IS NULL`, agrupa por arena+domain, chama `orkym-invoke` em batch, marca eventos como `processed_at=now()`. Configurar via Supabase cron extension.
-
----
-
-## 7. Dashboard — seção "ORKYM Insights"
-
-Em `ArenaDashboard.tsx`, abaixo de "Caixa de pendências":
-
-**Card novo "Sugestões da ORKYM"** — chama `invokeOrkym("arena_operations","daily_briefing",ctx)` no mount, exibe `suggestions[]` e `alerts[]` retornados como cards compactos. Status visíveis:
-- 🟢 Conectada (última call success < 1h)
-- 🟡 Degradada (últimas 3 calls failed/timeout)
-- 🔴 Offline (sem secrets)
-
-Ações por card: "Aceitar" (cria task via RPC), "Dispensar". Sem chat, sem livre texto.
-
-**Página nova `/admin/orkym`** — `AdminOrkymMonitor.tsx`: tabela `orkym_api_calls` últimas 100, filtros por domain/status, card de métricas (total, success rate, avg duration) lendo `v_orkym_metrics`. Apenas leitura.
+Validação dupla: RLS no DB (RPC valida via `is_*`) + check no edge `orkym-execute-action`.
 
 ---
 
-## 8. Contrato API ORKYM (documentado em memory)
+## 8. Cron (reuso de `pg_cron` da Fase 7)
 
-**Request** (POST `${ORKYM_API_BASE_URL}/invoke`):
-```json
-{
-  "request_id": "uuid",
-  "correlation_id": "uuid|null",
-  "domain": "arena_operations",
-  "action": "daily_briefing",
-  "tenant_id": "uuid",
-  "arena_id": "uuid|null",
-  "payload": { "context": {...}, "entity": {...}, "metadata": {...} }
-}
-```
-Headers: `Authorization: Bearer <token>`, `X-Request-Id`, `X-Tenant-Id`, `Content-Type`, `X-HMAC-Signature` (opcional).
-
-**Response esperada**:
-```json
-{
-  "ok": true,
-  "tasks": [{ "title": "...", "description": "...", "priority": 2, "task_type": "absent_pattern" }],
-  "suggestions": [{ "id": "...", "title": "...", "body": "...", "cta": {...} }],
-  "alerts": [{ "id": "...", "severity": "warning", "title": "..." }],
-  "meta": { "model_version": "...", "latency_ms": 450 }
-}
-```
-
-**Códigos de erro tratados**: 401 (auth) → degraded; 429 → log rate_limited + skip; 5xx → retry; timeout → log timeout + degraded.
+Novo job 1×/dia: `SELECT public.orkym_action_expire_stale();`
 
 ---
 
 ## 9. Segurança
 
-- Secrets nunca expostos no client. `invokeOrkym` no client passa só JWT do usuário; orkym-invoke (server) injeta service token.
-- HMAC opcional: header `X-HMAC-Signature: hex(hmac_sha256(ORKYM_HMAC_SECRET, request_id+body))`.
-- Sanitização de payload em logs: remove campos prefixados `_secret`, `password`, `cpf`, `email`, `phone` antes de gravar `request_summary`/`response_summary`.
-- Rate-limit por tenant: 60 calls/min (in-memory + check em `orkym_api_calls`).
-- Anti-loop: dedup TTL 5min por `(domain, action, entity_id ou hash(payload))`.
+- `proposed_payload` nunca exposto no frontend — apenas `human_summary` (filtrado server-side no ingest).
+- Sanitização no ingest remove PII conhecida.
+- RLS bloqueia INSERT/UPDATE direto — tudo via RPC SECURITY DEFINER.
+- Idempotência tripla: UNIQUE no DB + dedup ORKYM (Fase 7) + CAS em `mark_executing`.
+- Allowlist hardcoded no RPC + handler dispatcher — `action_type` desconhecido rejeita silenciosamente com log.
+- Auditoria completa em `orkym_action_executions` + eventos em `arena_operational_events`.
 
 ---
 
@@ -222,14 +281,14 @@ Headers: `Authorization: Bearer <token>`, `X-Request-Id`, `X-Tenant-Id`, `Conten
 
 | Tipo | Arquivo |
 |---|---|
-| Migration | `supabase/migrations/<ts>_phase7_orkym_integration.sql` |
-| Edge function | `supabase/functions/orkym-invoke/index.ts` (reescrita), `supabase/functions/orkym-cron-tick/index.ts` (novo) |
-| Frontend lib | `src/lib/orkym.ts` (estendido), `src/lib/orkymContext.ts` (novo) |
-| Frontend novo | `src/pages/admin/AdminOrkymMonitor.tsx`, `src/components/orkym/InsightsCard.tsx`, `src/components/orkym/StatusBadge.tsx` |
-| Frontend edit | `src/pages/arena-dashboard/ArenaDashboard.tsx` (+InsightsCard), `src/pages/admin/AdminLayout.tsx` (+rota), `src/App.tsx` (+rota) |
-| Memory | `mem/integration/orkym.md` (novo — contrato, secrets, hooks, fail-safe) |
+| Migration | `supabase/migrations/<ts>_phase8_orkym_action_proposals.sql` |
+| Edge functions | `supabase/functions/orkym-invoke/index.ts` (extensão actions[]), `supabase/functions/orkym-execute-action/index.ts` (novo) |
+| Frontend lib | `src/lib/orkym.ts` (tipos+helpers) |
+| Frontend novo | `src/components/orkym/OrkymActionsCard.tsx`, `src/components/orkym/ActionProposalDetail.tsx`, `src/pages/arena-dashboard/ArenaActions.tsx`, `src/pages/admin/AdminOrkymActions.tsx` |
+| Frontend edit | `src/pages/arena-dashboard/ArenaDashboard.tsx`, `src/pages/arena-dashboard/ArenaLayout.tsx`, `src/pages/admin/AdminLayout.tsx`, `src/pages/admin/AdminOrkymMonitor.tsx`, `src/App.tsx` |
+| Memory | `mem/integration/orkym.md` (atualizar contrato com `actions[]`), `mem/features/orkym-actions.md` (novo) |
 
-**Total**: 1 migration + 2 edge functions + 1 lib nova + 3 componentes + 4 edits.
+**Total**: 1 migration + 1 edge function nova + 1 estendida + 4 telas + 5 edits.
 
 ---
 
@@ -237,43 +296,40 @@ Headers: `Authorization: Bearer <token>`, `X-Request-Id`, `X-Tenant-Id`, `Conten
 
 | Item | Resultado |
 |---|---|
-| ORKYM plugada em | dashboard arena (briefing), cron de eventos, post-publish torneio, post-order marketplace |
-| Eventos disparadores | mount dashboard, cron 15min sobre `arena_operational_events`, ações pontuais |
-| Contexto montado por | `buildArenaOperationsContext`, `buildFinanceContext`, `buildTournamentsContext`, `buildGrowthContext` |
-| Auth | JWT user → orkym-invoke → service token → ORKYM (+ HMAC opcional) |
-| Timeout/retry/fallback | 8s timeout, 2 retries 5xx, degraded mode silencioso |
-| Logs | `orkym_api_calls` (sumário sanitizado) + view `v_orkym_metrics` |
-| Domains ativos | `arena_operations`, `finance`, `tournaments`, `growth` |
+| Tipos de ação permitidos | 9 (create_followup, create_reminder, create_occurrence, propose_manual_charge, flag_enrollment_attention, propose_promotion, schedule_operational_review, open_communication_thread, recovery_campaign_draft) |
+| Bloqueados | refund, cancel_payment, change_split, delete_*, suspend_user, automatic_charge |
+| Workflow aprovação | proposed → approve/reject (RPC, validação por role) → execute (edge) → executed/failed |
+| Auditoria | `orkym_action_proposals` (lifecycle) + `orkym_action_executions` (append-only) + eventos em `arena_operational_events` |
+| Anti-dupla-execução | UNIQUE no ingest + CAS em mark_executing + status transitions explícitas |
+| Reuso | tasks, occurrences, billing_cycles, ad_campaigns — zero estrutura paralela |
+| Modo degradado | aprovação/execução independem da ORKYM upstream |
 
 ---
 
 ## ENTREGA C — Riscos / Próximos passos
 
-**Síncrono nesta fase** (assíncrono futuro):
-- `daily_briefing` no mount do dashboard (pode atrasar render — mitigado por degraded silencioso)
-- Cron tick processando backlog (15min — pode crescer; mover para fila SQS/PgMQ depois)
-
-**Pendente Fase 8+**:
-- Auto-actions com aprovação (hoje só sugere/cria task — humano executa)
-- Streaming de respostas ORKYM (hoje request/response simples)
-- Schema de validação Zod compartilhado MoodPlay↔ORKYM via npm package
-- Métricas de impacto (sugestões aceitas, ROI por domain) — base já existe
-- Particionamento de `orkym_api_calls` quando volume > 1M
-- Webhook reverso ORKYM → MoodPlay (eventos push, não só pull)
-- Chat operacional integrado
+**Pendente Fase 9+**:
+- Auto-actions sem aprovação (autonomy policies por tipo + arena)
+- Ações destrutivas (refund/cancel) com aprovação de 2 níveis
+- Workflow de aprovação multi-step (ex: arena → tenant → admin)
+- Streaming de execução longa (hoje síncrono no edge, ok p/ ações leves)
+- Notificação push quando proposta criada (hoje só aparece no dashboard)
+- Rollback automático de ação executada (hoje manual via UI das tasks/occurrences)
+- Schema Zod compartilhado para `actions[]` ORKYM↔MoodPlay
 
 **Compatibilidade**:
-- Sem ORKYM secrets, app funciona normal — só não recebe sugestões
-- Sem quebra de fluxos existentes
-- `arena_operational_tasks.source='manual'` continua funcionando
+- Sem `actions[]` na resposta ORKYM → sistema funciona idêntico à Fase 7
+- Tasks ORKYM existentes (Fase 7) seguem funcionando independentes
+- Sem ORKYM secrets → nenhuma proposta criada, mas UI de actions vazia funciona
 
 **Critérios de sucesso**:
-- ✅ orkym-invoke chama API externa real com auth server-to-server
-- ✅ Contexto rico montado por helpers tipados
-- ✅ Tasks ORKYM aparecem na caixa de pendências (badge Bot)
-- ✅ Dashboard mostra Sugestões/Alertas com status de conectividade
-- ✅ Logs auditáveis em `orkym_api_calls` com sanitização
-- ✅ Timeout/retry/dedup/rate-limit implementados
-- ✅ Modo degradado silencioso — app nunca quebra
-- ✅ Zero IA local; toda decisão é da ORKYM
+- ✅ ORKYM consegue propor ações via response `actions[]`
+- ✅ Propostas aparecem no dashboard arena + página dedicada
+- ✅ Aprovar/rejeitar com validação de role
+- ✅ Execução chama fluxos existentes (tasks/occurrences/billing/ads)
+- ✅ Auditoria completa em proposals + executions + events
+- ✅ Idempotência tripla impede dupla execução
+- ✅ Allowlist hardcoded — ações destrutivas rejeitadas no ingest
+- ✅ Modo degradado: aprovação/execução não dependem da ORKYM
+- ✅ Zero IA local; toda decisão continua vindo da ORKYM
 
