@@ -1,8 +1,8 @@
 
 
-# Fase 9 — Autonomy Policies: SUGGEST → APPROVE → AUTO
+# Fase 10 — AI Control Tower: Monetização da Autonomia
 
-Camada oficial de **políticas de autonomia** sobre a Fase 8. Decide o modo de execução (suggest/approve/auto) por tenant + arena + domain + action_type. Auto-execução só para ações low-risk reversíveis. Kill switch global. Zero IA local. Fallback sempre seguro = `approve`.
+Transformar autonomia ORKYM em produto vendável. Tier de autonomia por plano + limites de uso + gating em runtime + dashboard de valor. **Zero IA local.** Reuso total da Fase 9 (resolver, guardrails, kill switch). Limites violados rebaixam modo (`auto→approve→suggest`), nunca quebram fluxo.
 
 ---
 
@@ -10,267 +10,250 @@ Camada oficial de **políticas de autonomia** sobre a Fase 8. Decide o modo de e
 
 | Existe | Decisão |
 |---|---|
-| `orkym_action_proposals` (Fase 8) | Adicionar colunas `execution_mode`, `policy_id`, `policy_decision` |
-| `orkym_ingest_actions` RPC | Estender para resolver policy ANTES de inserir, decidir mode, gravar decisão |
-| `orkym-execute-action` edge | Reusar como executor — chamado também pelo dispatcher de auto-execução |
-| `orkym_action_executions` | Trilha já cobre auto vs manual (campo `executed_by` + novo `triggered_by`) |
-| `arena_operational_events` | Continua sendo trilha lateral |
+| `company_plans` (free/pro/elite, `monthly_price`, flags) | Estender com `autonomy_tier` + 4 colunas de limite |
+| `subscriptions` (company↔plan) | Resolver tenant→plan via owner company subscription |
+| `tenant_settings.metadata` jsonb | Override opcional de tier (admin pode forçar Enterprise para tenant especial) |
+| `autonomy_resolve_policy` (Fase 9) | Estender: aplica gating de tier antes de retornar mode |
+| `autonomy_check_guardrails` | Adicionar checagem de quota mensal — rebaixa para `approve` |
+| `orkym_ingest_actions` | Já chama resolver+guardrails — ganha gating sem mudar contrato |
+| `v_autonomy_metrics` / `v_orkym_metrics` | Reusados; nova view `v_orkym_usage` agrega por mês |
+| `OrkymInsightsCard` / `OrkymActionsCard` | Reusados na Control Tower |
 
-**Não criar**: novo executor, novo motor de tasks, lógica inteligente local.
+**Não criar**: novo motor de billing, novo sistema de planos, lógica inteligente local. Pay-per-use fica fora — só prepara base.
 
 ---
 
-## 1. Migration `_phase9_autonomy_policies.sql`
+## 1. Migration `_phase10_autonomy_monetization.sql`
 
-### 1.1 Tabela `autonomy_policies`
+### 1.1 ALTER `company_plans`
+```
+ADD autonomy_tier text CHECK IN ('free','growth','pro','business','enterprise') DEFAULT 'free',
+ADD orkym_calls_limit int DEFAULT 0,            -- chamadas ORKYM/mês (0 = none)
+ADD orkym_suggestions_limit int DEFAULT 0,      -- sugestões/mês
+ADD orkym_auto_actions_limit int DEFAULT 0,     -- auto-execuções/mês
+ADD orkym_allowed_domains text[] DEFAULT ARRAY[]::text[]  -- ex: ['arena_operations']
+```
+Backfill dos 3 planos existentes:
+- `free` → tier=`free`, calls=20, suggestions=10, auto=0, domains=`['arena_operations']`
+- `pro` → tier=`pro`, calls=500, suggestions=200, auto=50, domains=`['arena_operations','growth']`
+- `elite` → tier=`business`, calls=5000, suggestions=2000, auto=1000, domains=`['arena_operations','growth','finance','tournaments']`
+
+(Tier `growth` e `enterprise` ficam disponíveis para admin criar planos novos.)
+
+### 1.2 Tabela `orkym_usage` (tracking mensal)
 ```
 id uuid PK,
-scope_level text CHECK IN ('global','tenant','arena') NOT NULL,
-tenant_id uuid,                              -- NULL quando scope=global
-arena_id uuid,                               -- NULL quando scope=global|tenant
-domain text,                                 -- NULL = aplica a todos os domains do escopo
-action_type text,                            -- NULL = aplica a todos action_types do domain
-execution_mode text CHECK IN ('suggest','approve','auto') NOT NULL DEFAULT 'approve',
-risk_level text CHECK IN ('low','medium','high','critical') NOT NULL DEFAULT 'medium',
-is_enabled boolean NOT NULL DEFAULT true,
-conditions jsonb DEFAULT '{}',               -- max_amount, time_window, max_per_hour, etc
-priority int NOT NULL DEFAULT 100,           -- menor = maior precedência (tie-breaker)
-created_by uuid, updated_by uuid,
+tenant_id uuid NOT NULL REFERENCES tenants,
+period_month date NOT NULL,                     -- sempre dia 1 do mês
+total_calls int DEFAULT 0,
+total_suggestions int DEFAULT 0,
+total_actions_proposed int DEFAULT 0,
+total_auto_executed int DEFAULT 0,
+total_approved int DEFAULT 0,
+total_rejected int DEFAULT 0,
+total_blocked_by_quota int DEFAULT 0,           -- novo: quantas vezes rebaixou por limite
+estimated_time_saved_minutes int DEFAULT 0,    -- 5min por auto, 2min por suggestion (heurística simples)
 created_at timestamptz DEFAULT now(),
-updated_at timestamptz DEFAULT now()
+updated_at timestamptz DEFAULT now(),
+UNIQUE (tenant_id, period_month)
 ```
-**Indexes**: `(tenant_id, arena_id, domain, action_type) WHERE is_enabled`, `(scope_level, priority)`.
-**Constraints**: scope_level=`global` ⇒ tenant_id+arena_id NULL; `tenant` ⇒ tenant_id NOT NULL, arena_id NULL; `arena` ⇒ ambos NOT NULL.
+INDEX `(period_month DESC, tenant_id)`.
+RLS: SELECT admin global + tenant_admin + arena_owner (vê do tenant pai). INSERT/UPDATE só via SECURITY DEFINER.
 
-### 1.2 Tabela `autonomy_kill_switches` (emergency stop)
+### 1.3 RPCs
+
+**`orkym_get_tenant_tier(_tenant uuid)` STABLE SECURITY DEFINER** RETURNS TABLE(tier, plan_id, calls_limit, suggestions_limit, auto_limit, allowed_domains, source).
+Resolução:
+1. `tenant_settings.metadata->>'autonomy_tier_override'` (admin force) → source=`override`
+2. Subscription ativa do owner do tenant → join `subscriptions`+`companies`+`company_plans` → source=`subscription`
+3. Fallback: tier=`free`, limites do plano `free` → source=`fallback`
+
+**`orkym_increment_usage(_tenant uuid, _calls int, _suggestions int, _proposed int, _auto int, _approved int, _rejected int, _blocked int, _time_saved int)` SECURITY DEFINER**.
+UPSERT em `orkym_usage` (tenant + período mês atual). Append-only por delta. Chamado pelo edge `orkym-invoke` e pelo `orkym_ingest_actions`.
+
+**`orkym_check_quota(_tenant uuid, _kind text)` STABLE SECURITY DEFINER** RETURNS TABLE(allowed boolean, current int, limit_value int, tier text, reason text).
+`_kind` ∈ `'calls'|'suggestions'|'auto_actions'`. Lê tier+usage do mês corrente. Retorna `allowed=false` se atingiu limite. Sempre retorna mesmo se NULL (defensivo).
+
+**`orkym_check_domain_allowed(_tenant uuid, _domain text)` STABLE** RETURNS boolean.
+Verifica se domain está em `allowed_domains` do tier. Domain `arena_operations` sempre permitido (default).
+
+### 1.4 Estender `autonomy_resolve_policy` — gating de tier
+Após resolver mode atual (Fase 9), antes de retornar:
 ```
-id uuid PK,
-scope_level text CHECK IN ('global','tenant','arena','domain','action_type') NOT NULL,
-tenant_id uuid, arena_id uuid, domain text, action_type text,
-is_active boolean DEFAULT true,
-reason text NOT NULL,
-activated_by uuid, activated_at timestamptz DEFAULT now(),
-deactivated_by uuid, deactivated_at timestamptz
+1. Carrega tier do tenant via orkym_get_tenant_tier
+2. Se domain NÃO em allowed_domains → force mode='suggest', source='tier_domain_block'
+3. Se mode='auto' E tier NÃO permite auto-actions (free/growth) → mode='approve', source='tier_no_auto'
+4. Se mode='auto' E orkym_check_quota('auto_actions').allowed=false → mode='approve', source='quota_auto'
+5. Se mode='approve' E orkym_check_quota('suggestions').allowed=false → mode='suggest', source='quota_suggestions'
+6. Retorna
 ```
-Quando match → força mode=`suggest` (registra apenas, não cria proposta executável).
+Tier→auto map (hardcoded):
+- `free`/`growth`: auto = NUNCA
+- `pro`: auto = só `low` risk
+- `business`: auto = `low` + `medium`
+- `enterprise`: auto = `low` + `medium` + `high` (ainda passa por guardrails)
 
-### 1.3 Tabela `autonomy_policy_logs` (auditoria de decisões)
-```
-id uuid PK,
-proposal_id uuid REFERENCES orkym_action_proposals,
-tenant_id uuid, arena_id uuid,
-domain text, action_type text,
-resolved_mode text NOT NULL,                 -- suggest|approve|auto
-policy_id uuid REFERENCES autonomy_policies, -- NULL se fallback
-policy_source text NOT NULL,                 -- 'arena_specific'|'tenant_action'|'tenant_domain'|'global_default'|'fallback'|'kill_switch'|'guardrail_block'
-guardrail_blocked text,                      -- NULL ou nome do guardrail que bloqueou auto
-metadata jsonb DEFAULT '{}',
-created_at timestamptz DEFAULT now()
-```
-INDEX `(tenant_id, created_at DESC)`, `(resolved_mode, created_at DESC)`.
+### 1.5 View `v_orkym_usage_summary`
+Agrega por tenant: tier atual, uso do mês corrente, limite, % consumido, projeção fim do mês (linear baseado em dias passados), última atividade. SELECT admin + tenant_admin + arena_owner.
 
-### 1.4 ALTER `orkym_action_proposals`
-```
-ADD execution_mode text CHECK IN ('suggest','approve','auto') DEFAULT 'approve',
-ADD policy_id uuid REFERENCES autonomy_policies,
-ADD policy_source text,
-ADD auto_executed boolean DEFAULT false,
-ADD initial_status text                      -- p/ trilha: o status que entrou
-```
-Para retro-compat: defaults garantem que registros antigos viram `approve`.
-
-### 1.5 RPCs
-
-**`autonomy_resolve_policy(_tenant uuid, _arena uuid, _domain text, _action_type text, _risk text)`** RETURNS TABLE(execution_mode, policy_id, policy_source).
-Precedência (primeira que casar e `is_enabled=true`):
-1. Kill switch ativo aplicável → `suggest` + source `kill_switch`
-2. `arena` + action_type específico
-3. `arena` + domain (action_type NULL)
-4. `tenant` + action_type específico
-5. `tenant` + domain
-6. `tenant` (catch-all, domain NULL action_type NULL)
-7. `global` + action_type
-8. `global` + domain
-9. Hard-coded risk fallback: `low`→`approve`, `medium`→`approve`, `high`/`critical`→`approve` (nunca `auto` por fallback)
-10. Última fallback: `approve` + source `fallback`
-
-**Hardcoded risk map** (no resolver, não em tabela — evita alteração acidental):
-```
-low: create_followup, create_reminder, schedule_operational_review, open_communication_thread
-medium: create_occurrence, flag_enrollment_attention, propose_manual_charge, recovery_campaign_draft
-high: propose_promotion
-critical: (futuro: refund, cancel_payment, change_split — bloqueados no ingest)
-```
-
-**`autonomy_check_guardrails(_tenant uuid, _arena uuid, _action_type text, _payload jsonb)`** RETURNS TABLE(allowed boolean, reason text).
-Aplica defaults conservadores quando `execution_mode='auto'`:
-- `high`/`critical` → block (force approve)
-- `action_type` em blocklist hardcoded (refund/cancel/change_split/delete_*) → block
-- max 10 auto-executions/hora por (tenant, action_type)
-- max 30 auto-executions/hora por tenant total
-- cooldown 60s entre auto-executions do mesmo action_type+entity_id
-- `conditions.max_amount` na policy: se payload.amount > max → block
-- `conditions.allowed_hours` ex `[8,22]`: fora da janela → block
-
-Bloqueio NÃO falha — rebaixa para `approve` e loga `guardrail_blocked`.
-
-**`autonomy_log_decision(_proposal_id, _resolved_mode, _policy_id, _source, _guardrail)`** SECURITY DEFINER.
-
-### 1.6 RLS
-
-`autonomy_policies`:
-- SELECT: admin global, `is_tenant_admin(tenant_id)` (vê tenant + global), `is_arena_owner(arena_id)` (vê arena + tenant pai + global)
-- INSERT/UPDATE/DELETE: admin global (qualquer); tenant_admin (scope tenant/arena dentro do seu tenant); arena_owner (somente scope=`arena` da sua arena, NUNCA pode setar mode=`auto` para risk≥`high`)
-
-`autonomy_kill_switches`:
-- SELECT mesmo padrão
-- INSERT/UPDATE: admin global, tenant_admin (escopo do seu tenant)
-
-`autonomy_policy_logs`: SELECT mesmo padrão; INSERT só via SECURITY DEFINER.
-
-### 1.7 View `v_autonomy_metrics`
-Agrega `autonomy_policy_logs` por dia/tenant/mode/action_type: total, by_mode, auto_executed_count, blocked_by_guardrail, blocked_by_kill_switch.
-
-### 1.8 Seed defaults (no migration)
-- 1 policy global por action_type da allowlist Phase 8 → mode `approve`, risk conforme map
-- 0 kill switches ativos
+### 1.6 Cron (novo job)
+- Job mensal dia 1 às 00:05: nada (UPSERT cria registro on-demand). Job opcional: snapshot de fechamento do mês anterior (apenas marca read-only via `metadata.closed=true`).
 
 ---
 
-## 2. Edge Function — extensão `orkym-invoke` / `orkym_ingest_actions`
+## 2. Edge `orkym-invoke` — extensões mínimas
 
-Modificar RPC `orkym_ingest_actions` para que cada action recebida passe por:
+Antes do flow ORKYM real:
 ```
-1. Resolve risk_level (hardcoded por action_type)
-2. Chama autonomy_resolve_policy → (mode, policy_id, source)
-3. Se mode='auto': chama autonomy_check_guardrails. Se bloqueia → mode='approve', source='guardrail_block'
-4. Determina initial_status:
-   - mode='suggest'  → status='canceled' + grava só human_summary (não vira proposta executável); ainda assim insere em autonomy_policy_logs
-   - mode='approve'  → status='proposed' (fluxo Phase 8 inalterado)
-   - mode='auto'     → status='approved' + auto_executed=false (será marcado true após exec)
-5. INSERT proposal com execution_mode, policy_id, policy_source, initial_status, status
-6. INSERT autonomy_policy_logs
-7. Se mode='auto': retorna lista de proposals para auto-execução pelo edge
+1. orkym_check_quota(tenant, 'calls')
+2. Se allowed=false: retorna 200 com { degraded:true, reason:'quota_exceeded', tier, limit, current }
+   — NÃO chama ORKYM, NÃO falha. Loga em orkym_api_calls com status='quota_blocked'
+3. Senão: prossegue normalmente
 ```
+Após sucesso: `orkym_increment_usage(calls=1, suggestions=N, proposed=M, ...)` baseado na resposta.
+`orkym_ingest_actions` já chama o resolver estendido (passo 1.4) — gating automático.
 
-Edge `orkym-invoke` ao receber `actions_proposed > 0`, lê propostas com `execution_mode='auto' AND auto_executed=false` desta call e dispara em paralelo `orkym-execute-action` (com service role + special header `X-Orkym-Auto: true` + setando `executed_by=NULL` para indicar sistema). Falhas registram em `orkym_action_executions` normalmente.
+**Time saved** (heurística): `auto_executed * 5 + suggestions * 2` minutos. Calculado no increment.
+
+## 3. Edge `orkym-execute-action` — gating final
+
+Antes de `mark_executing`:
+```
+1. Re-verifica execution_mode da proposal (Fase 9 já faz)
+2. Se mode='auto' E auto_executed=false: orkym_check_quota('auto_actions')
+3. Se quota estourou: marca proposal status='canceled' + failure_reason='quota_exhausted_runtime'. Retorna 200.
+```
+Defesa em profundidade — quota pode mudar entre ingest e execute.
 
 ---
 
-## 3. Edge `orkym-execute-action` — extensão mínima
-
-- Aceita autenticação por **service role** quando vem do auto-dispatcher (header `X-Orkym-Auto: true` + valida `SERVICE_ROLE_KEY` no body assinado). Nesse caso `executed_by=NULL`.
-- Validação extra: re-verifica `execution_mode` da proposal antes de executar (defesa em profundidade — se policy mudou entre ingest e exec, respeita o novo mode).
-- Após exec bem-sucedida com `execution_mode='auto'`: UPDATE `auto_executed=true`.
-- Se kill switch foi ativado entre proposed→execute para auto, aborta com status `canceled` + `failure_reason='kill_switch_activated'`.
-
----
-
-## 4. Frontend `src/lib/autonomy.ts` (novo)
+## 4. Frontend `src/lib/autonomyTier.ts` (novo)
 
 ```typescript
-export type ExecutionMode = "suggest" | "approve" | "auto";
-export type RiskLevel = "low" | "medium" | "high" | "critical";
+export type AutonomyTier = "free"|"growth"|"pro"|"business"|"enterprise";
 
-export interface AutonomyPolicy {
-  id: string;
-  scope_level: "global"|"tenant"|"arena";
-  tenant_id: string | null;
-  arena_id: string | null;
-  domain: string | null;
-  action_type: string | null;
-  execution_mode: ExecutionMode;
-  risk_level: RiskLevel;
-  is_enabled: boolean;
-  conditions: Record<string, unknown>;
-  priority: number;
+export interface TenantTier {
+  tier: AutonomyTier;
+  plan_id: string | null;
+  calls_limit: number;
+  suggestions_limit: number;
+  auto_limit: number;
+  allowed_domains: string[];
+  source: "override"|"subscription"|"fallback";
 }
 
-export async function listPolicies(filters): Promise<AutonomyPolicy[]>
-export async function upsertPolicy(input: Partial<AutonomyPolicy>): Promise<{ ok, error? }>
-export async function togglePolicy(id, enabled): Promise<{ ok }>
-export async function deletePolicy(id): Promise<{ ok }>
+export interface UsageSummary {
+  tenant_id: string;
+  tier: AutonomyTier;
+  period_month: string;
+  total_calls: number;
+  total_suggestions: number;
+  total_auto_executed: number;
+  total_approved: number;
+  total_rejected: number;
+  total_blocked_by_quota: number;
+  estimated_time_saved_minutes: number;
+  calls_limit: number;
+  suggestions_limit: number;
+  auto_limit: number;
+  pct_calls: number;        // 0-100, capped
+  pct_suggestions: number;
+  pct_auto: number;
+  projected_calls_eom: number;  // linear projection
+}
 
-export async function listKillSwitches(filters): Promise<KillSwitch[]>
-export async function activateKillSwitch(input): Promise<{ ok }>
-export async function deactivateKillSwitch(id): Promise<{ ok }>
+export async function fetchTenantTier(tenantId: string): Promise<TenantTier|null>
+export async function fetchUsageSummary(tenantId: string): Promise<UsageSummary|null>
+export async function fetchUsageHistory(tenantId: string, months: number): Promise<UsageSummary[]>
 
-export async function fetchPolicyLogs(filters): Promise<PolicyLog[]>
+export const TIER_LABELS: Record<AutonomyTier, string> = { ... }
+export const TIER_FEATURES: Record<AutonomyTier, { autoRiskLevels: string[]; description: string }> = { ... }
 ```
 
-Estende `src/lib/orkym.ts` `OrkymActionProposal` com `execution_mode`, `policy_source`, `auto_executed`.
+Estende `src/lib/autonomy.ts` `policySourceLabel` com: `tier_domain_block`, `tier_no_auto`, `quota_auto`, `quota_suggestions`.
 
 ---
 
-## 5. UI — 3 superfícies
+## 5. UI — AI Control Tower
 
-### 5.1 `src/pages/admin/AdminAutonomy.tsx` (rota `/admin/autonomy`)
-- Tab "Políticas": tabela de todas policies com filtro por scope/tenant/arena/domain. Botões: New, Edit, Toggle, Delete. Form modal com select de mode + risk + scope + conditions JSON simplificado (campos: max_amount, max_per_hour, allowed_hours).
-- Tab "Kill Switches": ativos + histórico. Botão grande "Emergency Stop Global" → ativa kill_switch scope=global.
-- Tab "Métricas": cards lendo `v_autonomy_metrics` (total auto-executadas 7d, bloqueadas por guardrail, by mode, top action_types).
-- Tab "Logs": tabela `autonomy_policy_logs` com filtros, mostra source/mode/policy aplicada.
+### 5.1 Página nova `src/pages/arena-dashboard/ArenaControlTower.tsx`
+Rota: `/arena/dashboard/control-tower`. Layout:
+- **Header**: Tier atual (badge grande) + plano vinculado + botão "Upgrade" se < business
+- **Cards de uso (3)**: Calls/Suggestions/Auto-actions — barra de progresso com `usado / limite` + projeção fim do mês
+- **Card "Valor gerado"**: tempo economizado (formato "X horas Y min este mês"), # auto-executadas, # aprovadas
+- **Tabela "Últimas auto-actions"**: reusa `OrkymActionsCard` filtrado por `auto_executed=true`, max 10
+- **Alerta**: se `pct >= 80` → banner amarelo "Você está perto do limite". Se `>= 100` → banner vermelho "Limite atingido. Ações rebaixadas para aprovação manual"
+- **CTA Upgrade**: card destacado mostrando próximo tier + ganhos (mais auto/mês, mais domains)
 
-### 5.2 `src/pages/arena-dashboard/ArenaAutonomy.tsx` (rota `/arena/dashboard/autonomia`)
-- Apenas policies scope=`arena` da arena atual + visão read-only das policies tenant/global aplicáveis.
-- Arena owner pode criar/editar policies da própria arena, MAS:
-  - Mode `auto` apenas para risk `low`
-  - Botão claro: "Pause autonomy for this arena" → cria kill_switch scope=`arena`
+Adicionar à `ArenaLayout.tsx` sidebar: "Control Tower" (icon `Gauge`).
 
-### 5.3 Componente novo `PolicyDecisionBadge.tsx`
-Usado em `OrkymActionsCard` e `ActionProposalDetail` (Fase 8): mostra como pill o `execution_mode` + tooltip com `policy_source` + link "Ver política aplicada". Para `auto_executed=true` mostra ícone ⚡ "Executada automaticamente".
+### 5.2 Página nova `src/pages/admin/AdminControlTower.tsx`
+Rota: `/admin/control-tower`. Visão global:
+- **Métricas top**: total auto-executadas (todos tenants, 30d) / receita potencial estimada (sum tier monthly_price × tenants ativos) / tempo economizado total
+- **Tabela "Top tenants por adoção"**: tenant, tier, uso/limite, auto-executadas, % adoção
+- **Tabela "Próximos do limite"**: tenants com `pct >= 80` em qualquer dimensão → oportunidade de upsell
+- **Gráfico**: distribuição de tenants por tier (pizza simples)
 
-### 5.4 Edits Fase 8
-- `OrkymActionsCard.tsx`: filtra por padrão `status='proposed'` (Phase 8 OK), mas adiciona seção colapsada "Executadas automaticamente (24h)" com items `auto_executed=true`.
-- `ArenaActions.tsx` / `AdminOrkymActions.tsx`: nova coluna "Mode" e filtro por `execution_mode`.
-- `AdminLayout.tsx` / `ArenaLayout.tsx`: link "Autonomia" (icon `ShieldCheck`).
-- `App.tsx`: 2 rotas novas.
+Adicionar à `AdminLayout.tsx` sidebar: "Control Tower" (icon `Gauge`).
 
----
+### 5.3 Componente `src/components/autonomy/UsageMeter.tsx`
+Props: `label`, `used`, `limit`, `projected?`. Renderiza barra com cores: verde <50%, amarelo 50-80%, vermelho >80%, cinza se limit=0. Tooltip com projeção.
 
-## 6. Matriz de risco e modo permitido (hardcoded)
+### 5.4 Componente `src/components/autonomy/UpgradeCTA.tsx`
+Props: `currentTier`, `reason?`. Card chamativo com next tier + ganhos. Link para `/marketplace/register` ou modal "Fale conosco" (sem cobrança automática nesta fase).
 
-| action_type | risk | auto permitido? |
-|---|---|---|
-| create_followup | low | ✅ |
-| create_reminder | low | ✅ |
-| schedule_operational_review | low | ✅ |
-| open_communication_thread | low | ✅ |
-| create_occurrence | medium | ⚠️ apenas via policy explícita admin/tenant_admin |
-| flag_enrollment_attention | medium | ⚠️ idem |
-| recovery_campaign_draft | medium | ⚠️ idem |
-| propose_manual_charge | medium | ❌ (sempre approve nesta fase — finance) |
-| propose_promotion | high | ❌ (sempre approve) |
-| refund/cancel/change_split/delete_* | critical | ❌ (bloqueado no ingest, não chega ao resolver) |
+### 5.5 Edits Fase 9
+- `OrkymActionsCard.tsx`: quando proposta tem `policy_source='quota_auto'` ou `'tier_no_auto'`, mostra badge sutil "Rebaixada por plano" + tooltip
+- `PolicyDecisionBadge.tsx`: já recebe `source` — adicionar mapping para os novos sources de tier/quota
+- `ArenaActions.tsx` / `AdminOrkymActions.tsx`: adicionar filtro "Origem: Tier/Quota"
 
-Validado em `autonomy_check_guardrails`. Tentativa de configurar `auto` para `high`/`critical` rejeitada na RPC de upsert da policy (exceto admin global, e ainda assim guardrails rebaixam em runtime).
+### 5.6 Edits AdminPlans
+- `AdminPlans.tsx`: adicionar 4 inputs (autonomy_tier select, calls/suggestions/auto limits) + multi-select de allowed_domains. Salva direto em `company_plans`.
 
 ---
 
-## 7. Cron (reuso pg_cron Fase 7)
+## 6. Matriz de gating (resumo executável)
 
-- Job existente `orkym_action_expire_stale` mantém-se
-- Novo job 1×/dia: cleanup `autonomy_policy_logs` > 90 dias (DELETE)
+| Tier | Calls/mês | Suggestions/mês | Auto/mês | Domains | Auto risk |
+|---|---|---|---|---|---|
+| free | 20 | 10 | 0 | arena_operations | — |
+| growth | 100 | 50 | 0 | arena_operations | — |
+| pro | 500 | 200 | 50 | arena_operations, growth | low |
+| business | 5000 | 2000 | 1000 | + finance, tournaments | low + medium |
+| enterprise | unlimited (-1) | unlimited | unlimited | all | low + medium + high |
 
----
-
-## 8. Compatibilidade Fase 8
-
-- Sem nenhuma policy criada → fallback retorna `approve` para tudo → comportamento **idêntico à Fase 8**
-- Propostas antigas (sem `execution_mode`) → backfill no migration setando `execution_mode='approve'`, `policy_source='legacy'`
-- `OrkymActionsCard` continua mostrando `status='proposed'` por default → auto-actions executadas não poluem a fila de aprovação
-- Usuário arena-owner sem permissão para gerir policies → vê apenas badge de decisão, sem botões
+`-1` em qualquer limit = ilimitado. `orkym_check_quota` retorna sempre `allowed=true` se limit=-1.
 
 ---
 
-## 9. Segurança
+## 7. Fallback / Compatibilidade
 
-- RLS bloqueia leitura cross-tenant
-- Apenas SECURITY DEFINER pode escrever em `autonomy_policy_logs`
-- Arena owner NUNCA cria policies tenant/global; tentativa retorna `forbidden`
-- Auto-dispatcher chama `orkym-execute-action` com header autenticado por service role — verify_jwt continua true mas há branch `X-Orkym-Auto` validado contra `SUPABASE_SERVICE_ROLE_KEY` em body
-- Kill switch global é prioritário sobre TODAS as policies — checked first
-- Conditions `max_amount` validadas no DB, não no client
-- Allowlist e blocklist de action_types continuam hardcoded — policies só decidem o **mode** dentro da allowlist Fase 8
+- Sem subscription → tier=`free` → comportamento ultra-conservador, sem auto
+- Tier não reconhecido → fallback `free`
+- `orkym_get_tenant_tier` falha → resolver continua com mode original (defensivo, loga em `autonomy_policy_logs.metadata`)
+- Limite estourou → rebaixa modo, nunca falha. Increment `total_blocked_by_quota`
+- Sem `orkym_usage` row do mês → tratado como zero, UPSERT cria
+- Fase 9 sem nada quebrado: se nenhuma policy + nenhum tier = comportamento idêntico (tudo `approve`)
+
+---
+
+## 8. Segurança (não negociável)
+
+- Kill switch tem prioridade sobre tier (Fase 9 inalterada)
+- Guardrails (rate limit, blocklist hardcoded) checados ANTES de quota
+- Tier `enterprise` NÃO desativa guardrails — só permite mais risk levels
+- Refund/cancel/change_split continuam bloqueados no ingest (allowlist)
+- RLS: tenant_admin só vê próprio tier+usage; admin global vê tudo
+- `orkym_get_tenant_tier` é SECURITY DEFINER — não vaza dados de subscription cross-tenant
+- Override admin via `tenant_settings.metadata` requer `is_admin(auth.uid())` (já protegido por RLS de tenant_settings)
+
+---
+
+## 9. Pay-per-use (preparação, NÃO implementado)
+
+- `orkym_usage.metadata` jsonb adicionado para futuro custo por call
+- View `v_orkym_usage_summary` já expõe contadores
+- Sem cobrança real, sem integração Stripe, sem invoice
 
 ---
 
@@ -278,14 +261,14 @@ Validado em `autonomy_check_guardrails`. Tentativa de configurar `auto` para `hi
 
 | Tipo | Arquivo |
 |---|---|
-| Migration | `supabase/migrations/<ts>_phase9_autonomy_policies.sql` |
-| Edge | `supabase/functions/orkym-invoke/index.ts` (auto-dispatch loop), `supabase/functions/orkym-execute-action/index.ts` (auto branch + re-check policy) |
-| Frontend lib | `src/lib/autonomy.ts` (novo), `src/lib/orkym.ts` (extender tipos) |
-| Frontend novo | `src/pages/admin/AdminAutonomy.tsx`, `src/pages/arena-dashboard/ArenaAutonomy.tsx`, `src/components/autonomy/PolicyDecisionBadge.tsx`, `src/components/autonomy/PolicyFormDialog.tsx`, `src/components/autonomy/KillSwitchPanel.tsx` |
-| Frontend edit | `src/pages/admin/AdminLayout.tsx`, `src/pages/arena-dashboard/ArenaLayout.tsx`, `src/pages/admin/AdminOrkymActions.tsx`, `src/pages/arena-dashboard/ArenaActions.tsx`, `src/components/orkym/OrkymActionsCard.tsx`, `src/components/orkym/ActionProposalDetail.tsx`, `src/App.tsx` |
-| Memory | `mem/features/autonomy-policies.md` (novo), atualiza `mem/features/orkym-actions.md` |
+| Migration | `supabase/migrations/<ts>_phase10_autonomy_monetization.sql` |
+| Edge | `supabase/functions/orkym-invoke/index.ts` (quota gate + increment), `supabase/functions/orkym-execute-action/index.ts` (re-check quota auto) |
+| Frontend lib | `src/lib/autonomyTier.ts` (novo), `src/lib/autonomy.ts` (extender labels) |
+| Frontend novo | `src/pages/arena-dashboard/ArenaControlTower.tsx`, `src/pages/admin/AdminControlTower.tsx`, `src/components/autonomy/UsageMeter.tsx`, `src/components/autonomy/UpgradeCTA.tsx` |
+| Frontend edit | `src/App.tsx`, `src/pages/arena-dashboard/ArenaLayout.tsx`, `src/pages/admin/AdminLayout.tsx`, `src/pages/admin/AdminPlans.tsx`, `src/components/orkym/OrkymActionsCard.tsx`, `src/components/autonomy/PolicyDecisionBadge.tsx`, `src/pages/arena-dashboard/ArenaActions.tsx`, `src/pages/admin/AdminOrkymActions.tsx` |
+| Memory | `mem/features/autonomy-monetization.md` (novo) |
 
-**Total**: 1 migration + 2 edge functions estendidas + 1 lib nova + 5 componentes/páginas + 7 edits.
+**Total**: 1 migration + 2 edges estendidas + 1 lib nova + 4 componentes/páginas + 8 edits.
 
 ---
 
@@ -293,45 +276,43 @@ Validado em `autonomy_check_guardrails`. Tentativa de configurar `auto` para `hi
 
 | Item | Resultado |
 |---|---|
-| Precedência | kill_switch → arena+action → arena+domain → tenant+action → tenant+domain → tenant catch-all → global+action → global+domain → risk fallback (sempre `approve`) → fallback `approve` |
-| Modos por risco | low: auto permitido / medium: auto só com policy explícita / high: sempre approve / critical: bloqueado upstream |
-| Kill switch | scope global/tenant/arena/domain/action_type — checagem antes de tudo, força `suggest` |
-| Guardrails | max 10/h por (tenant,action_type), max 30/h por tenant, cooldown 60s, max_amount, allowed_hours, blocklist hardcoded |
-| Fallback | sem policy → `approve`. Policy inválida → `approve`. action_type fora allowlist → bloqueado no ingest (Phase 8) |
-| Auditoria | `autonomy_policy_logs` por proposal + `auto_executed` flag + executions com `executed_by=NULL` para auto |
-| UI | `/admin/autonomy` (full), `/arena/dashboard/autonomia` (escopo arena), badges em todos cards |
+| Gating | resolver Fase 9 ganha 4 checagens extras (domain allowed, tier permite auto, quota auto, quota suggestions). Edge invoke gate de calls antes de chamar ORKYM |
+| Limites por plano | free 20/10/0, pro 500/200/50, business 5000/2000/1000, enterprise ilimitado. Configurável em AdminPlans |
+| Fallback | nunca falha — rebaixa: auto→approve→suggest. Loga em `policy_source` e incrementa `total_blocked_by_quota` |
+| Tracking | `orkym_usage` UPSERT mensal por tenant. View `v_orkym_usage_summary` com % e projeção |
+| UX | `/arena/dashboard/control-tower` (tenant) + `/admin/control-tower` (global). Badges em todas action cards |
+| Compat | Sem subscription = free tier. Sem policies = approve. Fase 9 inalterada. |
+| Segurança | Kill switch + guardrails > tier. Tier nunca desativa segurança. Refund/cancel continuam blocados. |
 
 ---
 
 ## ENTREGA C — Riscos / Próximos passos
 
-**Continua obrigatoriamente approve nesta fase**:
-- propose_manual_charge (finance)
-- propose_promotion (growth, gasto real)
-- todas medium sem policy explícita opt-in
+**Limitações desta fase**:
+- Tier resolvido via subscription do owner — tenants sem owner→company subscription caem em `free`
+- Tempo economizado é heurística simples (5min/auto, 2min/sugg) — não medido real
+- Sem cobrança automática quando upgrade — CTA leva a "Fale conosco"
 
-**Poderia virar auto futuramente (Fase 10+)**:
-- propose_manual_charge com confidence score da ORKYM > threshold
-- propose_promotion com cap de budget pequeno
+**Próximos passos (Fase 11+)**:
+- Pay-per-use real: cobrar por call extra acima do limite via Stripe
+- Score de qualidade ORKYM por tenant (ROI medido)
+- Tier `enterprise` com SLA contratual + dashboard admin de SLA
+- Auto-upgrade temporário com cobrança proporcional
+- Webhook quando atinge 80%/100% limite (email/notif)
+- Métricas de impacto financeiro real (ações que geraram receita)
 
-**Permanece crítico (nunca auto)**:
-- refund, cancel_payment, change_split, qualquer ação destrutiva
-- bloqueio de usuário, suspensão de tenant
-
-**Próximos passos**:
-- Score de confiança por action_type (ORKYM precisa enviar)
-- Policies por plano (free/pro/elite) — campo `applicable_plans` em conditions
-- Aprovação 2-níveis para high (futura — Fase 10)
-- Webhook para alertar admin quando guardrail bloqueia auto N vezes em janela
-- Dry-run mode: policy `auto` mas só registra "teria executado", não executa de fato
+**Permanece crítico (não muda)**:
+- Refund/cancel/change_split — bloqueados independente de tier
+- Guardrails de rate-limit e cooldown — ativos em todos tiers
+- Kill switch global — soberano
 
 **Critérios de sucesso**:
-- ✅ `autonomy_policies` + resolver + guardrails + kill switches operacionais
-- ✅ Cada action ORKYM passa pelo resolver e grava decisão em `autonomy_policy_logs`
-- ✅ Low-risk podem auto-executar quando policy permitir
-- ✅ Fallback sem policy = `approve` (Fase 8 inalterada)
-- ✅ Kill switch global desliga autonomy em 1 clique
-- ✅ Painéis admin + arena com edit + métricas
-- ✅ Badges mostram modo + fonte da decisão
-- ✅ Zero IA local, zero auto crítico, zero quebra de Fase 8
+- ✅ Tier resolvido por plano (free/pro/business)
+- ✅ Quota mensal em calls + suggestions + auto-actions
+- ✅ Domain gating (finance só em business+)
+- ✅ Auto risk gating (medium só em business+, high só enterprise)
+- ✅ Fallback rebaixa modo, nunca quebra
+- ✅ Control Tower mostra uso/projeção/valor
+- ✅ Admin pode editar limites por plano
+- ✅ Zero IA local, kill switch + guardrails preservados, Fase 9 inalterada
 
