@@ -1023,10 +1023,12 @@ export type Database = {
       arena_operational_tasks: {
         Row: {
           arena_id: string
+          correlation_id: string | null
           created_at: string
           description: string | null
           due_at: string | null
           id: string
+          metadata: Json
           occurrence_id: string | null
           priority: number
           related_entity_id: string | null
@@ -1042,10 +1044,12 @@ export type Database = {
         }
         Insert: {
           arena_id: string
+          correlation_id?: string | null
           created_at?: string
           description?: string | null
           due_at?: string | null
           id?: string
+          metadata?: Json
           occurrence_id?: string | null
           priority?: number
           related_entity_id?: string | null
@@ -1061,10 +1065,12 @@ export type Database = {
         }
         Update: {
           arena_id?: string
+          correlation_id?: string | null
           created_at?: string
           description?: string | null
           due_at?: string | null
           id?: string
+          metadata?: Json
           occurrence_id?: string | null
           priority?: number
           related_entity_id?: string | null
@@ -3032,6 +3038,84 @@ export type Database = {
           },
         ]
       }
+      orkym_api_calls: {
+        Row: {
+          action: string
+          arena_id: string | null
+          correlation_id: string | null
+          created_at: string
+          domain: string
+          duration_ms: number | null
+          error_message: string | null
+          http_status: number | null
+          id: string
+          request_id: string
+          request_summary: Json
+          response_summary: Json
+          retried_count: number
+          status: string
+          tenant_id: string | null
+        }
+        Insert: {
+          action: string
+          arena_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          domain: string
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          request_id: string
+          request_summary?: Json
+          response_summary?: Json
+          retried_count?: number
+          status: string
+          tenant_id?: string | null
+        }
+        Update: {
+          action?: string
+          arena_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          domain?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          request_id?: string
+          request_summary?: Json
+          response_summary?: Json
+          retried_count?: number
+          status?: string
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
+      orkym_dedup: {
+        Row: {
+          created_at: string
+          dedup_key: string
+          expires_at: string
+          id: string
+          tenant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          dedup_key: string
+          expires_at: string
+          id?: string
+          tenant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          dedup_key?: string
+          expires_at?: string
+          id?: string
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
       payment_accounts: {
         Row: {
           arena_id: string | null
@@ -4812,6 +4896,23 @@ export type Database = {
         }
         Relationships: []
       }
+      v_orkym_metrics: {
+        Row: {
+          action: string | null
+          avg_duration_ms_success: number | null
+          day: string | null
+          deduped: number | null
+          degraded: number | null
+          domain: string | null
+          failed: number | null
+          rate_limited: number | null
+          success: number | null
+          tenant_id: string | null
+          timeouts: number | null
+          total: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       ad_record_event: {
@@ -4945,6 +5046,8 @@ export type Database = {
         Args: { _tournament_id: string; _user_id: string }
         Returns: boolean
       }
+      orkym_ingest_tasks: { Args: { _payload: Json }; Returns: number }
+      orkym_purge_dedup: { Args: never; Returns: number }
       resolve_tenant_by_host: { Args: { _host: string }; Returns: string }
       search_global: { Args: { _term: string }; Returns: Json }
       set_current_tenant: { Args: { _tenant_id: string }; Returns: undefined }
