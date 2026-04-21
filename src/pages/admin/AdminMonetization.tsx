@@ -8,7 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { CreditCard, Zap, DollarSign, TrendingUp } from "lucide-react";
+import { CreditCard, Zap, DollarSign, TrendingUp, Gauge } from "lucide-react";
+import { TIER_LABELS, type AutonomyTier } from "@/lib/autonomyTier";
+
+const AUTONOMY_TIERS: AutonomyTier[] = ["free", "growth", "pro", "business", "enterprise"];
+const ALL_DOMAINS = ["arena_operations", "growth", "finance", "tournaments"];
 
 const AdminMonetization = () => {
   const [plans, setPlans] = useState<any[]>([]);
@@ -118,6 +122,72 @@ const AdminMonetization = () => {
                   <Switch checked={plan.marketplace_highlight} onCheckedChange={(v) => updatePlan(plan.id, { marketplace_highlight: v })} />
                   Destaque marketplace
                 </label>
+              </div>
+
+              {/* Phase 10: Autonomy / AI Control Tower */}
+              <div className="border-t border-border pt-3 mt-2 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <Gauge className="h-3.5 w-3.5 text-primary" />
+                  AI Autonomy
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Tier de autonomia</label>
+                  <Select
+                    value={plan.autonomy_tier ?? "free"}
+                    onValueChange={(v) => updatePlan(plan.id, { autonomy_tier: v })}
+                  >
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {AUTONOMY_TIERS.map((t) => (
+                        <SelectItem key={t} value={t}>{TIER_LABELS[t]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">Calls/mês</label>
+                    <Input type="number" defaultValue={plan.orkym_calls_limit ?? 0} className="h-8"
+                      title="-1 = ilimitado"
+                      onBlur={(e) => updatePlan(plan.id, { orkym_calls_limit: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">Sugestões</label>
+                    <Input type="number" defaultValue={plan.orkym_suggestions_limit ?? 0} className="h-8"
+                      onBlur={(e) => updatePlan(plan.id, { orkym_suggestions_limit: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">Auto-actions</label>
+                    <Input type="number" defaultValue={plan.orkym_auto_actions_limit ?? 0} className="h-8"
+                      onBlur={(e) => updatePlan(plan.id, { orkym_auto_actions_limit: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground">Domínios liberados</label>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {ALL_DOMAINS.map((d) => {
+                      const allowed: string[] = plan.orkym_allowed_domains ?? [];
+                      const isOn = allowed.includes(d);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            const next = isOn ? allowed.filter((x) => x !== d) : [...allowed, d];
+                            updatePlan(plan.id, { orkym_allowed_domains: next });
+                          }}
+                          className={`px-2 py-0.5 rounded-full text-[10px] border transition-colors ${
+                            isOn
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-muted text-muted-foreground border-border"
+                          }`}
+                        >
+                          {d}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

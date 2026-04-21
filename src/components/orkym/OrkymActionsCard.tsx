@@ -124,7 +124,7 @@ export const OrkymActionsCard = ({
                       p.policy_source === "tier_domain_block") && (
                       <Badge
                         variant="outline"
-                        className="text-[10px] h-4 px-1.5 bg-amber-500/10 text-amber-600 border-amber-500/30"
+                        className="text-[10px] h-4 px-1.5 bg-muted text-muted-foreground border-border"
                         title="Modo rebaixado por limite ou plano"
                       >
                         rebaixada por plano
