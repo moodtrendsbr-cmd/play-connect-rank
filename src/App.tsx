@@ -101,6 +101,7 @@ import OrganizerArenas from "./pages/organizer/OrganizerArenas";
 import OrganizerDomains from "./pages/organizer/OrganizerDomains";
 import OrganizerPayment from "./pages/organizer/OrganizerPayment";
 import OrganizerDashboard from "./pages/organizer/OrganizerDashboard";
+import AthleteDashboard from "./pages/athlete/AthleteDashboard";
 import AdminShell from "./layouts/AdminShell";
 import TenantShell from "./layouts/TenantShell";
 import TenantDashboard from "./pages/tenant/TenantDashboard";
@@ -209,11 +210,16 @@ const App = () => (
             {/* Phase 11.1 — alias shells (additive, do not break legacy routes) */}
             <Route path="/arena" element={<Navigate to="/arena/dashboard" replace />} />
             <Route path="/athlete" element={<AthleteShell />}>
-              <Route index element={<Navigate to="/athlete/perfil" replace />} />
+              <Route index element={<Navigate to="/athlete/dashboard" replace />} />
+              <Route path="dashboard" element={<AthleteDashboard />} />
               <Route path="perfil" element={<Profile />} />
+              <Route path="meu-dia" element={<AthleteDashboard />} />
               <Route path="feed" element={<Feed />} />
               <Route path="torneios" element={<Tournaments />} />
+              <Route path="jogos" element={<AthleteDashboard />} />
               <Route path="ranking" element={<Ranking />} />
+              <Route path="historico" element={<AthleteDashboard />} />
+              <Route path="descobrir" element={<Explore />} />
               <Route path="mensagens" element={<Messages />} />
             </Route>
             <Route path="/company" element={<CompanyShell />}>
