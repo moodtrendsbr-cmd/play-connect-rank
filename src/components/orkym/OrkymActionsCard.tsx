@@ -118,6 +118,18 @@ export const OrkymActionsCard = ({
                       source={p.policy_source ?? null}
                       autoExecuted={p.auto_executed ?? false}
                     />
+                    {(p.policy_source === "quota_auto" ||
+                      p.policy_source === "quota_suggestions" ||
+                      p.policy_source === "tier_no_auto" ||
+                      p.policy_source === "tier_domain_block") && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] h-4 px-1.5 bg-amber-500/10 text-amber-600 border-amber-500/30"
+                        title="Modo rebaixado por limite ou plano"
+                      >
+                        rebaixada por plano
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-sm font-medium text-foreground line-clamp-2">{p.title}</p>
                   {p.description && (

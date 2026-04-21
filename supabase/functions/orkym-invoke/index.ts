@@ -177,6 +177,33 @@ Deno.serve(async (req) => {
       return safeJson({ ok: false, degraded: true, error: "rate_limited", request_id: requestId });
     }
 
+    // 4b. Phase 10: Quota gate — calls/month per tenant tier
+    try {
+      const { data: quota } = await adminClient.rpc("orkym_check_quota", {
+        _tenant: payload.tenant_id,
+        _kind: "calls",
+      });
+      const row = Array.isArray(quota) ? quota[0] : quota;
+      if (row && row.allowed === false) {
+        logRow.status = "quota_blocked";
+        logRow.error_message = `quota_exceeded:calls (tier=${row.tier}, ${row.current}/${row.limit_value})`;
+        await finishLog();
+        return safeJson({
+          ok: false,
+          degraded: true,
+          error: "quota_exceeded",
+          reason: "calls_limit",
+          tier: row.tier,
+          limit: row.limit_value,
+          current: row.current,
+          request_id: requestId,
+        });
+      }
+    } catch (e) {
+      // Defensivo: se RPC falhar, prossegue (fail-open só para evitar quebrar fluxo)
+      console.warn("orkym_check_quota failed", e);
+    }
+
     // 5. Dedup
     const dKey = await dedupKey(domain, action, payload);
     const { data: existingDedup } = await adminClient
@@ -343,6 +370,27 @@ Deno.serve(async (req) => {
       actions_count: parsed.actions?.length ?? 0,
       meta: parsed.meta,
     });
+
+    // Phase 10: increment usage counters
+    try {
+      const sCount = parsed.suggestions?.length ?? 0;
+      const pCount = parsed.actions?.length ?? 0;
+      const timeSaved = actionsAutoExecuted * 5 + sCount * 2;
+      await adminClient.rpc("orkym_increment_usage", {
+        _tenant: payload.tenant_id,
+        _calls: 1,
+        _suggestions: sCount,
+        _proposed: pCount,
+        _auto: actionsAutoExecuted,
+        _approved: 0,
+        _rejected: 0,
+        _blocked: 0,
+        _time_saved: timeSaved,
+      });
+    } catch (e) {
+      console.warn("orkym_increment_usage failed", e);
+    }
+
     await finishLog();
 
     return safeJson({

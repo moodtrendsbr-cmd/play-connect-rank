@@ -252,6 +252,42 @@ Deno.serve(async (req) => {
       if (!allowed) return safeJson({ ok: false, error: "forbidden" }, 403);
     }
 
+    // Phase 10: re-check de quota auto-actions em runtime (defesa em profundidade)
+    if (proposal.execution_mode === "auto" && !proposal.auto_executed) {
+      try {
+        const { data: q } = await admin.rpc("orkym_check_quota", {
+          _tenant: proposal.tenant_id,
+          _kind: "auto_actions",
+        });
+        const row = Array.isArray(q) ? q[0] : q;
+        if (row && row.allowed === false) {
+          await admin
+            .from("orkym_action_proposals")
+            .update({
+              status: "canceled",
+              failure_reason: "quota_exhausted_runtime",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", proposalId);
+          await admin.rpc("orkym_increment_usage", {
+            _tenant: proposal.tenant_id,
+            _calls: 0, _suggestions: 0, _proposed: 0, _auto: 0,
+            _approved: 0, _rejected: 0, _blocked: 1, _time_saved: 0,
+          });
+          return safeJson({
+            ok: false,
+            status: "canceled",
+            error: "quota_exhausted_runtime",
+            tier: row.tier,
+            limit: row.limit_value,
+            current: row.current,
+          });
+        }
+      } catch (e) {
+        console.warn("quota recheck failed", e);
+      }
+    }
+
     // CAS approved → executing
     const { data: marked, error: markErr } = await admin.rpc("orkym_action_mark_executing", {
       _proposal_id: proposalId,
@@ -295,6 +331,25 @@ Deno.serve(async (req) => {
       await admin.from("orkym_action_proposals")
         .update({ auto_executed: true })
         .eq("id", proposalId);
+      // Phase 10: track auto execution + manual approval counters
+      try {
+        await admin.rpc("orkym_increment_usage", {
+          _tenant: proposal.tenant_id,
+          _calls: 0, _suggestions: 0, _proposed: 0,
+          _auto: 1, _approved: 0, _rejected: 0, _blocked: 0,
+          _time_saved: 5,
+        });
+      } catch (e) { console.warn("usage increment failed", e); }
+    } else {
+      // Approved + executed manualmente
+      try {
+        await admin.rpc("orkym_increment_usage", {
+          _tenant: proposal.tenant_id,
+          _calls: 0, _suggestions: 0, _proposed: 0,
+          _auto: 0, _approved: 1, _rejected: 0, _blocked: 0,
+          _time_saved: 2,
+        });
+      } catch (e) { console.warn("usage increment failed", e); }
     }
     if (proposal.arena_id) {
       await admin.from("arena_operational_events").insert({
