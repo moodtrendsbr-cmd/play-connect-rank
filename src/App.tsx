@@ -82,6 +82,8 @@ import AdminSplitRules from "./pages/admin/AdminSplitRules";
 import AdminAdjustments from "./pages/admin/AdminAdjustments";
 import AdminAdCampaigns from "./pages/admin/AdminAdCampaigns";
 import AdminOrkymMonitor from "./pages/admin/AdminOrkymMonitor";
+import AdminOrkymActions from "./pages/admin/AdminOrkymActions";
+import ArenaActions from "./pages/arena-dashboard/ArenaActions";
 import Explore from "./pages/Explore";
 import AthletesList from "./pages/AthletesList";
 import ArenasList from "./pages/arenas/ArenasList";
