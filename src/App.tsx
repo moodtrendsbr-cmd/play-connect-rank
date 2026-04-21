@@ -212,6 +212,7 @@ const App = () => (
               <Route path="adjustments" element={<AdminAdjustments />} />
               <Route path="ad-campaigns" element={<AdminAdCampaigns />} />
               <Route path="orkym" element={<AdminOrkymMonitor />} />
+              <Route path="orkym-actions" element={<AdminOrkymActions />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
