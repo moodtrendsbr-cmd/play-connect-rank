@@ -14,6 +14,230 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_campaigns: {
+        Row: {
+          budget: number
+          company_id: string
+          created_at: string
+          cta_label: string | null
+          ends_at: string
+          id: string
+          image_url: string | null
+          kind: string
+          link: string | null
+          name: string
+          priority: number
+          starts_at: string
+          status: string
+          target_id: string | null
+          target_type: string | null
+          tenant_id: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          budget?: number
+          company_id: string
+          created_at?: string
+          cta_label?: string | null
+          ends_at?: string
+          id?: string
+          image_url?: string | null
+          kind: string
+          link?: string | null
+          name: string
+          priority?: number
+          starts_at?: string
+          status?: string
+          target_id?: string | null
+          target_type?: string | null
+          tenant_id?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          budget?: number
+          company_id?: string
+          created_at?: string
+          cta_label?: string | null
+          ends_at?: string
+          id?: string
+          image_url?: string | null
+          kind?: string
+          link?: string | null
+          name?: string
+          priority?: number
+          starts_at?: string
+          status?: string
+          target_id?: string | null
+          target_type?: string | null
+          tenant_id?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_campaigns_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_campaigns_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_campaigns_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_events: {
+        Row: {
+          campaign_id: string
+          event_type: string
+          id: string
+          metadata: Json
+          occurred_at: string
+          slot_id: string | null
+          viewer_id: string | null
+        }
+        Insert: {
+          campaign_id: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          slot_id?: string | null
+          viewer_id?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          slot_id?: string | null
+          viewer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ads_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_events_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "ad_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_events_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "ads_public"
+            referencedColumns: ["slot_id"]
+          },
+        ]
+      }
+      ad_placements: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          id: string
+          slot_id: string
+          weight: number
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          id?: string
+          slot_id: string
+          weight?: number
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          slot_id?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_placements_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_placements_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ads_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_placements_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "ad_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_placements_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "ads_public"
+            referencedColumns: ["slot_id"]
+          },
+        ]
+      }
+      ad_slots: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          max_active: number
+          name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          max_active?: number
+          name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          max_active?: number
+          name?: string
+        }
+        Relationships: []
+      }
       arena_attendance: {
         Row: {
           arena_id: string
@@ -1248,6 +1472,42 @@ export type Database = {
           },
         ]
       }
+      athlete_activities: {
+        Row: {
+          activity_type: string
+          arena_id: string | null
+          athlete_id: string
+          created_at: string
+          id: string
+          metadata: Json
+          reference_id: string | null
+          reference_type: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          activity_type: string
+          arena_id?: string | null
+          athlete_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reference_id?: string | null
+          reference_type?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          activity_type?: string
+          arena_id?: string | null
+          athlete_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reference_id?: string | null
+          reference_type?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
       athlete_sponsors: {
         Row: {
           amount: number
@@ -2117,6 +2377,13 @@ export type Database = {
             foreignKeyName: "marketplace_orders_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
+            referencedRelation: "marketplace_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -2956,8 +3223,11 @@ export type Database = {
           featured: boolean
           id: string
           image_urls: string[]
+          kind: string | null
           name: string
           price: number
+          service_arena_id: string | null
+          service_duration_minutes: number | null
           status: string
           stock: number | null
           tenant_id: string | null
@@ -2971,8 +3241,11 @@ export type Database = {
           featured?: boolean
           id?: string
           image_urls?: string[]
+          kind?: string | null
           name: string
           price: number
+          service_arena_id?: string | null
+          service_duration_minutes?: number | null
           status?: string
           stock?: number | null
           tenant_id?: string | null
@@ -2986,8 +3259,11 @@ export type Database = {
           featured?: boolean
           id?: string
           image_urls?: string[]
+          kind?: string | null
           name?: string
           price?: number
+          service_arena_id?: string | null
+          service_duration_minutes?: number | null
           status?: string
           stock?: number | null
           tenant_id?: string | null
@@ -4145,6 +4421,24 @@ export type Database = {
       }
     }
     Views: {
+      ads_public: {
+        Row: {
+          company_logo: string | null
+          company_name: string | null
+          cta_label: string | null
+          id: string | null
+          image_url: string | null
+          kind: string | null
+          link: string | null
+          priority: number | null
+          slot_code: string | null
+          slot_id: string | null
+          target_id: string | null
+          target_type: string | null
+          title: string | null
+        }
+        Relationships: []
+      }
       arenas_public: {
         Row: {
           city: string | null
@@ -4194,6 +4488,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      athlete_activities_public: {
+        Row: {
+          activity_type: string | null
+          arena_id: string | null
+          athlete_id: string | null
+          created_at: string | null
+          id: string | null
+          metadata: Json | null
+          reference_id: string | null
+          reference_type: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          activity_type?: string | null
+          arena_id?: string | null
+          athlete_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          metadata?: Json | null
+          reference_id?: string | null
+          reference_type?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          activity_type?: string | null
+          arena_id?: string | null
+          athlete_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          metadata?: Json | null
+          reference_id?: string | null
+          reference_type?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
+      athletes_public: {
+        Row: {
+          attendances: number | null
+          avatar_url: string | null
+          bio: string | null
+          city: string | null
+          created_at: string | null
+          full_name: string | null
+          last_activity_at: string | null
+          participations: number | null
+          state: string | null
+          team: string | null
+          titles: string | null
+          user_id: string | null
+          wins: number | null
+        }
+        Relationships: []
       }
       companies_contact_public: {
         Row: {
@@ -4294,6 +4642,48 @@ export type Database = {
         }
         Relationships: []
       }
+      marketplace_public: {
+        Row: {
+          city: string | null
+          company_id: string | null
+          company_logo: string | null
+          company_name: string | null
+          created_at: string | null
+          description: string | null
+          featured: boolean | null
+          id: string | null
+          image_urls: string[] | null
+          kind: string | null
+          name: string | null
+          price: number | null
+          service_arena_id: string | null
+          service_duration_minutes: number | null
+          state: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles_public: {
         Row: {
           arena: string | null
@@ -4357,6 +4747,18 @@ export type Database = {
         }
         Relationships: []
       }
+      social_feed_public: {
+        Row: {
+          actor_id: string | null
+          arena_id: string | null
+          created_at: string | null
+          item_id: string | null
+          item_type: string | null
+          payload: Json | null
+          tenant_id: string | null
+        }
+        Relationships: []
+      }
       tenant_settings_public: {
         Row: {
           default_locale: string | null
@@ -4412,6 +4814,10 @@ export type Database = {
       }
     }
     Functions: {
+      ad_record_event: {
+        Args: { _campaign_id: string; _event_type: string; _slot_id: string }
+        Returns: string
+      }
       arena_archive_old_events: {
         Args: { _arena_id: string; _older_than_days?: number }
         Returns: number
@@ -4540,6 +4946,7 @@ export type Database = {
         Returns: boolean
       }
       resolve_tenant_by_host: { Args: { _host: string }; Returns: string }
+      search_global: { Args: { _term: string }; Returns: Json }
       set_current_tenant: { Args: { _tenant_id: string }; Returns: undefined }
       set_tenant_from_user: { Args: { _user_id: string }; Returns: string }
     }
