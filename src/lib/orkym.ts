@@ -81,6 +81,12 @@ export interface OrkymActionProposal {
   executed_at?: string | null;
   execution_result?: Record<string, unknown> | null;
   failure_reason?: string | null;
+  // Phase 9
+  execution_mode?: "suggest" | "approve" | "auto" | null;
+  policy_id?: string | null;
+  policy_source?: string | null;
+  auto_executed?: boolean | null;
+  initial_status?: string | null;
 }
 
 export interface OrkymResponse {
@@ -94,6 +100,7 @@ export interface OrkymResponse {
   meta?: Record<string, unknown>;
   request_id?: string;
   error?: string;
+  actions_auto_executed?: number;
 }
 
 /**

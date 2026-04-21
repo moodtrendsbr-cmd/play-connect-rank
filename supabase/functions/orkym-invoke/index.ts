@@ -284,8 +284,9 @@ Deno.serve(async (req) => {
       else tasksCreated = ingested ?? 0;
     }
 
-    // 8b. Ingest action proposals (Phase 8)
+    // 8b. Ingest action proposals (Phase 8) + auto-dispatch (Phase 9)
     let actionsProposed = 0;
+    let actionsAutoExecuted = 0;
     if (Array.isArray(parsed.actions) && parsed.actions.length > 0) {
       const { data: ingestedActions, error: actErr } = await adminClient.rpc("orkym_ingest_actions", {
         _payload: {
@@ -298,6 +299,33 @@ Deno.serve(async (req) => {
       });
       if (actErr) console.error("orkym_ingest_actions error", actErr);
       else actionsProposed = ingestedActions ?? 0;
+
+      // Phase 9: auto-dispatch para propostas com mode='auto'
+      if (actionsProposed > 0) {
+        const { data: autoProposals } = await adminClient
+          .from("orkym_action_proposals")
+          .select("id")
+          .eq("orkym_request_id", requestId)
+          .eq("execution_mode", "auto")
+          .eq("auto_executed", false);
+        if (autoProposals && autoProposals.length > 0) {
+          const fnUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/orkym-execute-action`;
+          const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          const results = await Promise.allSettled(
+            autoProposals.map((p: any) =>
+              fetch(fnUrl, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${svcKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ proposal_id: p.id, auto_dispatch: true }),
+              }).then((r) => r.ok)
+            )
+          );
+          actionsAutoExecuted = results.filter((r) => r.status === "fulfilled" && r.value).length;
+        }
+      }
     }
 
     // 9. Dedup insert (5min TTL)
@@ -321,6 +349,7 @@ Deno.serve(async (req) => {
       ok: true,
       tasks_created: tasksCreated,
       actions_proposed: actionsProposed,
+      actions_auto_executed: actionsAutoExecuted,
       suggestions: parsed.suggestions ?? [],
       alerts: parsed.alerts ?? [],
       meta: parsed.meta ?? {},

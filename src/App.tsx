@@ -83,7 +83,9 @@ import AdminAdjustments from "./pages/admin/AdminAdjustments";
 import AdminAdCampaigns from "./pages/admin/AdminAdCampaigns";
 import AdminOrkymMonitor from "./pages/admin/AdminOrkymMonitor";
 import AdminOrkymActions from "./pages/admin/AdminOrkymActions";
+import AdminAutonomy from "./pages/admin/AdminAutonomy";
 import ArenaActions from "./pages/arena-dashboard/ArenaActions";
+import ArenaAutonomy from "./pages/arena-dashboard/ArenaAutonomy";
 import Explore from "./pages/Explore";
 import AthletesList from "./pages/AthletesList";
 import ArenasList from "./pages/arenas/ArenasList";
@@ -172,6 +174,7 @@ const App = () => (
               <Route path="cobrancas" element={<ArenaBilling />} />
               <Route path="ocorrencias" element={<ArenaOccurrences />} />
               <Route path="acoes-ia" element={<ArenaActions />} />
+              <Route path="autonomia" element={<ArenaAutonomy />} />
             </Route>
             <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
             <Route path="/organizer" element={<OrganizerLayout />}>
@@ -213,6 +216,7 @@ const App = () => (
               <Route path="ad-campaigns" element={<AdminAdCampaigns />} />
               <Route path="orkym" element={<AdminOrkymMonitor />} />
               <Route path="orkym-actions" element={<AdminOrkymActions />} />
+              <Route path="autonomy" element={<AdminAutonomy />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

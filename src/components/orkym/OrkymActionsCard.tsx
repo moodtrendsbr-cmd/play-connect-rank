@@ -9,6 +9,7 @@ import {
 } from "@/lib/orkym";
 import { toast } from "sonner";
 import { ActionProposalDetail } from "./ActionProposalDetail";
+import { PolicyDecisionBadge } from "@/components/autonomy/PolicyDecisionBadge";
 import { Link } from "react-router-dom";
 
 interface Props {
@@ -112,6 +113,11 @@ export const OrkymActionsCard = ({
                     <Badge variant="outline" className="text-[10px] h-4 px-1.5 text-muted-foreground border-border">
                       {domainLabel[p.domain] ?? p.domain}
                     </Badge>
+                    <PolicyDecisionBadge
+                      mode={p.execution_mode ?? null}
+                      source={p.policy_source ?? null}
+                      autoExecuted={p.auto_executed ?? false}
+                    />
                   </div>
                   <p className="text-sm font-medium text-foreground line-clamp-2">{p.title}</p>
                   {p.description && (
