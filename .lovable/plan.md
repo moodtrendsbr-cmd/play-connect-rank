@@ -1,269 +1,235 @@
 
 
-# Fase 6 — Marketplace + Ads + Social Graph
+# Fase 7 — ORKYM Full: Conexão de Produção + Operations Deepening
 
-Camada de **crescimento e descoberta** sobre Fases 1-5.5. Reusa massivamente o que já existe. Zero IA local, zero duplicação, zero quebra de segurança. Tudo público vai por **view** com `security_invoker`.
+Ativar a ORKYM como camada real de inteligência via API server-to-server. **Zero IA local.** MoodPlay monta contexto, chama, registra, exibe — nada decide.
 
 ---
 
-## 0. Auditoria — reuso obrigatório
+## 0. Auditoria — reuso
 
-| Já existe | Decisão Fase 6 |
+| Existe | Decisão |
 |---|---|
-| `profiles` + `profiles_public` (view) | Base do "atleta" — não criar `athlete_profiles`. Adicionar view `athletes_public` derivada com stats agregados. |
-| `match_results`, `enrollments`, `arena_attendance`, `modality_matches`, `posts`, `clips` | Fontes de atividade — alimentam `athlete_activities` via triggers. |
-| `products` + `marketplace_orders` + `companies_public` | Marketplace já existe e já passa por `finance_record_payment` via trigger. **Não recriar.** Apenas estender produtos para suportar serviço + criar view pública. |
-| `tournament_sponsorships`, `sponsored_posts`, `tournament_sponsor_plans` | Patrocínio de torneio já existe. Generalizar para **campanhas globais** sem rebuild. |
-| `follows`, `posts`, `clips`, `hashtags`, `likes`, `comments` | Social interactions já cobertos. Feed atual lê direto. |
-| `arena_operational_events` | Reusar para eventos de discovery (impressions/clicks) + ganchos ORKYM. |
-
-**Não criar:** novo perfil de atleta, novo marketplace, nova engine de pagamento, novo sistema de feed social.
+| `orkym-invoke` (placeholder 501) | Reescrever para chamar API externa real |
+| `src/lib/orkym.ts` (wrapper supabase.functions.invoke) | Estender com tipos canônicos de payload/response |
+| `arena_operational_events` (trilha bruta + `processed_at`) | Fonte de eventos — ORKYM consome via backlog |
+| `arena_operational_tasks` (open/done/dismissed, source `manual`/`orkym`/`system`) | Sink de output da ORKYM — sem mudanças estruturais |
+| Dashboard "Caixa de pendências" | Já lê tasks com badge ORKYM — apenas adicionar seção "Sugestões/Alertas" |
 
 ---
 
-## BLOCO A — Social Graph (athlete activities + ranking)
+## 1. Secrets (necessários antes da implementação)
 
-### A.1 Tabela nova: `athlete_activities` (única tabela do bloco)
-Append-only. Trilha unificada do que cada atleta faz.
+Solicitar ao usuário via `add_secret`:
+- `ORKYM_API_BASE_URL` — base da API ORKYM (ex: `https://api.orkym.com/v1`)
+- `ORKYM_SERVICE_TOKEN` — bearer token server-to-server
+- `ORKYM_HMAC_SECRET` — opcional, para assinatura adicional dos requests
+- `ORKYM_TIMEOUT_MS` — opcional, default 8000
+
+Sem estes secrets, `orkym-invoke` permanece em modo `degraded` (retorna `ok:false, degraded:true`, app não quebra).
+
+---
+
+## 2. Migration — estrutura mínima
+
+`supabase/migrations/<ts>_phase7_orkym_integration.sql`:
+
+### 2.1 Tabela `orkym_api_calls` (log auditável)
 ```
-id uuid PK, athlete_id uuid NOT NULL (= profiles.user_id),
-tenant_id uuid, arena_id uuid (nullable),
-activity_type text CHECK IN (
-  'tournament.enrolled','tournament.checked_in','tournament.match_won','tournament.match_lost','tournament.placed',
-  'class.attended','class.enrolled',
-  'social.posted','social.clip_posted'
-),
-reference_type text, reference_id uuid,
-metadata jsonb DEFAULT '{}',
+id uuid PK, request_id text NOT NULL, correlation_id text,
+tenant_id uuid, arena_id uuid,
+domain text NOT NULL, action text NOT NULL,
+http_status int, status text CHECK IN ('success','failed','timeout','degraded','rate_limited'),
+duration_ms int,
+request_summary jsonb,    -- payload sanitizado (sem PII pesada)
+response_summary jsonb,   -- response sanitizado
+error_message text,
+retried_count int DEFAULT 0,
 created_at timestamptz DEFAULT now()
 ```
-INDEX `(athlete_id, created_at DESC)`, `(activity_type, created_at DESC)`, `(tenant_id, created_at DESC)`.
-RLS: SELECT público via view (não direto). INSERT só via SECURITY DEFINER triggers.
+INDEX `(tenant_id, created_at DESC)`, `(domain, action, created_at DESC)`, `(status, created_at DESC)`.
+RLS: SELECT só admin + tenant_admin. INSERT só via SECURITY DEFINER (edge function via service role).
 
-### A.2 Triggers leves (4) — populam `athlete_activities` automaticamente
-- `enrollments` AFTER INSERT/UPDATE → `tournament.enrolled` quando criado, `tournament.checked_in` quando `checked_in_at` muda.
-- `modality_matches` AFTER UPDATE quando `winner_entry_id` muda → resolve atleta(s) via `modality_entries` → emite `tournament.match_won`/`match_lost` para cada participante.
-- `arena_attendance` AFTER INSERT quando `status='present'` → resolve `profile_user_id` via `arena_students` → `class.attended`.
-- `posts` AFTER INSERT → `social.posted` (e `clips` AFTER INSERT → `social.clip_posted`).
-
-### A.3 View pública: `athletes_public`
-```sql
-CREATE VIEW athletes_public WITH (security_invoker=on) AS
-SELECT p.user_id, p.full_name, p.avatar_url, p.bio, p.city, p.state, p.team, p.titles,
-       COALESCE(s.wins, 0) AS wins,
-       COALESCE(s.participations, 0) AS participations,
-       COALESCE(s.attendances, 0) AS attendances,
-       COALESCE(s.last_activity_at, p.created_at) AS last_activity_at,
-       p.created_at
-FROM profiles_public p
-LEFT JOIN LATERAL (
-  SELECT
-    count(*) FILTER (WHERE activity_type='tournament.match_won') AS wins,
-    count(*) FILTER (WHERE activity_type='tournament.enrolled') AS participations,
-    count(*) FILTER (WHERE activity_type='class.attended') AS attendances,
-    max(created_at) AS last_activity_at
-  FROM athlete_activities WHERE athlete_id = p.user_id
-) s ON true;
+### 2.2 Tabela `orkym_dedup` (anti-loop / debounce)
 ```
-GRANT SELECT TO anon, authenticated.
+id uuid PK, dedup_key text UNIQUE NOT NULL,    -- hash(domain|action|entity_id|window)
+tenant_id uuid, expires_at timestamptz NOT NULL,
+created_at timestamptz DEFAULT now()
+```
+INDEX `(expires_at)`. Cleanup via RPC `orkym_purge_dedup()`.
 
-### A.4 View pública: `athlete_activities_public`
-Filtro: somente activities com `reference_type` cuja entidade-fonte é pública (torneios públicos, posts públicos). Restringe metadata sensível.
+### 2.3 RPC `orkym_ingest_tasks(_payload jsonb)`
+SECURITY DEFINER, chamada **apenas** por `orkym-invoke` (com service role). Recebe `tasks[]` da resposta ORKYM e faz INSERT em `arena_operational_tasks` com `source='orkym'`, mapeando `priority`, `correlation_id` em metadata.
 
-### A.5 Backfill one-shot
-UPDATE: popular `athlete_activities` a partir de `match_results`/`enrollments`/`arena_attendance` históricos (DO block na migration, idempotente via `ON CONFLICT DO NOTHING` em `(athlete_id, activity_type, reference_id)` UNIQUE parcial).
+### 2.4 ALTER `arena_operational_tasks` ADD `correlation_id text`, `metadata jsonb DEFAULT '{}'`
+Já tem `source` — só falta correlação com chamada ORKYM.
+
+### 2.5 View `v_orkym_metrics` (observabilidade simples)
+Agrega `orkym_api_calls` por dia/domain: total, success, failed, avg_duration. SELECT admin + tenant_admin.
 
 ---
 
-## BLOCO B — Marketplace (extensão mínima)
+## 3. Edge Function `orkym-invoke` — reescrita completa
 
-### B.1 Extensão `products` (ALTER ADD COLUMN IF NOT EXISTS)
-- `kind text DEFAULT 'physical' CHECK IN ('physical','service','class_pass','event_ticket')`
-- `service_arena_id uuid` (quando `kind='service'`, vincula à arena)
-- `service_duration_minutes int`
-
-### B.2 View pública: `marketplace_public`
-```sql
-CREATE VIEW marketplace_public WITH (security_invoker=on) AS
-SELECT p.id, p.name, p.description, p.price, p.image_urls, p.kind, p.featured,
-       p.company_id, c.name AS company_name, c.logo_url AS company_logo, c.city, c.state,
-       p.service_arena_id, p.created_at
-FROM products p
-JOIN companies c ON c.id = p.company_id
-WHERE p.status = 'approved' AND c.status = 'approved';
+Fluxo:
+```
+1. CORS + auth (getClaims) — JWT do usuário MoodPlay
+2. Valida body: { domain, action, payload: { tenant_id, arena_id?, context?, entity?, metadata? } }
+3. Verifica secrets ORKYM_* — se faltam → retorna { ok:false, degraded:true } + log status='degraded'
+4. Verifica dedup: gera dedup_key, consulta orkym_dedup; se existe → retorna { ok:true, deduped:true }
+5. Verifica rate-limit por tenant (in-memory simples + log) — 60 calls/min/tenant
+6. Gera request_id (uuid) + correlation_id (do body ou novo)
+7. Monta headers: Authorization Bearer ORKYM_SERVICE_TOKEN, X-Request-Id, X-Tenant-Id, X-HMAC (opcional)
+8. fetch ORKYM com AbortController + timeout (ORKYM_TIMEOUT_MS)
+9. Retry: max 2 retries para 5xx/timeout, com backoff exponencial (200ms, 800ms). Nunca retry para 4xx.
+10. Parse response (espera contrato: { ok, tasks?, suggestions?, alerts?, meta? })
+11. Se tasks[] presente: chama RPC orkym_ingest_tasks com service role
+12. Insere orkym_dedup (TTL 5min default)
+13. INSERT orkym_api_calls com sumário sanitizado
+14. Retorna { ok, tasks_created, suggestions, alerts, meta, request_id }
 ```
 
-### B.3 Integração financeira — **já existe**
-`trg_marketplace_record_payment` já chama `finance_record_payment('marketplace_order', ...)`. Sem mudanças.
+Em caso de erro (timeout, 5xx pós-retries, parse fail):
+- Retorna `{ ok:false, degraded:true, error: <safe_msg>, request_id }` com **HTTP 200** (app não trata como falha crítica)
+- Loga em `orkym_api_calls` com status apropriado
+
+**Service role client** criado dentro da função para `orkym_ingest_tasks` e `orkym_api_calls` INSERT (via `SUPABASE_SERVICE_ROLE_KEY`).
 
 ---
 
-## BLOCO C — Ads / Patrocínio interno (generalização)
+## 4. Frontend `src/lib/orkym.ts` — tipos canônicos
 
-### C.1 Tabelas novas (3)
+```typescript
+export type OrkymDomain = "arena_operations" | "finance" | "tournaments" | "growth";
 
-**`ad_campaigns`** — campanhas globais (não só torneio)
-```
-id uuid PK, tenant_id uuid NOT NULL, company_id uuid NOT NULL (FK companies),
-name text, kind text CHECK IN ('feed_highlight','tournament_highlight','arena_highlight','marketplace_highlight'),
-target_type text NULL, target_id uuid NULL,           -- ex: arena_id ou tournament_id quando aplicável
-title text, image_url text, link text, cta_label text,
-budget numeric(10,2) DEFAULT 0, status text CHECK IN ('pending','active','paused','ended','rejected') DEFAULT 'pending',
-starts_at timestamptz, ends_at timestamptz,
-priority int DEFAULT 0,
-created_at, updated_at
-```
+export interface OrkymPayload {
+  tenant_id: string;
+  arena_id?: string;
+  context?: Record<string, unknown>;
+  entity?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
 
-**`ad_slots`** — slots fixos da plataforma (catálogo)
-```
-id uuid PK, code text UNIQUE,                          -- ex: 'home.hero','feed.inline','arena.banner'
-name text, description text, max_active int DEFAULT 1,
-created_at
-```
-Seed inicial: `home.hero`, `feed.inline`, `tournaments.list_top`, `arena.banner`, `marketplace.featured`.
+export interface OrkymTask { title: string; description?: string; priority?: 1|2|3; task_type?: string; related_entity_type?: string; related_entity_id?: string; }
+export interface OrkymSuggestion { id: string; title: string; body: string; cta?: { label: string; href?: string }; }
+export interface OrkymAlert { id: string; severity: "info"|"warning"|"critical"; title: string; body?: string; }
 
-**`ad_placements`** — vínculo campanha ↔ slot
-```
-id uuid PK, campaign_id FK, slot_id FK, weight int DEFAULT 1,
-UNIQUE(campaign_id, slot_id)
-```
+export interface OrkymResponse {
+  ok: boolean;
+  degraded?: boolean;
+  deduped?: boolean;
+  tasks_created?: number;
+  suggestions?: OrkymSuggestion[];
+  alerts?: OrkymAlert[];
+  meta?: Record<string, unknown>;
+  request_id?: string;
+  error?: string;
+}
 
-**`ad_events`** (opcional leve, append-only) — impressões/clicks agregados
-```
-id uuid PK, campaign_id FK, slot_id FK, event_type text CHECK IN ('impression','click'),
-viewer_id uuid NULL, occurred_at timestamptz DEFAULT now(),
-metadata jsonb
-```
-Particionamento? Não nessa fase — apenas índice em `(campaign_id, occurred_at DESC)`.
-
-### C.2 RLS
-- `ad_campaigns`: SELECT para admin + `is_company_owner`. UPDATE/INSERT mesmo. Aprovação (`status`) só admin.
-- `ad_slots`: SELECT público via view; ALL só admin.
-- `ad_placements`: idem campaigns.
-- `ad_events`: INSERT público (RPC `ad_record_event`), SELECT só admin/dono da campanha.
-
-### C.3 View pública: `ads_public`
-```sql
-CREATE VIEW ads_public WITH (security_invoker=on) AS
-SELECT ac.id, ac.kind, ac.target_type, ac.target_id, ac.title, ac.image_url, ac.link, ac.cta_label,
-       ac.priority, asl.code AS slot_code, c.name AS company_name, c.logo_url AS company_logo
-FROM ad_campaigns ac
-JOIN ad_placements ap ON ap.campaign_id = ac.id
-JOIN ad_slots asl ON asl.id = ap.slot_id
-JOIN companies c ON c.id = ac.company_id
-WHERE ac.status='active' AND now() BETWEEN ac.starts_at AND ac.ends_at AND c.status='approved';
+export async function invokeOrkym(domain: OrkymDomain, action: string, payload: OrkymPayload): Promise<OrkymResponse>
 ```
 
-### C.4 RPC `ad_record_event(_campaign_id, _slot_id, _event_type)`
-SECURITY DEFINER. Insere em `ad_events` + opcional `arena_operational_events` se `target_type='arena'`. Sem rate-limit pesado nesta fase (nota em pendências).
-
-### C.5 Integração financeira
-Quando campanha é paga (futuro): `finance_record_payment('ad_campaign', campaign_id, ...)`. **Estrutura pronta** — só precisa adicionar `'ad_campaign'` ao CHECK de `financial_transactions.source_type` e seed em `split_rules`. Hoje, campanhas criadas em modo manual/free.
+Wrapper trata `degraded:true` silenciosamente (sem toast de erro), apenas loga em console.
 
 ---
 
-## BLOCO D — Discovery / Feed global
+## 5. Context Resolver `src/lib/orkymContext.ts` (novo)
 
-### D.1 View `social_feed_public` (não tabela — view materializada lógica via UNION)
-```sql
-CREATE VIEW social_feed_public WITH (security_invoker=on) AS
--- Posts públicos
-SELECT 'post'::text AS item_type, p.id AS item_id, p.author_id AS actor_id,
-       NULL::uuid AS arena_id, p.tenant_id, p.created_at,
-       jsonb_build_object('content', p.content, 'type', p.type) AS payload
-FROM posts p
-UNION ALL
--- Atividades de atleta (vitórias, presenças, conquistas)
-SELECT 'activity', aa.id, aa.athlete_id, aa.arena_id, aa.tenant_id, aa.created_at,
-       jsonb_build_object('activity_type', aa.activity_type, 'metadata', aa.metadata)
-FROM athlete_activities aa
-WHERE aa.activity_type IN ('tournament.match_won','tournament.placed','tournament.checked_in')
-UNION ALL
--- Anúncios ativos
-SELECT 'ad', ac.id, NULL, NULL, ac.tenant_id, ac.created_at,
-       jsonb_build_object('title', ac.title, 'image_url', ac.image_url, 'link', ac.link, 'kind', ac.kind)
-FROM ad_campaigns ac
-WHERE ac.status='active' AND now() BETWEEN ac.starts_at AND ac.ends_at
-UNION ALL
--- Torneios novos publicados
-SELECT 'tournament', t.id, t.organizer_id, NULL, t.tenant_id, t.created_at,
-       jsonb_build_object('name', t.name, 'start_date', t.start_date)
-FROM tournaments t
-WHERE t.is_published = true;
+Funções helper que **lêem do banco** (não decidem nada) e montam context blocks reutilizáveis:
+
+- `buildArenaOperationsContext(arenaId)` → alunos ativos, aulas próximas, presença 7d, billing pending/overdue, ocorrências abertas, eventos não processados
+- `buildFinanceContext(tenantId, arenaId?)` → transações 30d, splits pendentes, billing cycles, refunds recentes
+- `buildTournamentsContext(tournamentId)` → enrollments, categorias, brackets, check-ins
+- `buildGrowthContext(tenantId)` → ads ativos, top produtos, atividades recentes do feed
+
+Cada uma retorna jsonb pronto para injetar em `payload.context`. Sem ranking, sem score — apenas dados crus organizados.
+
+---
+
+## 6. Hooks operacionais (triggers de chamada)
+
+Adicionar ganchos que chamam `invokeOrkym` em pontos-chave (não automático em DB — chamado do client/edge para manter controle):
+
+| Hook | Onde | Quando | Domain.action |
+|---|---|---|---|
+| Dashboard load | `ArenaDashboard.tsx` | mount + pull-to-refresh | `arena_operations.daily_briefing` |
+| Aluno faltou 3+ vezes | edge function `orkym-evaluate-attendance` (cron diário) | scheduled | `arena_operations.absent_pattern` |
+| Mensalidade overdue | trigger DB já emite event → cron lê backlog | a cada 1h | `finance.overdue_review` |
+| Torneio publicado | `ManageTournament.tsx` post-publish | on action | `tournaments.launch_review` |
+| Marketplace order | já tem trigger event → cron processa | a cada 30min | `growth.purchase_signal` |
+
+Edge function nova `orkym-cron-tick`: roda a cada 15min, lê `arena_operational_events` com `processed_at IS NULL`, agrupa por arena+domain, chama `orkym-invoke` em batch, marca eventos como `processed_at=now()`. Configurar via Supabase cron extension.
+
+---
+
+## 7. Dashboard — seção "ORKYM Insights"
+
+Em `ArenaDashboard.tsx`, abaixo de "Caixa de pendências":
+
+**Card novo "Sugestões da ORKYM"** — chama `invokeOrkym("arena_operations","daily_briefing",ctx)` no mount, exibe `suggestions[]` e `alerts[]` retornados como cards compactos. Status visíveis:
+- 🟢 Conectada (última call success < 1h)
+- 🟡 Degradada (últimas 3 calls failed/timeout)
+- 🔴 Offline (sem secrets)
+
+Ações por card: "Aceitar" (cria task via RPC), "Dispensar". Sem chat, sem livre texto.
+
+**Página nova `/admin/orkym`** — `AdminOrkymMonitor.tsx`: tabela `orkym_api_calls` últimas 100, filtros por domain/status, card de métricas (total, success rate, avg duration) lendo `v_orkym_metrics`. Apenas leitura.
+
+---
+
+## 8. Contrato API ORKYM (documentado em memory)
+
+**Request** (POST `${ORKYM_API_BASE_URL}/invoke`):
+```json
+{
+  "request_id": "uuid",
+  "correlation_id": "uuid|null",
+  "domain": "arena_operations",
+  "action": "daily_briefing",
+  "tenant_id": "uuid",
+  "arena_id": "uuid|null",
+  "payload": { "context": {...}, "entity": {...}, "metadata": {...} }
+}
 ```
-GRANT SELECT TO anon, authenticated. ORDER BY na consulta cliente (`order by created_at desc limit ...`).
+Headers: `Authorization: Bearer <token>`, `X-Request-Id`, `X-Tenant-Id`, `Content-Type`, `X-HMAC-Signature` (opcional).
 
-### D.2 Busca unificada — RPC `search_global(_term text)`
-SECURITY DEFINER, `STABLE`. Retorna jsonb com 4 buckets: athletes, arenas, tournaments, products. Cada bucket: top 5 por ILIKE no nome. Lê só de views públicas. Sem full-text nesta fase (nota em pendências).
+**Response esperada**:
+```json
+{
+  "ok": true,
+  "tasks": [{ "title": "...", "description": "...", "priority": 2, "task_type": "absent_pattern" }],
+  "suggestions": [{ "id": "...", "title": "...", "body": "...", "cta": {...} }],
+  "alerts": [{ "id": "...", "severity": "warning", "title": "..." }],
+  "meta": { "model_version": "...", "latency_ms": 450 }
+}
+```
 
----
-
-## Frontend — telas e edits
-
-| Rota | Arquivo | Função |
-|---|---|---|
-| `/explore` (nova) | `Explore.tsx` | Hub de descoberta: busca global + 4 sessões (atletas em alta, torneios, produtos em destaque, arenas) |
-| `/athletes` (nova) | `AthletesList.tsx` | Lista paginada de `athletes_public` ordenada por wins/last_activity. Filtro por cidade/estado. |
-| `/athletes/:userId` | reusa `UserProfile.tsx` | Adicionar seção "Atividades recentes" lendo `athlete_activities_public`. |
-| `/marketplace` | `Marketplace.tsx` (edit) | Migrar leitura para `marketplace_public`. Filtro por `kind`. |
-| `/feed` | `Feed.tsx` (edit) | Aba "Global" extra que lê `social_feed_public` (mantém aba "Seguindo" atual). |
-| `/admin/ads` (estende) | `AdminAds.tsx` (existe?) ou novo | CRUD de `ad_campaigns` + aprovação. |
-| Tab nova em `MyCompany.tsx` | "Anúncios" | Empresa cria campanhas próprias (status `pending` até admin aprovar). |
-
-Componente novo: `AdSlot.tsx` — recebe `slotCode`, busca `ads_public WHERE slot_code=X`, renderiza com tracking de impression/click via `ad_record_event`.
-
-Inserir `<AdSlot code="home.hero" />` em `Index.tsx`, `<AdSlot code="feed.inline" />` no Feed, `<AdSlot code="marketplace.featured" />` no Marketplace.
+**Códigos de erro tratados**: 401 (auth) → degraded; 429 → log rate_limited + skip; 5xx → retry; timeout → log timeout + degraded.
 
 ---
 
-## Migração — arquivo único idempotente
+## 9. Segurança
 
-`supabase/migrations/<ts>_phase6_social_marketplace_ads.sql`:
-
-1. CREATE TABLE `athlete_activities` + indexes + RLS (SELECT via view only).
-2. CREATE 4 triggers de population (enrollments, modality_matches, arena_attendance, posts/clips).
-3. Backfill DO block (one-shot).
-4. CREATE VIEW `athletes_public`, `athlete_activities_public` + grants.
-5. ALTER `products` ADD `kind`, `service_arena_id`, `service_duration_minutes` IF NOT EXISTS.
-6. CREATE VIEW `marketplace_public` + grants.
-7. CREATE TABLE `ad_campaigns`, `ad_slots`, `ad_placements`, `ad_events` + RLS + indexes.
-8. SEED `ad_slots` (5 codes).
-9. CREATE VIEW `ads_public` + grants.
-10. CREATE FUNCTION `ad_record_event` (SECURITY DEFINER).
-11. CREATE VIEW `social_feed_public` + grants.
-12. CREATE FUNCTION `search_global` (SECURITY DEFINER, STABLE).
-13. ALTER `financial_transactions` — relax CHECK de `source_type` para incluir `'ad_campaign'` (futuro).
+- Secrets nunca expostos no client. `invokeOrkym` no client passa só JWT do usuário; orkym-invoke (server) injeta service token.
+- HMAC opcional: header `X-HMAC-Signature: hex(hmac_sha256(ORKYM_HMAC_SECRET, request_id+body))`.
+- Sanitização de payload em logs: remove campos prefixados `_secret`, `password`, `cpf`, `email`, `phone` antes de gravar `request_summary`/`response_summary`.
+- Rate-limit por tenant: 60 calls/min (in-memory + check em `orkym_api_calls`).
+- Anti-loop: dedup TTL 5min por `(domain, action, entity_id ou hash(payload))`.
 
 ---
 
-## Segurança — checklist
-
-- ✅ Toda leitura pública passa por **view** com `security_invoker=on`.
-- ✅ `athlete_activities` base: SELECT bloqueado para `anon`/`authenticated`; público só via view.
-- ✅ `ad_campaigns`/`ad_events`: nunca expostos diretamente — apenas `ads_public` mostra campos seguros.
-- ✅ `social_feed_public`: filtra `tournaments WHERE is_published=true`, posts já têm RLS própria via tabela base (view com invoker herda).
-- ✅ Tenant isolation: views carregam `tenant_id` mas não expõem `owner_user_id`/`payment_*`.
-- ✅ Backfill não duplica (UNIQUE parcial em `(athlete_id, activity_type, reference_id)` quando `reference_id IS NOT NULL`).
-
----
-
-## Hooks ORKYM (sem IA local)
-
-- Eventos `social.activity_created`, `ads.impression_recorded` adicionados a `arena_operational_events` quando `arena_id` está presente. ORKYM consome via fronteira `orkym-invoke` no futuro.
-- Sem ranking inteligente, sem recomendação, sem feed personalizado nesta fase.
-
----
-
-## Arquivos tocados
+## 10. Arquivos tocados
 
 | Tipo | Arquivo |
 |---|---|
-| Migration | `supabase/migrations/<ts>_phase6_social_marketplace_ads.sql` |
-| Frontend novo | `Explore.tsx`, `AthletesList.tsx`, `AdSlot.tsx`, `AdminAdsPro.tsx` (se não existir editor de campanhas), `MyCompanyAds.tsx` (tab) |
-| Frontend edit | `Feed.tsx` (+aba Global), `Marketplace.tsx` (view + kind filter), `UserProfile.tsx` (+atividades), `Index.tsx` (+AdSlot hero), `App.tsx` (+rotas), `AdminLayout.tsx` (+nav Ads) |
-| Memory | `mem/features/social-graph.md` (novo), `mem/features/marketplace.md` (update kind), `mem/features/advertising-and-sponsorship.md` (update generalização) |
+| Migration | `supabase/migrations/<ts>_phase7_orkym_integration.sql` |
+| Edge function | `supabase/functions/orkym-invoke/index.ts` (reescrita), `supabase/functions/orkym-cron-tick/index.ts` (novo) |
+| Frontend lib | `src/lib/orkym.ts` (estendido), `src/lib/orkymContext.ts` (novo) |
+| Frontend novo | `src/pages/admin/AdminOrkymMonitor.tsx`, `src/components/orkym/InsightsCard.tsx`, `src/components/orkym/StatusBadge.tsx` |
+| Frontend edit | `src/pages/arena-dashboard/ArenaDashboard.tsx` (+InsightsCard), `src/pages/admin/AdminLayout.tsx` (+rota), `src/App.tsx` (+rota) |
+| Memory | `mem/integration/orkym.md` (novo — contrato, secrets, hooks, fail-safe) |
 
-**Total:** 1 migration + 4-5 telas + 6 edits triviais. Brackets, finance triggers, webhooks MP intocados.
+**Total**: 1 migration + 2 edge functions + 1 lib nova + 3 componentes + 4 edits.
 
 ---
 
@@ -271,39 +237,43 @@ Inserir `<AdSlot code="home.hero" />` em `Index.tsx`, `<AdSlot code="feed.inline
 
 | Item | Resultado |
 |---|---|
-| Tabelas criadas | 5 (`athlete_activities`, `ad_campaigns`, `ad_slots`, `ad_placements`, `ad_events`) |
-| Views públicas criadas | 4 (`athletes_public`, `athlete_activities_public`, `marketplace_public`, `ads_public`, `social_feed_public`) |
-| Tabelas estendidas | 1 (`products`: kind/service) |
-| Reaproveitado | `profiles`/`profiles_public`, `posts`/`clips`, `match_results`, `enrollments`, `arena_attendance`, `modality_matches`, `products`, `marketplace_orders`, `companies_public`, `arenas_public`, `tournament_sponsorships` |
-| Integração financeira | Marketplace já integrado via trigger Fase 5; ads modelados para integração futura |
-| Frente de descoberta | `/explore`, `/athletes`, AdSlot embeds, busca unificada via RPC |
-| Segurança | Tudo público via view com `security_invoker`; tabelas base intocadas |
+| ORKYM plugada em | dashboard arena (briefing), cron de eventos, post-publish torneio, post-order marketplace |
+| Eventos disparadores | mount dashboard, cron 15min sobre `arena_operational_events`, ações pontuais |
+| Contexto montado por | `buildArenaOperationsContext`, `buildFinanceContext`, `buildTournamentsContext`, `buildGrowthContext` |
+| Auth | JWT user → orkym-invoke → service token → ORKYM (+ HMAC opcional) |
+| Timeout/retry/fallback | 8s timeout, 2 retries 5xx, degraded mode silencioso |
+| Logs | `orkym_api_calls` (sumário sanitizado) + view `v_orkym_metrics` |
+| Domains ativos | `arena_operations`, `finance`, `tournaments`, `growth` |
 
 ---
 
-## ENTREGA C — Riscos / Pendências
+## ENTREGA C — Riscos / Próximos passos
 
-**Pendente Fase 7+:**
-- Pagamento real de campanhas (precisa CHECK `'ad_campaign'` + UI de checkout — modelagem pronta).
-- Full-text search (hoje ILIKE simples).
-- Rate-limit de `ad_record_event` (hoje aberto a authenticated).
-- Particionamento de `ad_events` quando volume crescer.
-- Recomendação personalizada via ORKYM (hooks prontos).
-- Moderação de campanhas (hoje admin aprova manual).
-- View materializada para `athletes_public` se ranking ficar lento (hoje LATERAL real-time).
+**Síncrono nesta fase** (assíncrono futuro):
+- `daily_briefing` no mount do dashboard (pode atrasar render — mitigado por degraded silencioso)
+- Cron tick processando backlog (15min — pode crescer; mover para fila SQS/PgMQ depois)
 
-**Compatibilidade mantida:**
-- `tournament_sponsorships`/`sponsored_posts` permanecem (legado funcional). Não migrados para `ad_campaigns` — convivem.
-- Feed atual (`Feed.tsx` lendo `posts` direto) mantido. Aba "Global" é adição.
-- `Ranking.tsx` continua lendo `match_results` direto. Pode migrar para `athletes_public` em fase futura.
+**Pendente Fase 8+**:
+- Auto-actions com aprovação (hoje só sugere/cria task — humano executa)
+- Streaming de respostas ORKYM (hoje request/response simples)
+- Schema de validação Zod compartilhado MoodPlay↔ORKYM via npm package
+- Métricas de impacto (sugestões aceitas, ROI por domain) — base já existe
+- Particionamento de `orkym_api_calls` quando volume > 1M
+- Webhook reverso ORKYM → MoodPlay (eventos push, não só pull)
+- Chat operacional integrado
 
-**Critérios de sucesso:**
-- ✅ Atletas têm perfil público com stats reais (wins/participations/attendances)
-- ✅ Histórico de participação visível por atleta
-- ✅ Ranking simples computável via view
-- ✅ Marketplace lendo de view pública + suporta serviço
-- ✅ Empresa cria campanha; admin aprova; campanha aparece em slots
-- ✅ Feed global mostra mix de posts/atividades/torneios/ads
-- ✅ Busca unificada cobre 4 entidades
-- ✅ Zero IA local, zero quebra, tudo via view com `security_invoker`
+**Compatibilidade**:
+- Sem ORKYM secrets, app funciona normal — só não recebe sugestões
+- Sem quebra de fluxos existentes
+- `arena_operational_tasks.source='manual'` continua funcionando
+
+**Critérios de sucesso**:
+- ✅ orkym-invoke chama API externa real com auth server-to-server
+- ✅ Contexto rico montado por helpers tipados
+- ✅ Tasks ORKYM aparecem na caixa de pendências (badge Bot)
+- ✅ Dashboard mostra Sugestões/Alertas com status de conectividade
+- ✅ Logs auditáveis em `orkym_api_calls` com sanitização
+- ✅ Timeout/retry/dedup/rate-limit implementados
+- ✅ Modo degradado silencioso — app nunca quebra
+- ✅ Zero IA local; toda decisão é da ORKYM
 
