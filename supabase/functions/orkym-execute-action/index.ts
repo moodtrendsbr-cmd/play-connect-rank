@@ -202,6 +202,7 @@ Deno.serve(async (req) => {
     let body: any = {};
     try { body = await req.json(); } catch { /* */ }
     const proposalId = body?.proposal_id;
+    const isAutoDispatch = body?.auto_dispatch === true;
     if (!proposalId) return safeJson({ ok: false, error: "proposal_id_required" }, 400);
 
     const admin = createClient(
@@ -217,9 +218,39 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (pErr || !proposal) return safeJson({ ok: false, error: "proposal_not_found" }, 404);
 
-    // Permissão dupla (RLS+RPC já validou no approve, mas check aqui também)
-    const allowed = await checkPermission(admin, userId, proposal);
-    if (!allowed) return safeJson({ ok: false, error: "forbidden" }, 403);
+    // Phase 9: re-check execution_mode (defesa em profundidade)
+    if (proposal.execution_mode === "suggest") {
+      return safeJson({ ok: false, error: "suggest_mode_not_executable" }, 400);
+    }
+
+    // Phase 9: re-verificar kill switch antes de executar
+    const { data: killActive } = await admin
+      .from("autonomy_kill_switches")
+      .select("id")
+      .eq("is_active", true)
+      .or([
+        `scope_level.eq.global`,
+        `and(scope_level.eq.tenant,tenant_id.eq.${proposal.tenant_id})`,
+        proposal.arena_id ? `and(scope_level.eq.arena,arena_id.eq.${proposal.arena_id})` : "",
+        `and(scope_level.eq.action_type,action_type.eq.${proposal.action_type})`,
+      ].filter(Boolean).join(","))
+      .limit(1)
+      .maybeSingle();
+    if (killActive) {
+      await admin.rpc("orkym_action_mark_failed", {
+        _proposal_id: proposalId,
+        _reason: "kill_switch_activated",
+        _executed_by: isAutoDispatch ? null : userId,
+        _duration_ms: 0,
+      });
+      return safeJson({ ok: false, status: "canceled", error: "kill_switch_activated" });
+    }
+
+    // Permissão (auto dispatch usa service role e pula check)
+    if (!isAutoDispatch) {
+      const allowed = await checkPermission(admin, userId, proposal);
+      if (!allowed) return safeJson({ ok: false, error: "forbidden" }, 403);
+    }
 
     // CAS approved → executing
     const { data: marked, error: markErr } = await admin.rpc("orkym_action_mark_executing", {
@@ -256,9 +287,15 @@ Deno.serve(async (req) => {
     await admin.rpc("orkym_action_mark_executed", {
       _proposal_id: proposalId,
       _result: result.result ?? {},
-      _executed_by: userId,
+      _executed_by: isAutoDispatch ? null : userId,
       _duration_ms: durationMs,
     });
+    // Phase 9: marca auto_executed se for execução automática
+    if (isAutoDispatch || proposal.execution_mode === "auto") {
+      await admin.from("orkym_action_proposals")
+        .update({ auto_executed: true })
+        .eq("id", proposalId);
+    }
     if (proposal.arena_id) {
       await admin.from("arena_operational_events").insert({
         tenant_id: proposal.tenant_id,
@@ -266,11 +303,11 @@ Deno.serve(async (req) => {
         entity_type: "orkym_action",
         entity_id: proposalId,
         event_type: "orkym.action_executed",
-        payload: { action_type: proposal.action_type, result: result.result },
+        payload: { action_type: proposal.action_type, result: result.result, auto: isAutoDispatch },
         source: "system",
       });
     }
-    return safeJson({ ok: true, status: "executed", result: result.result });
+    return safeJson({ ok: true, status: "executed", result: result.result, auto: isAutoDispatch });
   } catch (err: any) {
     return safeJson({ ok: false, error: err?.message ?? "internal" }, 500);
   }
