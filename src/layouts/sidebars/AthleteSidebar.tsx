@@ -10,17 +10,53 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { User, Trophy, Medal, MessageSquare, Rss } from "lucide-react";
+import {
+  LayoutDashboard,
+  User,
+  Sun,
+  MessageSquare,
+  Trophy,
+  Swords,
+  Medal,
+  History,
+  Compass,
+  Rss,
+} from "lucide-react";
 
 const groups = [
   {
-    label: "Atleta",
+    label: "Meu Perfil",
     items: [
-      { title: "Meu Perfil", url: "/athlete/perfil", icon: User },
-      { title: "Feed", url: "/athlete/feed", icon: Rss },
-      { title: "Torneios", url: "/athlete/torneios", icon: Trophy },
-      { title: "Ranking", url: "/athlete/ranking", icon: Medal },
+      { title: "Dashboard", url: "/athlete/dashboard", icon: LayoutDashboard },
+      { title: "Meu perfil", url: "/athlete/perfil", icon: User },
+    ],
+  },
+  {
+    label: "Meu Dia",
+    items: [
+      { title: "Hoje", url: "/athlete/meu-dia", icon: Sun },
       { title: "Mensagens", url: "/athlete/mensagens", icon: MessageSquare },
+    ],
+  },
+  {
+    label: "Torneios",
+    items: [
+      { title: "Torneios", url: "/athlete/torneios", icon: Trophy },
+      { title: "Meus jogos", url: "/athlete/jogos", icon: Swords },
+    ],
+  },
+  {
+    label: "Ranking & Histórico",
+    items: [
+      { title: "Ranking", url: "/athlete/ranking", icon: Medal },
+      { title: "Histórico", url: "/athlete/historico", icon: History },
+    ],
+  },
+  {
+    label: "Descobrir",
+    items: [
+      { title: "Descobrir", url: "/athlete/descobrir", icon: Compass },
+      { title: "Feed", url: "/athlete/feed", icon: Rss },
     ],
   },
 ];
