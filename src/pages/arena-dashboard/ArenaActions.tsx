@@ -84,9 +84,20 @@ const ArenaActions = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Sparkles className="h-5 w-5 text-primary" />
-        <h1 className="text-xl font-semibold">Ações sugeridas pela ORKYM</h1>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <h1 className="text-xl font-semibold">Ações sugeridas pela ORKYM</h1>
+        </div>
+        <Select value={modeFilter} onValueChange={setModeFilter}>
+          <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos modos</SelectItem>
+            <SelectItem value="suggest">Sugerir</SelectItem>
+            <SelectItem value="approve">Aprovar</SelectItem>
+            <SelectItem value="auto">Auto</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
