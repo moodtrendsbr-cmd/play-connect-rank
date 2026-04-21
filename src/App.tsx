@@ -102,6 +102,7 @@ import OrganizerDomains from "./pages/organizer/OrganizerDomains";
 import OrganizerPayment from "./pages/organizer/OrganizerPayment";
 import AdminShell from "./layouts/AdminShell";
 import TenantShell from "./layouts/TenantShell";
+import TenantDashboard from "./pages/tenant/TenantDashboard";
 import ArenaShell from "./layouts/ArenaShell";
 import OrganizerShell from "./layouts/OrganizerShell";
 import AthleteShell from "./layouts/AthleteShell";

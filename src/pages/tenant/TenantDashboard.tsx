@@ -170,7 +170,7 @@ const TenantDashboard = () => {
 
       // Torneios ativos por nome de arena (tournaments.arena é string match — herdado, ver pendência 11.6)
       const arenaNames = arenaArr.map((a: any) => a.name);
-      const { count: tcount } = await supabase
+      const { count: tcount } = await (supabase as any)
         .from("tournaments")
         .select("id", { count: "exact", head: true })
         .in("arena", arenaNames)
