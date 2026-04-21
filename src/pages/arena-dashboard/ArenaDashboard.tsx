@@ -3,11 +3,61 @@ import { useOutletContext, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CalendarCheck, Grid3X3, DollarSign, ArrowRight, Users, CalendarClock, Receipt, AlertTriangle, Inbox, Bot, User as UserIcon, Cog, Trophy, TrendingUp } from "lucide-react";
+import {
+  CalendarCheck, Grid3X3, DollarSign, ArrowRight, Users, CalendarClock, Receipt,
+  AlertTriangle, Inbox, Bot, User as UserIcon, Cog, Trophy, TrendingUp,
+  Gauge, Activity, Wallet, Sparkles, QrCode, ClipboardList,
+} from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { OrkymInsightsCard } from "@/components/orkym/InsightsCard";
 import { OrkymActionsCard } from "@/components/orkym/OrkymActionsCard";
+import { cn } from "@/lib/utils";
+
+// ---------- Local UI helpers (not exported) ----------
+
+const SectionHeader = ({
+  icon: Icon, title, subtitle, accent = "text-primary",
+}: { icon: any; title: string; subtitle?: string; accent?: string }) => (
+  <div className="flex items-end justify-between gap-3">
+    <div className="flex items-center gap-2">
+      <Icon className={cn("h-5 w-5", accent)} />
+      <div>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">{title}</h2>
+        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+      </div>
+    </div>
+  </div>
+);
+
+const KpiCard = ({
+  icon: Icon, label, value, color = "text-primary", to,
+}: { icon: any; label: string; value: string | number; color?: string; to?: string }) => {
+  const inner = (
+    <Card className="bg-card border-border hover:border-primary/40 transition-colors h-full">
+      <CardContent className="p-4 flex items-center gap-3">
+        <Icon className={cn("h-7 w-7 shrink-0", color)} />
+        <div className="min-w-0">
+          <p className="text-[11px] text-muted-foreground truncate">{label}</p>
+          <p className="text-lg font-bold text-foreground truncate">{value}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+  return to ? <Link to={to}>{inner}</Link> : inner;
+};
+
+const ShortcutLink = ({ to, label }: { to: string; label: string }) => (
+  <Link
+    to={to}
+    className="flex items-center justify-between p-3 rounded-xl bg-card border border-border hover:border-primary/40 transition-colors"
+  >
+    <span className="text-sm font-medium text-foreground">{label}</span>
+    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+  </Link>
+);
+
+// ---------- Page ----------
 
 const ArenaDashboard = () => {
   const { arena } = useOutletContext<{ arena: any }>();
@@ -72,142 +122,157 @@ const ArenaDashboard = () => {
     load();
   };
 
-  const statCards = [
-    { label: "Reservas hoje", value: stats.today, icon: CalendarCheck, color: "text-primary" },
-    { label: "Aulas hoje", value: stats.classesToday, icon: CalendarClock, color: "text-blue-400" },
-    { label: "Alunos ativos", value: stats.students, icon: Users, color: "text-emerald-400" },
-    { label: "Receita semana", value: `R$ ${stats.revenue.toFixed(2)}`, icon: DollarSign, color: "text-amber-400" },
-    { label: "Torneios ativos", value: stats.activeTournaments, icon: Trophy, color: "text-purple-400" },
-    { label: "Receita do mês", value: `R$ ${stats.monthRevenue.toFixed(2)}`, icon: TrendingUp, color: "text-emerald-400" },
-  ];
-
-  const opCards = [
-    { label: "Vencimentos 7d", value: stats.dueSoon, icon: Receipt, color: "text-amber-400", to: "/arena/dashboard/cobrancas" },
-    { label: "Cobranças vencidas", value: stats.overdue, icon: Receipt, color: "text-destructive", to: "/arena/dashboard/cobrancas" },
-    { label: "Ocorrências abertas", value: stats.openOcc, icon: AlertTriangle, color: "text-amber-400", to: "/arena/dashboard/ocorrencias" },
-    { label: "Pendências", value: stats.openTasks, icon: Inbox, color: "text-blue-400", to: "#tasks" },
-  ];
-
   const sourceIcon = (s: string) => s === "orkym" ? Bot : s === "manual" ? UserIcon : Cog;
   const sourceLabel = (s: string) => s === "orkym" ? "ORKYM" : s === "manual" ? "Manual" : "Sistema";
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-display text-foreground">Dashboard</h1>
-
-      <div className="grid grid-cols-2 gap-3">
-        {statCards.map((s) => (
-          <Card key={s.label} className="bg-card border-border">
-            <CardContent className="p-4 flex items-center gap-3">
-              <s.icon className={`h-8 w-8 ${s.color}`} />
-              <div>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-                <p className="text-xl font-bold text-foreground">{s.value}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Operação</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {opCards.map((s) => (
-            <Link key={s.label} to={s.to.startsWith("#") ? "#" : s.to}>
-              <Card className="bg-card border-border hover:border-primary/40 transition-colors">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <s.icon className={`h-7 w-7 ${s.color}`} />
-                  <div>
-                    <p className="text-xs text-muted-foreground">{s.label}</p>
-                    <p className="text-xl font-bold text-foreground">{s.value}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+    <div className="space-y-8">
+      {/* HEADER */}
+      <header className="flex items-end justify-between gap-3 border-b border-border pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Gauge className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl font-display text-foreground">Control Tower</h1>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            {arena?.name ? `Central de operação · ${arena.name}` : "Central de operação"}
+          </p>
         </div>
-      </div>
+      </header>
 
-      {arena?.id && arena?.tenant_id && (
-        <OrkymInsightsCard tenantId={arena.tenant_id} arenaId={arena.id} />
-      )}
+      {/* BLOCO 1 — CONTROL TOWER (DOMINANTE) */}
+      <section className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 md:p-5">
+        <SectionHeader
+          icon={Sparkles}
+          title="Control Tower"
+          subtitle="ORKYM · alertas · ações pendentes · pendências operacionais"
+        />
 
-      <Card id="tasks" className="bg-card border-border">
-        <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base font-medium">Caixa de pendências</CardTitle>
-          <span className="text-xs text-muted-foreground">{tasks.length} aberta(s)</span>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {tasks.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma pendência. ORKYM populará aqui sugestões e ações operacionais.</p>}
-          {tasks.map((t) => {
-            const SourceIcon = sourceIcon(t.source);
-            return (
-              <div key={t.id} className="flex items-start justify-between gap-2 p-3 rounded-lg bg-muted/30">
-                <div className="space-y-1 flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-medium text-foreground truncate">{t.title}</p>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-background/60 text-muted-foreground inline-flex items-center gap-1">
-                      <SourceIcon className="h-2.5 w-2.5" /> {sourceLabel(t.source)}
-                    </span>
-                    {t.occurrence_id && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive inline-flex items-center gap-1">
-                        <AlertTriangle className="h-2.5 w-2.5" /> do incidente
+        {arena?.id && arena?.tenant_id && (
+          <OrkymInsightsCard tenantId={arena.tenant_id} arenaId={arena.id} />
+        )}
+
+        {arena?.id && arena?.tenant_id && (
+          <OrkymActionsCard tenantId={arena.tenant_id} arenaId={arena.id} />
+        )}
+
+        <Card id="tasks" className="bg-card border-border">
+          <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base font-medium">Caixa de pendências operacionais</CardTitle>
+            <span className="text-xs text-muted-foreground">{tasks.length} aberta(s)</span>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {tasks.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma pendência. ORKYM populará aqui sugestões e ações operacionais.</p>}
+            {tasks.map((t) => {
+              const SourceIcon = sourceIcon(t.source);
+              return (
+                <div key={t.id} className="flex items-start justify-between gap-2 p-3 rounded-lg bg-muted/30">
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-foreground truncate">{t.title}</p>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-background/60 text-muted-foreground inline-flex items-center gap-1">
+                        <SourceIcon className="h-2.5 w-2.5" /> {sourceLabel(t.source)}
                       </span>
-                    )}
+                      {t.occurrence_id && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive inline-flex items-center gap-1">
+                          <AlertTriangle className="h-2.5 w-2.5" /> do incidente
+                        </span>
+                      )}
+                    </div>
+                    {t.description && <p className="text-xs text-muted-foreground line-clamp-2">{t.description}</p>}
                   </div>
-                  {t.description && <p className="text-xs text-muted-foreground line-clamp-2">{t.description}</p>}
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => updateTask(t.id, "done")}>Feito</Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => updateTask(t.id, "dismissed")}>Dispensar</Button>
+                  </div>
                 </div>
-                <div className="flex gap-1 shrink-0">
-                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => updateTask(t.id, "done")}>Feito</Button>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => updateTask(t.id, "dismissed")}>Dispensar</Button>
+              );
+            })}
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* BLOCO 2 — OPERAÇÃO DO DIA */}
+      <section className="space-y-3">
+        <SectionHeader icon={Activity} title="Operação do dia" subtitle="O que está acontecendo agora" accent="text-blue-400" />
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KpiCard icon={CalendarCheck} label="Reservas hoje"   value={stats.today}        color="text-primary" />
+          <KpiCard icon={CalendarClock} label="Aulas hoje"      value={stats.classesToday} color="text-blue-400" />
+          <KpiCard icon={Grid3X3}       label="Quadras"         value={stats.courts}       color="text-cyan-400" />
+          <KpiCard icon={Users}         label="Alunos ativos"   value={stats.students}     color="text-emerald-400" to="/arena/dashboard/alunos" />
+        </div>
+
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium">Próximas reservas</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {upcoming.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma reserva próxima</p>}
+            {upcoming.map((b) => (
+              <div key={b.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{b.courts?.name} — {b.customer_name}</p>
+                  <p className="text-xs text-muted-foreground">{format(new Date(b.booking_date), "dd/MM")} • {String(b.start_time).slice(0, 5)} - {String(b.end_time).slice(0, 5)}</p>
                 </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${b.status === "confirmed" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
+                  {b.status === "confirmed" ? "Confirmada" : b.status === "completed" ? "Concluída" : b.status}
+                </span>
               </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+            ))}
+          </CardContent>
+        </Card>
 
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-medium">Próximas reservas</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {upcoming.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma reserva próxima</p>}
-          {upcoming.map((b) => (
-            <div key={b.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
-              <div>
-                <p className="text-sm font-medium text-foreground">{b.courts?.name} — {b.customer_name}</p>
-                <p className="text-xs text-muted-foreground">{format(new Date(b.booking_date), "dd/MM")} • {String(b.start_time).slice(0, 5)} - {String(b.end_time).slice(0, 5)}</p>
-              </div>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${b.status === "confirmed" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
-                {b.status === "confirmed" ? "Confirmada" : b.status === "completed" ? "Concluída" : b.status}
-              </span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <KpiCard icon={QrCode}         label="Check-in"             value="Abrir" color="text-primary"     to="/arena/checkin" />
+          <KpiCard icon={AlertTriangle}  label="Ocorrências abertas"  value={stats.openOcc} color="text-amber-400" to="/arena/dashboard/ocorrencias" />
+          <KpiCard icon={ClipboardList}  label="Matrículas"           value="Gerir" color="text-emerald-400" to="/arena/dashboard/matriculas" />
+        </div>
+      </section>
 
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { to: "/arena/dashboard/alunos", label: "Alunos" },
-          { to: "/arena/dashboard/professores", label: "Professores" },
-          { to: "/arena/dashboard/aulas", label: "Aulas" },
-          { to: "/arena/dashboard/matriculas", label: "Matrículas" },
-          { to: "/arena/dashboard/planos", label: "Planos" },
-          { to: "/arena/dashboard/assinaturas", label: "Assinaturas" },
-          { to: "/arena/dashboard/cobrancas", label: "Cobranças" },
-          { to: "/arena/dashboard/ocorrencias", label: "Ocorrências" },
-          { to: "/arena/dashboard/quadras", label: "Quadras" },
-          { to: "/arena/dashboard/horarios", label: "Horários" },
-          { to: "/arena/dashboard/reservas", label: "Reservas" },
-          { to: "/arena/dashboard/patrocinios", label: "Patrocínios" },
-        ].map((link) => (
-          <Link key={link.to} to={link.to} className="flex items-center justify-between p-3 rounded-xl bg-card border border-border hover:border-primary/40 transition-colors">
-            <span className="text-sm font-medium text-foreground">{link.label}</span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground" />
-          </Link>
-        ))}
-      </div>
+      {/* BLOCO 3 — FINANCEIRO */}
+      <section className="space-y-3">
+        <SectionHeader icon={Wallet} title="Financeiro" subtitle="Visão rápida" accent="text-emerald-400" />
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KpiCard icon={TrendingUp} label="Receita do mês"   value={`R$ ${stats.monthRevenue.toFixed(2)}`} color="text-emerald-400" to="/arena/dashboard/financeiro" />
+          <KpiCard icon={DollarSign} label="Receita 7 dias"   value={`R$ ${stats.revenue.toFixed(2)}`}      color="text-amber-400"   to="/arena/dashboard/transacoes" />
+          <KpiCard icon={Receipt}    label="Vencimentos 7d"   value={stats.dueSoon}                         color="text-amber-400"   to="/arena/dashboard/cobrancas" />
+          <KpiCard icon={Receipt}    label="Inadimplência"    value={stats.overdue}                         color="text-destructive" to="/arena/dashboard/cobrancas" />
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <ShortcutLink to="/arena/dashboard/cobrancas"   label="Cobranças (mensalidades)" />
+          <ShortcutLink to="/arena/dashboard/assinaturas" label="Assinaturas" />
+          <ShortcutLink to="/arena/dashboard/transacoes"  label="Transações" />
+        </div>
+      </section>
+
+      {/* BLOCO 4 — TORNEIOS */}
+      <section className="space-y-3">
+        <SectionHeader icon={Trophy} title="Torneios" subtitle="Estado competitivo" accent="text-purple-400" />
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <KpiCard icon={Trophy} label="Torneios ativos" value={stats.activeTournaments} color="text-purple-400" to="/arena/dashboard/torneios" />
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <ShortcutLink to="/arena/dashboard/torneios" label="Gerir torneios" />
+          <ShortcutLink to="/arena/checkin"            label="Check-in de torneios" />
+          <ShortcutLink to="/arena/dashboard/horarios" label="Horários e quadras" />
+        </div>
+      </section>
+
+      {/* BLOCO 5 — GROWTH */}
+      <section className="space-y-3">
+        <SectionHeader icon={Sparkles} title="Growth" subtitle="Crescimento e visibilidade" accent="text-pink-400" />
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <ShortcutLink to="/arena/dashboard/patrocinios" label="Patrocínios" />
+          <ShortcutLink to="/marketplace"                 label="Marketplace" />
+          <ShortcutLink to="/arena/dashboard/acoes-ia"    label="Sugestões da ORKYM" />
+        </div>
+      </section>
     </div>
   );
 };
