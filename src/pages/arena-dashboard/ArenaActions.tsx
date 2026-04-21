@@ -4,12 +4,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sparkles, Check, X, Loader2 } from "lucide-react";
 import {
   listActionProposals, approveAction, executeAction, rejectAction,
   type OrkymActionProposal, type OrkymActionStatus,
 } from "@/lib/orkym";
 import { ActionProposalDetail } from "@/components/orkym/ActionProposalDetail";
+import { PolicyDecisionBadge } from "@/components/autonomy/PolicyDecisionBadge";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -42,6 +44,7 @@ const ArenaActions = () => {
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [detail, setDetail] = useState<OrkymActionProposal | null>(null);
+  const [modeFilter, setModeFilter] = useState<string>("all");
 
   const load = async () => {
     if (!arena?.id || !arena?.tenant_id) return;
@@ -50,11 +53,12 @@ const ArenaActions = () => {
     const data = await listActionProposals({
       tenantId: arena.tenant_id, arenaId: arena.id, status: statuses, limit: 100,
     });
-    setItems(data);
+    const filtered = modeFilter === "all" ? data : data.filter((p) => (p.execution_mode ?? "approve") === modeFilter);
+    setItems(filtered);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [tab, arena?.id]);
+  useEffect(() => { load(); }, [tab, arena?.id, modeFilter]);
 
   const handleApprove = async (p: OrkymActionProposal) => {
     setBusyId(p.id);
@@ -80,9 +84,20 @@ const ArenaActions = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Sparkles className="h-5 w-5 text-primary" />
-        <h1 className="text-xl font-semibold">Ações sugeridas pela ORKYM</h1>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <h1 className="text-xl font-semibold">Ações sugeridas pela ORKYM</h1>
+        </div>
+        <Select value={modeFilter} onValueChange={setModeFilter}>
+          <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos modos</SelectItem>
+            <SelectItem value="suggest">Sugerir</SelectItem>
+            <SelectItem value="approve">Aprovar</SelectItem>
+            <SelectItem value="auto">Auto</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -110,6 +125,11 @@ const ArenaActions = () => {
                         <Badge variant="outline" className={`text-[10px] ${statusBadge(p.status)}`}>
                           {p.status}
                         </Badge>
+                        <PolicyDecisionBadge
+                          mode={(p.execution_mode ?? "approve") as any}
+                          source={p.policy_source ?? undefined}
+                          autoExecuted={p.auto_executed ?? false}
+                        />
                         <Badge variant="outline" className="text-[10px]">{p.priority}</Badge>
                         <Badge variant="outline" className="text-[10px] text-muted-foreground">
                           {p.action_type}

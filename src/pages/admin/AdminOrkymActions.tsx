@@ -8,6 +8,7 @@ import { Sparkles, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { listActionProposals, type OrkymActionProposal, type OrkymActionStatus } from "@/lib/orkym";
 import { ActionProposalDetail } from "@/components/orkym/ActionProposalDetail";
+import { PolicyDecisionBadge } from "@/components/autonomy/PolicyDecisionBadge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -41,6 +42,7 @@ const AdminOrkymActions = () => {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [modeFilter, setModeFilter] = useState<string>("all");
   const [detail, setDetail] = useState<OrkymActionProposal | null>(null);
 
   const load = async () => {
@@ -49,7 +51,8 @@ const AdminOrkymActions = () => {
     if (statusFilter !== "all") filters.status = statusFilter as OrkymActionStatus;
     if (domainFilter !== "all") filters.domain = domainFilter;
     const data = await listActionProposals(filters);
-    setItems(data);
+    const filtered = modeFilter === "all" ? data : data.filter((p) => (p.execution_mode ?? "approve") === modeFilter);
+    setItems(filtered);
 
     // métricas (últimos 30 dias)
     const { data: m } = await (supabase as any)
@@ -80,7 +83,7 @@ const AdminOrkymActions = () => {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [statusFilter, domainFilter]);
+  useEffect(() => { load(); }, [statusFilter, domainFilter, modeFilter]);
 
   const fmtMs = (v: number | null) => v == null ? "—" : v < 60000 ? `${(v/1000).toFixed(1)}s` : `${(v/60000).toFixed(1)}min`;
 
@@ -125,6 +128,15 @@ const AdminOrkymActions = () => {
                 <SelectItem value="growth">Crescimento</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={modeFilter} onValueChange={setModeFilter}>
+              <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos modos</SelectItem>
+                <SelectItem value="suggest">Sugerir</SelectItem>
+                <SelectItem value="approve">Aprovar</SelectItem>
+                <SelectItem value="auto">Auto</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="icon" variant="ghost" onClick={load} disabled={loading} className="h-8 w-8">
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
@@ -135,6 +147,7 @@ const AdminOrkymActions = () => {
             <TableHeader>
               <TableRow>
                 <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">Mode</TableHead>
                 <TableHead className="text-xs">Tipo</TableHead>
                 <TableHead className="text-xs">Título</TableHead>
                 <TableHead className="text-xs">Domínio</TableHead>
@@ -144,13 +157,20 @@ const AdminOrkymActions = () => {
             </TableHeader>
             <TableBody>
               {items.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
+                <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
                   Nenhuma proposta encontrada.
                 </TableCell></TableRow>
               )}
               {items.map((p) => (
                 <TableRow key={p.id} className="cursor-pointer" onClick={() => setDetail(p)}>
                   <TableCell><Badge variant="outline" className={`text-[10px] ${statusBadgeCls(p.status)}`}>{p.status}</Badge></TableCell>
+                  <TableCell>
+                    <PolicyDecisionBadge
+                      mode={(p.execution_mode ?? "approve") as any}
+                      source={p.policy_source ?? undefined}
+                      autoExecuted={p.auto_executed ?? false}
+                    />
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{p.action_type}</TableCell>
                   <TableCell className="text-sm font-medium max-w-[300px] truncate">{p.title}</TableCell>
                   <TableCell className="text-xs">{p.domain}</TableCell>
