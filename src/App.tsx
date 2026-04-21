@@ -171,6 +171,7 @@ const App = () => (
               <Route path="assinaturas" element={<ArenaSubscriptions />} />
               <Route path="cobrancas" element={<ArenaBilling />} />
               <Route path="ocorrencias" element={<ArenaOccurrences />} />
+              <Route path="acoes-ia" element={<ArenaActions />} />
             </Route>
             <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
             <Route path="/organizer" element={<OrganizerLayout />}>
