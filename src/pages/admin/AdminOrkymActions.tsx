@@ -147,6 +147,7 @@ const AdminOrkymActions = () => {
             <TableHeader>
               <TableRow>
                 <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">Mode</TableHead>
                 <TableHead className="text-xs">Tipo</TableHead>
                 <TableHead className="text-xs">Título</TableHead>
                 <TableHead className="text-xs">Domínio</TableHead>
@@ -156,13 +157,20 @@ const AdminOrkymActions = () => {
             </TableHeader>
             <TableBody>
               {items.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
+                <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
                   Nenhuma proposta encontrada.
                 </TableCell></TableRow>
               )}
               {items.map((p) => (
                 <TableRow key={p.id} className="cursor-pointer" onClick={() => setDetail(p)}>
                   <TableCell><Badge variant="outline" className={`text-[10px] ${statusBadgeCls(p.status)}`}>{p.status}</Badge></TableCell>
+                  <TableCell>
+                    <PolicyDecisionBadge
+                      mode={(p.execution_mode ?? "approve") as any}
+                      source={p.policy_source ?? undefined}
+                      autoExecuted={p.auto_executed ?? false}
+                    />
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{p.action_type}</TableCell>
                   <TableCell className="text-sm font-medium max-w-[300px] truncate">{p.title}</TableCell>
                   <TableCell className="text-xs">{p.domain}</TableCell>
