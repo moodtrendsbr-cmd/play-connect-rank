@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Search, Store, ShoppingBag, Star } from "lucide-react";
+import AdSlot from "@/components/ads/AdSlot";
 
 const CATEGORIES = [
   { label: "Todos", value: "" },
@@ -53,37 +54,35 @@ const Marketplace = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true);
-      let query = supabase
-        .from("products")
-        .select("*, companies(*)")
-        .eq("status", "approved");
+      const { data } = await supabase
+        .from("marketplace_public" as any)
+        .select("*")
+        .order("created_at", { ascending: false });
 
+      let list = ((data as any[]) || []);
 
-      const { data } = await query;
-      let list = (data || []).filter((p: any) => p.companies?.status === "approved");
-
-      // Filter by search (product name or company name)
       if (search) {
         const term = search.toLowerCase();
         list = list.filter((p: any) =>
-          p.name?.toLowerCase().includes(term) || p.companies?.name?.toLowerCase().includes(term)
+          p.name?.toLowerCase().includes(term) || p.company_name?.toLowerCase().includes(term)
         );
       }
 
-      // Filter by company category
+      // Filter by category (companies category not in view; fallback to client-side via separate fetch)
       if (category) {
-        list = list.filter((p: any) => p.companies?.category === category);
+        const ids = list.map((p: any) => p.company_id);
+        if (ids.length) {
+          const { data: cos } = await supabase.from("companies").select("id, category").in("id", ids);
+          const set = new Set((cos || []).filter((c: any) => c.category === category).map((c: any) => c.id));
+          list = list.filter((p: any) => set.has(p.company_id));
+        }
       }
 
-      // Sort: featured > paid plan > same city > created_at
       list.sort((a: any, b: any) => {
         if (a.featured !== b.featured) return a.featured ? -1 : 1;
-        const planA = PLAN_PRIORITY[a.companies?.plan] || 1;
-        const planB = PLAN_PRIORITY[b.companies?.plan] || 1;
-        if (planA !== planB) return planB - planA;
         if (userCity) {
-          const aLocal = a.companies?.city?.toLowerCase() === userCity.toLowerCase();
-          const bLocal = b.companies?.city?.toLowerCase() === userCity.toLowerCase();
+          const aLocal = a.city?.toLowerCase() === userCity.toLowerCase();
+          const bLocal = b.city?.toLowerCase() === userCity.toLowerCase();
           if (aLocal !== bLocal) return aLocal ? -1 : 1;
         }
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -135,6 +134,8 @@ const Marketplace = () => {
           </div>
         </div>
 
+        <AdSlot code="marketplace.featured" className="mb-4" />
+
         <div className="flex items-center justify-between mb-4">
           <p className="text-xs text-muted-foreground">{products.length} produto(s)</p>
         </div>
@@ -174,8 +175,8 @@ const Marketplace = () => {
                 <div className="p-2">
                   <h3 className="text-sm font-medium text-foreground truncate">{p.name}</h3>
                   <p className="text-sm font-bold" style={{ color: "#2BFF88" }}>R$ {Number(p.price).toFixed(2)}</p>
-                  {p.companies?.name && (
-                    <p className="text-[10px] text-muted-foreground truncate mt-0.5">{p.companies.name}</p>
+                  {p.company_name && (
+                    <p className="text-[10px] text-muted-foreground truncate mt-0.5">{p.company_name}</p>
                   )}
                 </div>
               </Link>
