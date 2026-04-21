@@ -8,6 +8,7 @@ import { Sparkles, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { listActionProposals, type OrkymActionProposal, type OrkymActionStatus } from "@/lib/orkym";
 import { ActionProposalDetail } from "@/components/orkym/ActionProposalDetail";
+import { PolicyDecisionBadge } from "@/components/autonomy/PolicyDecisionBadge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
