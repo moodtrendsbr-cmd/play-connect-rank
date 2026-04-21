@@ -125,6 +125,11 @@ const ArenaActions = () => {
                         <Badge variant="outline" className={`text-[10px] ${statusBadge(p.status)}`}>
                           {p.status}
                         </Badge>
+                        <PolicyDecisionBadge
+                          mode={(p.execution_mode ?? "approve") as any}
+                          source={p.policy_source ?? undefined}
+                          autoExecuted={p.auto_executed ?? false}
+                        />
                         <Badge variant="outline" className="text-[10px]">{p.priority}</Badge>
                         <Badge variant="outline" className="text-[10px] text-muted-foreground">
                           {p.action_type}
