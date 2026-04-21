@@ -42,6 +42,7 @@ const AdminOrkymActions = () => {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [modeFilter, setModeFilter] = useState<string>("all");
   const [detail, setDetail] = useState<OrkymActionProposal | null>(null);
 
   const load = async () => {
