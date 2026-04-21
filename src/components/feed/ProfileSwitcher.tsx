@@ -264,7 +264,7 @@ const ProfileSwitcher = () => {
             <div className="border-t" style={{ borderColor: "rgba(43,255,136,0.1)" }}>
               {(userRole === "organizer" || userRole === "admin") && (
                 <button
-                  onClick={() => { setOpen(false); navigate("/dashboard"); }}
+                  onClick={() => { setOpen(false); navigate(userRole === "organizer" ? "/organizer" : "/dashboard"); }}
                   className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-white/5 transition-colors"
                 >
                   <div className="h-8 w-8 rounded-full flex items-center justify-center" style={{ background: "rgba(43,255,136,0.1)" }}>
