@@ -215,7 +215,8 @@ const App = () => (
               <Route path="performance" element={<SponsorDashboard />} />
             </Route>
             <Route path="/tenant" element={<TenantShell />}>
-              <Route index element={<Navigate to="/tenant/overview" replace />} />
+              <Route index element={<Navigate to="/tenant/dashboard" replace />} />
+              <Route path="dashboard" element={<TenantDashboard />} />
               <Route path="overview" element={<OrganizerSettings />} />
               <Route path="arenas" element={<OrganizerArenas />} />
               <Route path="membros" element={<OrganizerMembers />} />
