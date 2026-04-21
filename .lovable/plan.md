@@ -1,147 +1,144 @@
 
 
-# Fase 11.1 — Reestruturação Segura: Layouts e Rotas por Perfil
+# Fase 11.2 — Arena Control Tower (UX-only)
 
-> **Princípio inegociável**: nenhuma rota antiga sai do ar, nenhuma tela é apagada, nenhuma lógica core é alterada. Esta subfase é **100% UX/estrutura** — adiciona uma nova camada limpa por cima do que existe e usa **alias/redirects** para convergir navegação futura.
-
----
-
-## 0. Estratégia "shell-only, zero-risk"
-
-| Princípio | Como aplicamos |
-|---|---|
-| Não apagar nada | Toda rota antiga continua válida e funcional |
-| Não duplicar lógica | Novos layouts apenas **renderizam Outlet** + sidebar; reusam páginas existentes |
-| Convergência por alias | Rotas novas (`/athlete`, `/company`, `/tenant`) resolvem para componentes já usados via `<Route>` adicional ou `<Navigate>` |
-| Sidebar isolada | Cada layout novo importa só ícones/itens do seu perfil |
-| Resolver duplicação herdada | Remover bloco duplicado `/organizer` (linhas 192-200 de `App.tsx`) — único toque em código existente, sem mudança de comportamento |
+> **Princípio**: zero banco, zero edge, zero lógica nova. Apenas reorganização visual de `/arena/dashboard` em 5 blocos hierárquicos + 6 sub-blocos de Visão Rápida + ajuste de naming/agrupamento na sidebar nova. Tudo reusa componentes/queries que já existem.
 
 ---
 
-## 1. Novos layouts (6 arquivos novos)
-
-Todos seguem o mesmo template: `<SidebarProvider>` + `<AppSidebar>` próprio + `<Outlet/>`. Cada um faz seu próprio guard de role e não vaza menus de outros perfis.
-
-| Arquivo (novo) | Role guard | Sidebar (grupos) |
-|---|---|---|
-| `src/layouts/AdminShell.tsx` | `userRole === 'admin'` | **Visão Global** (Dashboard, Analytics, Users, Tenants*), **Operação** (Tournaments, Enrollments, Arenas), **Marketplace** (Companies, Products, Sponsors, Sponsorships, Plans, Gifts, Ads, Ad-campaigns), **Financeiro** (Finances, Split-rules, Adjustments, Monetization), **ORKYM & Autonomia** (Monitor, Actions, Autonomy, Control Tower) |
-| `src/layouts/TenantShell.tsx` | `useIsTenantAdmin()` | **Overview**, **Arenas**, **Organizadores/Membros**, **Empresas vinculadas**, **Financeiro**, **Branding & Domínios**, **Autonomia** |
-| `src/layouts/ArenaShell.tsx` | `arenas.owner_user_id = user.id` (já feito em `ArenaLayout`) | **Control Tower** (Dashboard, Control-tower, Actions IA, Autonomia), **Operação** (Quadras, Horários, Reservas, Aulas, Matrículas, Ocorrências, Check-in), **Pessoas** (Alunos, Professores), **Financeiro** (Financeiro, Transações, Planos, Assinaturas, Cobranças), **Growth** (Torneios, Patrocínios) |
-| `src/layouts/OrganizerShell.tsx` | `userRole === 'organizer'` | **Eventos** (Meus Torneios, Criar Torneio), **Inscrições**, **Jogos/Brackets**, **Financeiro** |
-| `src/layouts/AthleteShell.tsx` | autenticado | **Meu Perfil**, **Torneios**, **Ranking**, **Mensagens** |
-| `src/layouts/CompanyShell.tsx` | `companies.owner_user_id = user.id` | **Marketplace** (Minha Empresa, Produtos, Pedidos), **Campanhas** (Sponsor Dashboard, Sponsor Tournaments, Ad-campaigns vinculadas), **Performance** (métricas) |
-
-`*Tenants` no Admin é só link futuro; não cria página agora.
-
-> Localização: pasta `src/layouts/` nova. **Layouts antigos (`AdminLayout`, `OrganizerLayout`, `ArenaLayout`, `SponsorLayout`, `AppLayout`) permanecem intactos e continuam respondendo às rotas atuais.**
-
----
-
-## 2. Nova estrutura de rotas (aditiva)
-
-Adicionar **em paralelo** às rotas atuais, sem remover nenhuma. Cada nova rota aponta para a mesma página existente:
+## 1. Os 5 blocos do dashboard (reorganização de `ArenaDashboard.tsx`)
 
 ```text
-/admin/*       → mantém AdminLayout atual + adiciona /admin/tenants (placeholder navega p/ /organizer/arenas)
-/tenant/*      → NOVO; TenantShell renderiza páginas /organizer/* já existentes (settings, members, arenas, domains, finance, payment)
-/arena/*       → /arena/dashboard mantém; /arena/* (sem /dashboard) ganha alias que redireciona p/ /arena/dashboard
-/organizer/*   → mantém OrganizerLayout; bloco duplicado linhas 192-200 removido
-/athlete/*     → NOVO; AthleteShell com sub-rotas que apontam para Profile, Tournaments, Ranking, Messages existentes
-/company/*     → NOVO; CompanyShell com sub-rotas apontando para MyCompany, SponsorDashboard, SponsorTournaments existentes
+┌─────────────────────────────────────────────────────────────────┐
+│ HEADER — "Control Tower" + nome arena + status ORKYM + refresh  │
+├─────────────────────────────────────────────────────────────────┤
+│ BLOCO 1 — CONTROL TOWER (DOMINANTE, topo)                       │
+│ ├─ OrkymInsightsCard (alerts + sugestões + status)  [reuso]     │
+│ ├─ OrkymActionsCard  (ações pendentes, max 3)       [reuso]     │
+│ └─ Caixa de pendências (tasks operacionais)         [reuso]     │
+├─────────────────────────────────────────────────────────────────┤
+│ BLOCO 2 — OPERAÇÃO DO DIA                                       │
+│ ├─ KPIs do dia: Reservas hoje · Aulas hoje · Quadras · Alunos   │
+│ ├─ Próximas reservas (lista existente)              [reuso]     │
+│ └─ Atalhos: Check-in · Ocorrências abertas · Presença           │
+├─────────────────────────────────────────────────────────────────┤
+│ BLOCO 3 — FINANCEIRO (resumo)                                   │
+│ ├─ Receita do mês · Receita 7d · Vencimentos 7d · Inadimplência │
+│ └─ Atalhos: Cobranças · Assinaturas · Transações                │
+├─────────────────────────────────────────────────────────────────┤
+│ BLOCO 4 — TORNEIOS                                              │
+│ ├─ KPI: Torneios ativos                                         │
+│ └─ Atalhos: Torneios · Categorias · Check-in torneios           │
+├─────────────────────────────────────────────────────────────────┤
+│ BLOCO 5 — GROWTH                                                │
+│ └─ Atalhos: Patrocínios · Marketplace (link) · Sugestões ORKYM  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Tabela de rotas novas → páginas reusadas (zero código novo de página)
+**Mudanças concretas em `ArenaDashboard.tsx`** (apenas refactor de JSX, mantém todas as queries do `load()`):
+- Header novo com título "Control Tower", subtítulo com nome da arena, badge de status ORKYM (já vem do `OrkymInsightsCard`).
+- Subir `OrkymInsightsCard` + `OrkymActionsCard` + Caixa de pendências para o topo dentro de uma section visualmente dominante (border-l-2 primary, bg-primary/5).
+- Quebrar grid `statCards` (6) em **3 grids menores** distribuídos pelos blocos 2/3/4 conforme afinidade — mesmas variáveis (`stats.today`, `stats.classesToday`, etc.).
+- Remover o grid genérico de 12 atalhos do final; substituir por 4 mini-grids contextuais dentro de cada bloco.
+- Adicionar `<SectionHeader>` reusável local (h2 + ícone + cor de acento) — componente trivial inline, ~10 linhas.
 
-| Nova rota | Renderiza |
+**O que NÃO muda**: nenhuma query, nenhum endpoint, nenhuma lógica de `updateTask`, nenhum tipo de dado. Apenas estrutura JSX.
+
+---
+
+## 2. Sidebar do `ArenaShell` (já estruturada — só ajustes finos)
+
+A sidebar nova em `src/layouts/sidebars/ArenaSidebar.tsx` já tem 5 grupos: Control Tower / Operação / Pessoas / Financeiro / Growth. Ajustes mínimos:
+
+| Antes | Depois | Motivo |
+|---|---|---|
+| Grupo "Control Tower" inclui Dashboard + Control Tower + Ações IA + Autonomia | **"Central de Operação"** com mesmos 4 itens, "Ações IA" → "Ações sugeridas", "Autonomia" → "Controle automático" | naming operacional |
+| Grupo "Pessoas" separado | **fundir em "Operação"** abaixo das aulas (Alunos · Professores logo após Matrículas) | menos quebras |
+| "Cobranças" | "Cobranças (mensalidades)" | clareza |
+| Sem ícone de check-in destacado | Mover Check-in para o topo de Operação | é ação diária crítica |
+
+O `ArenaLayout` legacy (top-bar de 19 abas em `/arena/dashboard`) **não é alterado** — continua intacto para compatibilidade.
+
+---
+
+## 3. Naming (apenas labels, sem renomear rotas)
+
+| Atual | Novo |
 |---|---|
-| `/athlete` | `<Navigate to="/athlete/perfil" />` |
-| `/athlete/perfil` | `<Profile />` |
-| `/athlete/torneios` | `<Tournaments />` |
-| `/athlete/ranking` | `<Ranking />` |
-| `/athlete/mensagens` | `<Messages />` |
-| `/company` | `<Navigate to="/company/marketplace" />` |
-| `/company/marketplace` | `<MyCompany />` |
-| `/company/produtos` | `<MyCompany />` (mesma tela; ancora futura) |
-| `/company/campanhas` | `<SponsorDashboard />` |
-| `/company/torneios-patrocinados` | `<SponsorTournaments />` |
-| `/tenant` | `<Navigate to="/tenant/overview" />` |
-| `/tenant/overview` | `<OrganizerSettings />` (até ter dashboard próprio) |
-| `/tenant/arenas` | `<OrganizerArenas />` |
-| `/tenant/membros` | `<OrganizerMembers />` |
-| `/tenant/financeiro` | `<OrganizerFinance />` |
-| `/tenant/branding` | `<OrganizerSettings />` |
-| `/tenant/dominios` | `<OrganizerDomains />` |
-| `/tenant/pagamento` | `<OrganizerPayment />` |
-| `/admin/tenants` | placeholder simples listando tenants via `<OrganizerArenas />` em modo read-only — opcional, só linka |
+| "Dashboard" (título h1) | "Control Tower" |
+| "Operação" (subtítulo) | "Visão geral da operação" |
+| "Caixa de pendências" | "Caixa de pendências operacionais" (mantém) |
+| "Ações IA" (sidebar) | "Ações sugeridas" |
+| "Autonomia" (sidebar) | "Controle automático" |
+| "Attendance" (se aparecer em algum lugar) | "Presença" |
 
-**Rotas antigas (`/profile`, `/marketplace/my-company`, `/sponsor/dashboard`, `/organizer/settings`, etc.) continuam ativas exatamente como hoje.**
+URLs permanecem idênticas (`/arena/dashboard/acoes-ia`, `/arena/dashboard/autonomia`, etc.).
 
 ---
 
-## 3. ProfileSwitcher: convergência opcional
+## 4. Componentes — reuso vs criação
 
-Mudar **um único atalho** em `ProfileSwitcher.tsx` (linha 267):
-- `organizer` → de `/dashboard` para `/organizer` (já não tem efeito quebrador, hoje o legacy responde)
-- `admin` → mantém `/admin`
-- `arena` → mantém `/arena/dashboard`
+**Reusados sem alteração**:
+- `OrkymInsightsCard`, `OrkymActionsCard`, `ActionProposalDetail`, `PolicyDecisionBadge`, `OrkymStatusBadge`
+- Cards `Card/CardContent/CardHeader/CardTitle` (shadcn)
+- `Button`, `Badge`, ícones `lucide-react`
+- Toda a função `load()` e `updateTask()` do `ArenaDashboard.tsx`
 
-`/dashboard` continua existindo (atletas comuns que caem nele veem MEUS TORNEIOS legacy — sem mudança).
+**Criados (locais ao arquivo, não exportados)**:
+- `SectionHeader` (~10 linhas) — h2 + ícone + cor de acento; usado em cada um dos 5 blocos.
+- `KpiCard` (~15 linhas) — wrapper visual mais premium para os stats existentes (já existe um padrão inline; só extrai para reduzir duplicação dentro do mesmo arquivo).
 
----
-
-## 4. Limpeza mínima permitida
-
-Único toque em código existente:
-- **`src/App.tsx` linhas 192-200**: remover bloco duplicado `/organizer`. O bloco 183-191 cobre 100% dos paths; remover o segundo é seguro (React Router pega o primeiro mesmo, mas é code smell óbvio).
-
-Nenhuma outra alteração em arquivos existentes.
+Nenhum componente novo em `src/components/`.
 
 ---
 
-## 5. Arquivos tocados (resumo)
+## 5. Arquivos tocados
 
 | Tipo | Arquivo |
 |---|---|
-| Novo | `src/layouts/AdminShell.tsx`, `TenantShell.tsx`, `ArenaShell.tsx`, `OrganizerShell.tsx`, `AthleteShell.tsx`, `CompanyShell.tsx` |
-| Novo | `src/layouts/sidebars/` (6 arquivos `<Role>Sidebar.tsx`) |
-| Edit | `src/App.tsx` — adicionar 6 blocos `<Route>` novos + remover bloco duplicado |
-| Edit | `src/components/feed/ProfileSwitcher.tsx` — 1 linha (atalho organizer) |
-| Memory | `mem/architecture/route-shells.md` (novo) — registra a estratégia "shell-only" |
+| Edit | `src/pages/arena-dashboard/ArenaDashboard.tsx` — refactor de JSX em 5 blocos (queries intactas) |
+| Edit | `src/layouts/sidebars/ArenaSidebar.tsx` — relabel + reorder + fundir Pessoas em Operação |
+| Memory | `mem/features/arena-management.md` — append nota "Phase 11.2: dashboard reorganizado em 5 blocos (Control Tower / Operação / Financeiro / Torneios / Growth)" |
 
-**Total**: 13 arquivos novos, 2 arquivos minimamente editados.
+**Total**: 2 arquivos editados, 1 memory atualizado. Zero arquivos novos. Zero rotas alteradas.
 
 ---
 
 ## 6. Garantias de não-regressão
 
-| Risco | Mitigação |
+- `/arena/dashboard` continua funcionando — legacy `ArenaLayout` (top-bar) intocado.
+- Todas as 19 sub-rotas (`/arena/dashboard/*`) intocadas.
+- Nenhuma query SQL nova; mesmas tabelas (`bookings`, `arena_students`, `arena_billing_cycles`, `arena_occurrences`, `arena_operational_tasks`, `tournaments`, `financial_transactions`).
+- Nenhum import novo de tipos do Supabase.
+- Build TS: zero diff de tipos.
+
+---
+
+## 7. ENTREGA B — Relatório (resumo do que será informado ao final)
+
+| Item | Resultado |
 |---|---|
-| Quebrar deep-link existente | Nenhuma rota antiga é removida ou renomeada |
-| Confundir guard de role | Cada Shell faz seu próprio guard isolado, sem mexer nos guards atuais |
-| Loop de redirect | Aliases novos (`/athlete`, `/company`, `/tenant`) só redirecionam para sub-rota dentro do próprio prefixo, nunca para rota antiga |
-| Lógica de negócio afetada | Páginas reusadas como-são (`<Profile />`, `<MyCompany />` etc.) — zero diff comportamental |
-| Layout antigo conflitar | Layouts antigos só respondem aos paths antigos; layouts novos só aos paths novos |
+| Reaproveitado | OrkymInsightsCard, OrkymActionsCard, queries do dashboard, todos os ícones existentes |
+| Reorganizado | ArenaDashboard.tsx em 5 blocos hierárquicos; ARenaSidebar com Pessoas fundido em Operação |
+| Renomeado (labels) | "Dashboard"→"Control Tower", "Ações IA"→"Ações sugeridas", "Autonomia"→"Controle automático" |
+| Melhor agrupado | KPIs distribuídos por afinidade (dia/financeiro/torneios) ao invés de grid solto de 6 |
+| Para subfases | Hub real Operação do Dia com timeline (11.3); financeiro com gráfico (11.4); torneios com brackets resumo (11.5) |
 
----
+## 8. ENTREGA C — Pendências para próximas subfases
 
-## 7. Critério de sucesso
+- **11.3**: timeline real do dia (aulas + reservas + ocorrências em uma linha temporal única)
+- **11.4**: gráfico financeiro 30d e funil de inadimplência
+- **11.5**: card "Torneios" mostrando próximas partidas via `tournament_modalities`/`match_results`
+- **11.6**: substituir `tournaments.arena = arena.name` (string match frágil) por FK real — depende de migration
+- **11.7**: camada conversacional WhatsApp (alertas críticos + aprovação de ação ORKYM via reply)
+- **11.8**: deprecar legacy `ArenaLayout` (top-bar de 19 abas) e migrar `/arena/dashboard` para o `ArenaShell` novo com sidebar
 
-- ✅ Todas as URLs antigas continuam funcionando idênticas (testar: `/dashboard`, `/profile`, `/admin`, `/arena/dashboard`, `/organizer/settings`, `/marketplace/my-company`, `/sponsor/dashboard`)
-- ✅ 6 novas URLs raiz respondem (`/admin`, `/tenant`, `/arena`, `/organizer`, `/athlete`, `/company`)
-- ✅ Cada Shell mostra apenas os menus do seu perfil
-- ✅ Bloco duplicado de `/organizer` em `App.tsx` removido
-- ✅ Zero edge function tocada, zero migration, zero RLS, zero ORKYM/policy/quota alterado
-- ✅ Build passa, sem warnings novos
+## 9. Critério de sucesso
 
----
-
-## 8. Fora desta subfase (próximas 11.x)
-
-- **11.2**: criar `TenantDashboard` real (KPIs consolidados)
-- **11.3**: hub Company unificado (substituir reuso de `MyCompany`+`SponsorDashboard` por hub novo)
-- **11.4**: hub Athlete (`AthleteDashboard` com agenda + notificações)
-- **11.5**: deprecar `/dashboard` legacy + `/sponsor/*` + `/marketplace/my-company` com redirects 301-like
-- **11.6**: módulo `/admin/tenants` real
-- **11.7**: agrupamento de nav da Arena (já com Shell, é mover itens)
-- **11.8**: camada conversacional WhatsApp (transversal)
+- ✅ `/arena/dashboard` parece uma central operacional (Control Tower visualmente dominante no topo)
+- ✅ Os 5 blocos hierárquicos visíveis sem scroll horizontal
+- ✅ ORKYM (insights + actions + tasks) é a primeira coisa que aparece
+- ✅ Sidebar do `ArenaShell` tem 5 grupos claros com naming operacional
+- ✅ Todas as 19 sub-rotas continuam respondendo
+- ✅ Zero edge function, zero migration, zero policy, zero RLS, zero quebra de tipos
 
