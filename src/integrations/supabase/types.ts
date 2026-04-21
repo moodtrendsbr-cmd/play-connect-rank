@@ -2007,6 +2007,7 @@ export type Database = {
       }
       company_plans: {
         Row: {
+          autonomy_tier: string
           banner_feed_enabled: boolean
           commission_rate: number
           created_at: string
@@ -2017,11 +2018,16 @@ export type Database = {
           max_products: number | null
           monthly_price: number
           name: string
+          orkym_allowed_domains: string[]
+          orkym_auto_actions_limit: number
+          orkym_calls_limit: number
+          orkym_suggestions_limit: number
           sponsored_posts_per_month: number
           tournament_visibility: boolean
           updated_at: string
         }
         Insert: {
+          autonomy_tier?: string
           banner_feed_enabled?: boolean
           commission_rate?: number
           created_at?: string
@@ -2032,11 +2038,16 @@ export type Database = {
           max_products?: number | null
           monthly_price?: number
           name: string
+          orkym_allowed_domains?: string[]
+          orkym_auto_actions_limit?: number
+          orkym_calls_limit?: number
+          orkym_suggestions_limit?: number
           sponsored_posts_per_month?: number
           tournament_visibility?: boolean
           updated_at?: string
         }
         Update: {
+          autonomy_tier?: string
           banner_feed_enabled?: boolean
           commission_rate?: number
           created_at?: string
@@ -2047,6 +2058,10 @@ export type Database = {
           max_products?: number | null
           monthly_price?: number
           name?: string
+          orkym_allowed_domains?: string[]
+          orkym_auto_actions_limit?: number
+          orkym_calls_limit?: number
+          orkym_suggestions_limit?: number
           sponsored_posts_per_month?: number
           tournament_visibility?: boolean
           updated_at?: string
@@ -3478,6 +3493,65 @@ export type Database = {
           tenant_id?: string | null
         }
         Relationships: []
+      }
+      orkym_usage: {
+        Row: {
+          created_at: string
+          estimated_time_saved_minutes: number
+          id: string
+          metadata: Json
+          period_month: string
+          tenant_id: string
+          total_actions_proposed: number
+          total_approved: number
+          total_auto_executed: number
+          total_blocked_by_quota: number
+          total_calls: number
+          total_rejected: number
+          total_suggestions: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          estimated_time_saved_minutes?: number
+          id?: string
+          metadata?: Json
+          period_month: string
+          tenant_id: string
+          total_actions_proposed?: number
+          total_approved?: number
+          total_auto_executed?: number
+          total_blocked_by_quota?: number
+          total_calls?: number
+          total_rejected?: number
+          total_suggestions?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          estimated_time_saved_minutes?: number
+          id?: string
+          metadata?: Json
+          period_month?: string
+          tenant_id?: string
+          total_actions_proposed?: number
+          total_approved?: number
+          total_auto_executed?: number
+          total_blocked_by_quota?: number
+          total_calls?: number
+          total_rejected?: number
+          total_suggestions?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orkym_usage_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payment_accounts: {
         Row: {
@@ -5310,6 +5384,39 @@ export type Database = {
         }
         Relationships: []
       }
+      v_orkym_usage_summary: {
+        Row: {
+          auto_limit: number | null
+          calls_limit: number | null
+          estimated_time_saved_minutes: number | null
+          last_activity: string | null
+          pct_auto: number | null
+          pct_calls: number | null
+          pct_suggestions: number | null
+          period_month: string | null
+          projected_calls_eom: number | null
+          suggestions_limit: number | null
+          tenant_id: string | null
+          tenant_name: string | null
+          tier: string | null
+          total_actions_proposed: number | null
+          total_approved: number | null
+          total_auto_executed: number | null
+          total_blocked_by_quota: number | null
+          total_calls: number | null
+          total_rejected: number | null
+          total_suggestions: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orkym_usage_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       ad_record_event: {
@@ -5597,6 +5704,46 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      orkym_check_domain_allowed: {
+        Args: { _domain: string; _tenant: string }
+        Returns: boolean
+      }
+      orkym_check_quota: {
+        Args: { _kind: string; _tenant: string }
+        Returns: {
+          allowed: boolean
+          current_value: number
+          limit_value: number
+          reason: string
+          tier: string
+        }[]
+      }
+      orkym_get_tenant_tier: {
+        Args: { _tenant: string }
+        Returns: {
+          allowed_domains: string[]
+          auto_limit: number
+          calls_limit: number
+          plan_id: string
+          source: string
+          suggestions_limit: number
+          tier: string
+        }[]
+      }
+      orkym_increment_usage: {
+        Args: {
+          _approved?: number
+          _auto?: number
+          _blocked?: number
+          _calls?: number
+          _proposed?: number
+          _rejected?: number
+          _suggestions?: number
+          _tenant: string
+          _time_saved?: number
+        }
+        Returns: undefined
       }
       orkym_ingest_actions: { Args: { _payload: Json }; Returns: number }
       orkym_ingest_tasks: { Args: { _payload: Json }; Returns: number }

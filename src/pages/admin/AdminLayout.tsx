@@ -14,7 +14,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag, Handshake, BarChart3, Gift, Layers, Building2, Percent, ScrollText, Bot, Sparkles, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag, Handshake, BarChart3, Gift, Layers, Building2, Percent, ScrollText, Bot, Sparkles, ShieldCheck, Gauge } from "lucide-react";
 
 const navItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
@@ -29,6 +29,7 @@ const navItems = [
   { title: "Monitor ORKYM", url: "/admin/orkym", icon: Bot },
   { title: "Ações ORKYM", url: "/admin/orkym-actions", icon: Sparkles },
   { title: "Autonomia", url: "/admin/autonomy", icon: ShieldCheck },
+  { title: "Control Tower", url: "/admin/control-tower", icon: Gauge },
 ];
 
 const marketplaceNavItems = [
