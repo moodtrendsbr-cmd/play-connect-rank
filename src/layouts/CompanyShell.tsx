@@ -1,11 +1,26 @@
+import { useEffect, useState } from "react";
 import { Outlet, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { CompanySidebar } from "./sidebars/CompanySidebar";
 import { Loader2 } from "lucide-react";
 
 const CompanyShell = () => {
   const { user, loading } = useAuth();
+  const [companyName, setCompanyName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("companies")
+        .select("name")
+        .eq("owner_user_id", user.id)
+        .maybeSingle();
+      if (data?.name) setCompanyName(data.name);
+    })();
+  }, [user]);
 
   if (loading) {
     return (
@@ -23,7 +38,10 @@ const CompanyShell = () => {
         <div className="flex-1 flex flex-col">
           <header className="h-12 flex items-center border-b border-border px-2">
             <SidebarTrigger />
-            <span className="ml-3 text-sm font-medium text-muted-foreground">Empresa</span>
+            <span className="ml-3 text-sm font-medium text-muted-foreground">
+              Empresa · Mood Play
+              {companyName && <span className="text-foreground"> — {companyName}</span>}
+            </span>
           </header>
           <main className="flex-1 p-6">
             <Outlet />
