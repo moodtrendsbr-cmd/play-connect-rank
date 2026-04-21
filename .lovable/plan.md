@@ -1,318 +1,273 @@
 
 
-# Fase 10 — AI Control Tower: Monetização da Autonomia
+# Auditoria Completa — Perfis e Dashboards do MoodPlay
 
-Transformar autonomia ORKYM em produto vendável. Tier de autonomia por plano + limites de uso + gating em runtime + dashboard de valor. **Zero IA local.** Reuso total da Fase 9 (resolver, guardrails, kill switch). Limites violados rebaixam modo (`auto→approve→suggest`), nunca quebram fluxo.
-
----
-
-## 0. Auditoria — reuso
-
-| Existe | Decisão |
-|---|---|
-| `company_plans` (free/pro/elite, `monthly_price`, flags) | Estender com `autonomy_tier` + 4 colunas de limite |
-| `subscriptions` (company↔plan) | Resolver tenant→plan via owner company subscription |
-| `tenant_settings.metadata` jsonb | Override opcional de tier (admin pode forçar Enterprise para tenant especial) |
-| `autonomy_resolve_policy` (Fase 9) | Estender: aplica gating de tier antes de retornar mode |
-| `autonomy_check_guardrails` | Adicionar checagem de quota mensal — rebaixa para `approve` |
-| `orkym_ingest_actions` | Já chama resolver+guardrails — ganha gating sem mudar contrato |
-| `v_autonomy_metrics` / `v_orkym_metrics` | Reusados; nova view `v_orkym_usage` agrega por mês |
-| `OrkymInsightsCard` / `OrkymActionsCard` | Reusados na Control Tower |
-
-**Não criar**: novo motor de billing, novo sistema de planos, lógica inteligente local. Pay-per-use fica fora — só prepara base.
+> **Read-only**. Não há alterações propostas. Apenas mapeamento exaustivo do estado atual.
 
 ---
 
-## 1. Migration `_phase10_autonomy_monetization.sql`
+## 1. Inventário de perfis (enum `app_role` + papéis derivados)
 
-### 1.1 ALTER `company_plans`
-```
-ADD autonomy_tier text CHECK IN ('free','growth','pro','business','enterprise') DEFAULT 'free',
-ADD orkym_calls_limit int DEFAULT 0,            -- chamadas ORKYM/mês (0 = none)
-ADD orkym_suggestions_limit int DEFAULT 0,      -- sugestões/mês
-ADD orkym_auto_actions_limit int DEFAULT 0,     -- auto-execuções/mês
-ADD orkym_allowed_domains text[] DEFAULT ARRAY[]::text[]  -- ex: ['arena_operations']
-```
-Backfill dos 3 planos existentes:
-- `free` → tier=`free`, calls=20, suggestions=10, auto=0, domains=`['arena_operations']`
-- `pro` → tier=`pro`, calls=500, suggestions=200, auto=50, domains=`['arena_operations','growth']`
-- `elite` → tier=`business`, calls=5000, suggestions=2000, auto=1000, domains=`['arena_operations','growth','finance','tournaments']`
+| Papel | Origem | Resolução |
+|---|---|---|
+| **Athlete** | enum `app_role.athlete` | default no signup |
+| **Organizer** | enum `app_role.organizer` | escolhido no /register |
+| **Arena** | enum `app_role.arena` | escolhido no /register, gera linha em `arenas` |
+| **Company** | enum `app_role.company` | escolhido no /register, gera linha em `companies` |
+| **Admin (Super)** | enum `app_role.admin` | atribuído manualmente em `user_roles` |
+| **Tenant Admin / Owner** | `tenant_memberships.role IN ('owner','admin')` | criado por `create_organizer_tenant` no `OrganizerOnboarding` |
+| **Sponsor** | NÃO é um role separado — é uma `company` com `status='approved'` que entra em `/sponsor/*` | derivação implícita |
 
-(Tier `growth` e `enterprise` ficam disponíveis para admin criar planos novos.)
-
-### 1.2 Tabela `orkym_usage` (tracking mensal)
-```
-id uuid PK,
-tenant_id uuid NOT NULL REFERENCES tenants,
-period_month date NOT NULL,                     -- sempre dia 1 do mês
-total_calls int DEFAULT 0,
-total_suggestions int DEFAULT 0,
-total_actions_proposed int DEFAULT 0,
-total_auto_executed int DEFAULT 0,
-total_approved int DEFAULT 0,
-total_rejected int DEFAULT 0,
-total_blocked_by_quota int DEFAULT 0,           -- novo: quantas vezes rebaixou por limite
-estimated_time_saved_minutes int DEFAULT 0,    -- 5min por auto, 2min por suggestion (heurística simples)
-created_at timestamptz DEFAULT now(),
-updated_at timestamptz DEFAULT now(),
-UNIQUE (tenant_id, period_month)
-```
-INDEX `(period_month DESC, tenant_id)`.
-RLS: SELECT admin global + tenant_admin + arena_owner (vê do tenant pai). INSERT/UPDATE só via SECURITY DEFINER.
-
-### 1.3 RPCs
-
-**`orkym_get_tenant_tier(_tenant uuid)` STABLE SECURITY DEFINER** RETURNS TABLE(tier, plan_id, calls_limit, suggestions_limit, auto_limit, allowed_domains, source).
-Resolução:
-1. `tenant_settings.metadata->>'autonomy_tier_override'` (admin force) → source=`override`
-2. Subscription ativa do owner do tenant → join `subscriptions`+`companies`+`company_plans` → source=`subscription`
-3. Fallback: tier=`free`, limites do plano `free` → source=`fallback`
-
-**`orkym_increment_usage(_tenant uuid, _calls int, _suggestions int, _proposed int, _auto int, _approved int, _rejected int, _blocked int, _time_saved int)` SECURITY DEFINER**.
-UPSERT em `orkym_usage` (tenant + período mês atual). Append-only por delta. Chamado pelo edge `orkym-invoke` e pelo `orkym_ingest_actions`.
-
-**`orkym_check_quota(_tenant uuid, _kind text)` STABLE SECURITY DEFINER** RETURNS TABLE(allowed boolean, current int, limit_value int, tier text, reason text).
-`_kind` ∈ `'calls'|'suggestions'|'auto_actions'`. Lê tier+usage do mês corrente. Retorna `allowed=false` se atingiu limite. Sempre retorna mesmo se NULL (defensivo).
-
-**`orkym_check_domain_allowed(_tenant uuid, _domain text)` STABLE** RETURNS boolean.
-Verifica se domain está em `allowed_domains` do tier. Domain `arena_operations` sempre permitido (default).
-
-### 1.4 Estender `autonomy_resolve_policy` — gating de tier
-Após resolver mode atual (Fase 9), antes de retornar:
-```
-1. Carrega tier do tenant via orkym_get_tenant_tier
-2. Se domain NÃO em allowed_domains → force mode='suggest', source='tier_domain_block'
-3. Se mode='auto' E tier NÃO permite auto-actions (free/growth) → mode='approve', source='tier_no_auto'
-4. Se mode='auto' E orkym_check_quota('auto_actions').allowed=false → mode='approve', source='quota_auto'
-5. Se mode='approve' E orkym_check_quota('suggestions').allowed=false → mode='suggest', source='quota_suggestions'
-6. Retorna
-```
-Tier→auto map (hardcoded):
-- `free`/`growth`: auto = NUNCA
-- `pro`: auto = só `low` risk
-- `business`: auto = `low` + `medium`
-- `enterprise`: auto = `low` + `medium` + `high` (ainda passa por guardrails)
-
-### 1.5 View `v_orkym_usage_summary`
-Agrega por tenant: tier atual, uso do mês corrente, limite, % consumido, projeção fim do mês (linear baseado em dias passados), última atividade. SELECT admin + tenant_admin + arena_owner.
-
-### 1.6 Cron (novo job)
-- Job mensal dia 1 às 00:05: nada (UPSERT cria registro on-demand). Job opcional: snapshot de fechamento do mês anterior (apenas marca read-only via `metadata.closed=true`).
+**Observação crítica**: "Tenant Admin" e "Organizer" se sobrepõem. Quem cria um tenant via `/organizer/onboarding` automaticamente vira `tenant_memberships.role='owner'`, mas nada exige que o usuário tenha `app_role='organizer'` no `user_roles`. São dois sistemas paralelos de autorização.
 
 ---
 
-## 2. Edge `orkym-invoke` — extensões mínimas
+## 2. ATHLETE 🟡 Parcial
 
-Antes do flow ORKYM real:
-```
-1. orkym_check_quota(tenant, 'calls')
-2. Se allowed=false: retorna 200 com { degraded:true, reason:'quota_exceeded', tier, limit, current }
-   — NÃO chama ORKYM, NÃO falha. Loga em orkym_api_calls com status='quota_blocked'
-3. Senão: prossegue normalmente
-```
-Após sucesso: `orkym_increment_usage(calls=1, suggestions=N, proposed=M, ...)` baseado na resposta.
-`orkym_ingest_actions` já chama o resolver estendido (passo 1.4) — gating automático.
+**Rotas**: `/feed`, `/profile`, `/profile/:userId`, `/ranking`, `/tournaments`, `/tournaments/:id`, `/tournaments/:id/match*`, `/messages`, `/marketplace*`, `/explore`, `/athletes`, `/arenas`, `/arenas/:slug`, `/arenas/:slug/reservar`, `/payment/:id`.
 
-**Time saved** (heurística): `auto_executed * 5 + suggestions * 2` minutos. Calculado no increment.
+**Telas**: `Feed.tsx` (clips, posts, sponsored, ads), `Profile.tsx` (auto), `UserProfile.tsx` (terceiro), `Ranking.tsx`, `Tournaments.tsx`, `TournamentDetail.tsx`, `Messages.tsx`+`ChatView.tsx`, módulo MATCH (`TournamentMatch`, `MatchRequests`, `MatchPair`, `MatchChat`), `ArenaPublic.tsx`, `ArenaBooking.tsx`, `Marketplace*`, `Cart.tsx`. Layout: `AppLayout` + `FeedBottomNav` (Feed / Torneios↔Ranking / Criar / Arenas / Loja).
 
-## 3. Edge `orkym-execute-action` — gating final
+**Dados**: `posts`, `post_media`, `clips`, `likes`, `comments`, `post_saves`, `follows`, `messages`, `enrollments`, `tournaments`, `match_*`, `bookings`, `marketplace_orders`, `cart`, `profiles`, `profiles_public`, `athletes_public`, `athlete_activities`, `arenas_public`. Edge: `create-payment`, `create-booking-payment`, `create-marketplace-payment`.
 
-Antes de `mark_executing`:
-```
-1. Re-verifica execution_mode da proposal (Fase 9 já faz)
-2. Se mode='auto' E auto_executed=false: orkym_check_quota('auto_actions')
-3. Se quota estourou: marca proposal status='canceled' + failure_reason='quota_exhausted_runtime'. Retorna 200.
-```
-Defesa em profundidade — quota pode mudar entre ingest e execute.
+**Ações**: postar/clipar, curtir/comentar/salvar/seguir/mencionar, criar DM, inscrever em torneio, sacar saldo (se também organizer), pagar, reservar arena, comprar marketplace, entrar/sair de pool MATCH, editar perfil.
+
+**ORKYM**: ❌ Nenhuma integração. Não recebe sugestões, não vê tasks, não tem feed personalizado pela ORKYM.
+
+**Conversacional (WhatsApp)**: ❌ Nada. Tudo via app. Notificações de inscrição/pagamento/MATCH/mensagens deveriam ser conversacionais — não são.
+
+**Problemas**:
+- `Profile.tsx` mistura UI de atleta + UI de organizador (saldo, MP collector, withdrawals) — perfil único faz dupla função.
+- `/dashboard` ainda existe e é renderizada para atleta como "MEUS TORNEIOS" — concorre com `/profile` e com `/feed`.
+- Notificações (Bell em `FeedTopBar`) não funcional.
+
+**Gaps**: sem central de notificações, sem agenda pessoal (próximas inscrições/jogos), sem histórico consolidado de conquistas (existe `athlete_activities` mas só aparece em telas de terceiros), sem conversacional.
 
 ---
 
-## 4. Frontend `src/lib/autonomyTier.ts` (novo)
+## 3. ORGANIZER 🔴 Desorganizado
 
-```typescript
-export type AutonomyTier = "free"|"growth"|"pro"|"business"|"enterprise";
+**Rotas**: `/dashboard` (tela legacy), `/tournaments/create`, `/tournaments/:id/manage`, `/tournaments/:id/brackets`, `/tournaments/:id/results`, `/organizer/onboarding`, `/organizer/settings`, `/organizer/members`, `/organizer/arenas`, `/organizer/domains`, `/organizer/payment`, `/organizer/finance`. **Note**: bloco `/organizer` está duplicado em `App.tsx` (linhas 182-200).
 
-export interface TenantTier {
-  tier: AutonomyTier;
-  plan_id: string | null;
-  calls_limit: number;
-  suggestions_limit: number;
-  auto_limit: number;
-  allowed_domains: string[];
-  source: "override"|"subscription"|"fallback";
-}
+**Telas**: `Dashboard.tsx` (legacy organizer view), `CreateTournament.tsx`, `ManageTournament.tsx`, `Brackets.tsx`, `Results.tsx`, layout `OrganizerLayout` com 6 itens (Settings, Members, Arenas, Domains, Payment, Finance).
 
-export interface UsageSummary {
-  tenant_id: string;
-  tier: AutonomyTier;
-  period_month: string;
-  total_calls: number;
-  total_suggestions: number;
-  total_auto_executed: number;
-  total_approved: number;
-  total_rejected: number;
-  total_blocked_by_quota: number;
-  estimated_time_saved_minutes: number;
-  calls_limit: number;
-  suggestions_limit: number;
-  auto_limit: number;
-  pct_calls: number;        // 0-100, capped
-  pct_suggestions: number;
-  pct_auto: number;
-  projected_calls_eom: number;  // linear projection
-}
+**Dados**: `tournaments`, `tournament_modalities`, `enrollments`, `match_results`, `modality_*`, `tenants`, `tenant_settings`, `tenant_memberships`, `tenant_domains`, `split_rules`, `transaction_splits`, `financial_transactions`, `v_organizer_balances_canonical`, `withdrawal_requests`. RPCs: `create_organizer_tenant`. Edge: `request-withdrawal`.
 
-export async function fetchTenantTier(tenantId: string): Promise<TenantTier|null>
-export async function fetchUsageSummary(tenantId: string): Promise<UsageSummary|null>
-export async function fetchUsageHistory(tenantId: string, months: number): Promise<UsageSummary[]>
+**Ações**: criar/editar torneios, gerar chaveamento, lançar resultados, configurar branding tenant, convidar membros, vincular arenas ao tenant, configurar domínio próprio, vincular MP, ver financeiro, sacar saldo.
 
-export const TIER_LABELS: Record<AutonomyTier, string> = { ... }
-export const TIER_FEATURES: Record<AutonomyTier, { autoRiskLevels: string[]; description: string }> = { ... }
-```
+**ORKYM**: ❌ Nenhuma. Briefing/sugestões só na ArenaDashboard, não para organizer.
 
-Estende `src/lib/autonomy.ts` `policySourceLabel` com: `tier_domain_block`, `tier_no_auto`, `quota_auto`, `quota_suggestions`.
+**Conversacional**: ❌ Nada.
+
+**Problemas**:
+- **Dois "homes" do organizer**: `/dashboard` (legacy, mostra torneios+inscrições+saldo) e `/organizer/settings` (white-label). Sem hub único.
+- Saldo/saque do organizer aparece **dentro de `Profile.tsx`**, não no `OrganizerLayout`. O `OrganizerFinance.tsx` mostra splits canônicos, mas sem botão de saque.
+- Bloco de rotas `/organizer` está **duplicado** em `App.tsx` (192-200 repete 183-191) — funciona por sobreposição, mas é code smell evidente.
+- Criação de torneio (`/tournaments/create`) está **fora** do `OrganizerLayout`.
+- Gerenciar torneio (`/tournaments/:id/manage`) também fora do layout.
+- Arenas vinculadas ao tenant (`OrganizerArenas`) não dão entrada no `ArenaLayout` — separação confusa.
+- `ProfileSwitcher` envia organizer para `/dashboard` (legacy), não para `/organizer/settings`.
+
+**Gaps**: hub `/organizer/dashboard` (KPIs do tenant: torneios ativos, inscritos, receita, alertas); Caixa de entrada de pendências do organizer; integração ORKYM (briefing diário do tenant: torneios sub-inscritos, atrasos, oportunidades); central de saque dentro do `OrganizerLayout`; visão de torneios concentrada (hoje espalhada entre `/dashboard`, `/tournaments`, `ArenaTournaments`).
 
 ---
 
-## 5. UI — AI Control Tower
+## 4. ARENA 🟢 Estruturado (mais completo do sistema)
 
-### 5.1 Página nova `src/pages/arena-dashboard/ArenaControlTower.tsx`
-Rota: `/arena/dashboard/control-tower`. Layout:
-- **Header**: Tier atual (badge grande) + plano vinculado + botão "Upgrade" se < business
-- **Cards de uso (3)**: Calls/Suggestions/Auto-actions — barra de progresso com `usado / limite` + projeção fim do mês
-- **Card "Valor gerado"**: tempo economizado (formato "X horas Y min este mês"), # auto-executadas, # aprovadas
-- **Tabela "Últimas auto-actions"**: reusa `OrkymActionsCard` filtrado por `auto_executed=true`, max 10
-- **Alerta**: se `pct >= 80` → banner amarelo "Você está perto do limite". Se `>= 100` → banner vermelho "Limite atingido. Ações rebaixadas para aprovação manual"
-- **CTA Upgrade**: card destacado mostrando próximo tier + ganhos (mais auto/mês, mais domains)
+**Rotas**: `/arena/checkin` (público QR), `/arena/dashboard` + 18 sub-rotas (`torneios`, `financeiro`, `transacoes`, `alunos`, `professores`, `aulas`, `matriculas`, `quadras`, `horarios`, `reservas`, `patrocinios`, `planos`, `assinaturas`, `cobrancas`, `ocorrencias`, `acoes-ia`, `autonomia`, `control-tower`).
 
-Adicionar à `ArenaLayout.tsx` sidebar: "Control Tower" (icon `Gauge`).
+**Telas**: 21 páginas em `arena-dashboard/` + `ArenaPublic`, `ArenaBooking`, `ArenasList`, `ArenaCheckin`. Layout próprio (top bar com nav horizontal scrollable de 18+ itens).
 
-### 5.2 Página nova `src/pages/admin/AdminControlTower.tsx`
-Rota: `/admin/control-tower`. Visão global:
-- **Métricas top**: total auto-executadas (todos tenants, 30d) / receita potencial estimada (sum tier monthly_price × tenants ativos) / tempo economizado total
-- **Tabela "Top tenants por adoção"**: tenant, tier, uso/limite, auto-executadas, % adoção
-- **Tabela "Próximos do limite"**: tenants com `pct >= 80` em qualquer dimensão → oportunidade de upsell
-- **Gráfico**: distribuição de tenants por tier (pizza simples)
+**Dados**: `arenas`, `courts`, `bookings`, `arena_students`, `arena_instructors`, `arena_classes`, `arena_class_enrollments`, `arena_attendance`, `arena_membership_plans`, `arena_student_subscriptions`, `arena_billing_cycles`, `arena_occurrences`, `arena_operational_tasks`, `arena_operational_events`, `arena_checkin_tokens`, `payment_accounts`, `financial_transactions`, `transaction_splits`, `orkym_action_proposals`, `autonomy_policies`, `orkym_usage`, `v_orkym_usage_summary`. RPCs: `arena_generate_billing_cycle`, `arena_mark_cycle_paid`, `arena_mark_overdue_cycles`, `arena_checkin_validate`, `arena_archive_old_events`, `autonomy_resolve_policy`, `orkym_check_quota`, `orkym_increment_usage`. Edge: `orkym-invoke`, `orkym-execute-action`, `orkym-cron-tick`, `booking-webhook`.
 
-Adicionar à `AdminLayout.tsx` sidebar: "Control Tower" (icon `Gauge`).
+**Ações**: CRUD completo de quadras/horários/reservas/aulas/alunos/professores/planos/assinaturas; gerar/marcar pago ciclo de cobrança; gerar QR check-in e validar; criar ocorrências; aprovar/rejeitar/executar action proposals da ORKYM; configurar policies de autonomia (escopo arena, somente low-risk auto); ativar kill switch local; visualizar Control Tower (uso vs limite, tempo economizado, upgrade CTA).
 
-### 5.3 Componente `src/components/autonomy/UsageMeter.tsx`
-Props: `label`, `used`, `limit`, `projected?`. Renderiza barra com cores: verde <50%, amarelo 50-80%, vermelho >80%, cinza se limit=0. Tooltip com projeção.
+**ORKYM**: ✅ Profundamente integrada. `ArenaDashboard` chama `daily_briefing` no mount; `ArenaActions` lista propostas; `ArenaAutonomy` gere policies; `ArenaControlTower` mostra consumo; `OrkymInsightsCard` + `OrkymActionsCard` em vários lugares.
 
-### 5.4 Componente `src/components/autonomy/UpgradeCTA.tsx`
-Props: `currentTier`, `reason?`. Card chamativo com next tier + ganhos. Link para `/marketplace/register` ou modal "Fale conosco" (sem cobrança automática nesta fase).
+**Conversacional**: ❌ Nada. Check-in é QR no app; cobranças não disparam WhatsApp; ocorrências não notificam dono via WhatsApp.
 
-### 5.5 Edits Fase 9
-- `OrkymActionsCard.tsx`: quando proposta tem `policy_source='quota_auto'` ou `'tier_no_auto'`, mostra badge sutil "Rebaixada por plano" + tooltip
-- `PolicyDecisionBadge.tsx`: já recebe `source` — adicionar mapping para os novos sources de tier/quota
-- `ArenaActions.tsx` / `AdminOrkymActions.tsx`: adicionar filtro "Origem: Tier/Quota"
+**Problemas**:
+- **Navegação inviável**: 18+ abas em barra horizontal scrollable. Sem agrupamento (Operação / Pessoas / Financeiro / IA).
+- **3 telas de IA** sequenciais ("Ações IA", "Autonomia", "Control Tower") — overlap conceitual: actions vs policies vs uso.
+- "Torneios" da arena (`ArenaTournaments`) usa `tournaments.arena = arena.name` (string match) — frágil e desconectado do sistema multi-tenant real.
+- Sub-rotas em português (`alunos`, `quadras`) enquanto admin está em inglês (`users`, `tournaments`) — inconsistência de naming.
+- `/arena/checkin` está fora do `ArenaLayout` mas referenciado no admin/arena.
 
-### 5.6 Edits AdminPlans
-- `AdminPlans.tsx`: adicionar 4 inputs (autonomy_tier select, calls/suggestions/auto limits) + multi-select de allowed_domains. Salva direto em `company_plans`.
+**Gaps**: agrupamento da nav; visão "minha agenda do dia" (próximas reservas + aulas + ocorrências em uma timeline); WhatsApp para confirmar reserva, lembrar aluno, alertar inadimplência; sem "Caixa de entrada conversacional"; sem relatório semanal automático.
 
 ---
 
-## 6. Matriz de gating (resumo executável)
+## 5. COMPANY (Empresa / Marketplace) 🟡 Parcial
 
-| Tier | Calls/mês | Suggestions/mês | Auto/mês | Domains | Auto risk |
-|---|---|---|---|---|---|
-| free | 20 | 10 | 0 | arena_operations | — |
-| growth | 100 | 50 | 0 | arena_operations | — |
-| pro | 500 | 200 | 50 | arena_operations, growth | low |
-| business | 5000 | 2000 | 1000 | + finance, tournaments | low + medium |
-| enterprise | unlimited (-1) | unlimited | unlimited | all | low + medium + high |
+**Rotas**: `/marketplace/register`, `/marketplace/my-company`, `/marketplace/company/:id`, `/marketplace/product/:id`, `/marketplace/cart`, `/marketplace/checkout`, `/marketplace/tournaments`, **e indiretamente** `/sponsor/*` quando a company é patrocinador.
 
-`-1` em qualquer limit = ilimitado. `orkym_check_quota` retorna sempre `allowed=true` se limit=-1.
+**Telas**: `MarketplaceRegister.tsx`, `MyCompany.tsx` (hub principal — produtos, pedidos, plano), `MarketplaceCompany.tsx` (vitrine pública), `MarketplaceProduct.tsx`, `Marketplace.tsx` (lista). Sem layout dedicado — usam `AppLayout` (compartilhado com atleta).
 
----
+**Dados**: `companies`, `company_plans`, `subscriptions`, `products`, `marketplace_orders`, `tournament_sponsorships`, `tournament_sponsor_plans`, `ad_campaigns` (futuro), `sponsored_posts`. Edge: `create-marketplace-payment`, `marketplace-webhook`.
 
-## 7. Fallback / Compatibilidade
+**Ações**: criar empresa, escolher plano, adicionar/editar produtos (com até 10 imagens + vídeo), ver pedidos, atualizar marca/logo. Como sponsor: patrocinar torneios, ver métricas (views/clicks).
 
-- Sem subscription → tier=`free` → comportamento ultra-conservador, sem auto
-- Tier não reconhecido → fallback `free`
-- `orkym_get_tenant_tier` falha → resolver continua com mode original (defensivo, loga em `autonomy_policy_logs.metadata`)
-- Limite estourou → rebaixa modo, nunca falha. Increment `total_blocked_by_quota`
-- Sem `orkym_usage` row do mês → tratado como zero, UPSERT cria
-- Fase 9 sem nada quebrado: se nenhuma policy + nenhum tier = comportamento idêntico (tudo `approve`)
+**ORKYM**: ❌ Nenhuma. Não recebe sugestões de produto, sem actions sobre estoque, sem briefing.
 
----
+**Conversacional**: ❌ Nada. Pedidos não geram WhatsApp; sponsor não recebe relatórios via mensagem.
 
-## 8. Segurança (não negociável)
+**Problemas**:
+- **`MyCompany.tsx` é monolítica** — produtos + pedidos + plano numa tela só.
+- **Dois mundos paralelos da mesma empresa**: `/marketplace/my-company` (gestão de produtos) e `/sponsor/dashboard` (gestão de patrocínios) — mesma `companies.id`, layouts diferentes, sem ponte entre eles.
+- Pedidos (`marketplace_orders`) consultados sem filtro por empresa em `MyCompany.tsx` (linha 51 — `select("*")` sem `eq`) — bug de visibilidade potencial (depende de RLS).
+- `SponsorLayout` só tem 2 itens (Dashboard, Torneios) — menu raso comparado aos outros perfis.
 
-- Kill switch tem prioridade sobre tier (Fase 9 inalterada)
-- Guardrails (rate limit, blocklist hardcoded) checados ANTES de quota
-- Tier `enterprise` NÃO desativa guardrails — só permite mais risk levels
-- Refund/cancel/change_split continuam bloqueados no ingest (allowlist)
-- RLS: tenant_admin só vê próprio tier+usage; admin global vê tudo
-- `orkym_get_tenant_tier` é SECURITY DEFINER — não vaza dados de subscription cross-tenant
-- Override admin via `tenant_settings.metadata` requer `is_admin(auth.uid())` (já protegido por RLS de tenant_settings)
+**Gaps**: hub único da empresa (vendas + patrocínios + plano + financeiro); ORKYM para sugerir promoções, recuperar carrinho, sugerir torneios para patrocinar baseado em ICP; financeiro (recebíveis marketplace + métricas sponsor) num lugar só; conversacional (pedido novo via WhatsApp ao dono).
 
 ---
 
-## 9. Pay-per-use (preparação, NÃO implementado)
+## 6. SUPER ADMIN (MoodPlay) 🟡 Parcial
 
-- `orkym_usage.metadata` jsonb adicionado para futuro custo por call
-- View `v_orkym_usage_summary` já expõe contadores
-- Sem cobrança real, sem integração Stripe, sem invoice
+**Rotas**: `/admin` + 22 sub-rotas (Dashboard, Analytics, Users, Tournaments, Enrollments, Finances, Split-rules, Adjustments, Arenas, Orkym monitor, Orkym-actions, Autonomy, Control-tower, Companies, Products, Ads, Ad-campaigns, Sponsors, Sponsorships, Plans, Gifts, Monetization).
 
----
+**Telas**: 23 páginas em `admin/`. Layout: `AdminLayout` com 3 grupos sidebar — "Navegação" (13), "Marketplace" (9), "Navegar como Usuário" (5).
 
-## 10. Arquivos tocados
+**Dados**: visão global de praticamente todas as tabelas. Métricas no dashboard via `profiles`, `user_roles`, `tournaments`, `enrollments`, `organizer_balances`, `withdrawal_requests`, `companies`, `products`, `marketplace_orders`, `subscriptions`, `financial_ledger`, `financial_transactions`. Sem visão por tenant.
 
-| Tipo | Arquivo |
-|---|---|
-| Migration | `supabase/migrations/<ts>_phase10_autonomy_monetization.sql` |
-| Edge | `supabase/functions/orkym-invoke/index.ts` (quota gate + increment), `supabase/functions/orkym-execute-action/index.ts` (re-check quota auto) |
-| Frontend lib | `src/lib/autonomyTier.ts` (novo), `src/lib/autonomy.ts` (extender labels) |
-| Frontend novo | `src/pages/arena-dashboard/ArenaControlTower.tsx`, `src/pages/admin/AdminControlTower.tsx`, `src/components/autonomy/UsageMeter.tsx`, `src/components/autonomy/UpgradeCTA.tsx` |
-| Frontend edit | `src/App.tsx`, `src/pages/arena-dashboard/ArenaLayout.tsx`, `src/pages/admin/AdminLayout.tsx`, `src/pages/admin/AdminPlans.tsx`, `src/components/orkym/OrkymActionsCard.tsx`, `src/components/autonomy/PolicyDecisionBadge.tsx`, `src/pages/arena-dashboard/ArenaActions.tsx`, `src/pages/admin/AdminOrkymActions.tsx` |
-| Memory | `mem/features/autonomy-monetization.md` (novo) |
+**Ações**: aprovar empresa, gerenciar split rules globais, registrar ajustes financeiros, ver/aprovar saques, gerir planos (incl. tier de autonomia), gerir todos torneios/inscrições, monitorar ORKYM, gerir policies globais e tenant, ativar kill switch global, ver Control Tower agregado, gerir campanhas de ads, sponsors, gifts.
 
-**Total**: 1 migration + 2 edges estendidas + 1 lib nova + 4 componentes/páginas + 8 edits.
+**ORKYM**: ✅ Total visibilidade (`AdminOrkymMonitor`, `AdminOrkymActions`, `AdminAutonomy`, `AdminControlTower`).
 
----
+**Conversacional**: ❌ Nada.
 
-## ENTREGA B — Relatório esperado
+**Problemas**:
+- **22 itens na sidebar** sem hierarquia clara. "Publicidade (legado)" + "Campanhas Ads" coexistem (2 sistemas de ads no menu).
+- **Sem dimensão tenant**: dashboards admin somam tudo sem distinguir tenant; não há `/admin/tenants` para listar/gerir tenants brancos.
+- "Sponsors" (atleta) e "Sponsorships" (torneio) são dois conceitos com nomes parecidos.
+- "Ações ORKYM" + "Autonomia" + "Control Tower" + "Monitor ORKYM" = 4 telas relacionadas, sem hub.
+- `Profile.tsx` ainda mostra controles de organizer mesmo para admin.
+- `Dashboard.tsx` redireciona admin para `/admin`, mas `ProfileSwitcher` envia admin para `/dashboard` primeiro (linha 267) — pequena inconsistência.
 
-| Item | Resultado |
-|---|---|
-| Gating | resolver Fase 9 ganha 4 checagens extras (domain allowed, tier permite auto, quota auto, quota suggestions). Edge invoke gate de calls antes de chamar ORKYM |
-| Limites por plano | free 20/10/0, pro 500/200/50, business 5000/2000/1000, enterprise ilimitado. Configurável em AdminPlans |
-| Fallback | nunca falha — rebaixa: auto→approve→suggest. Loga em `policy_source` e incrementa `total_blocked_by_quota` |
-| Tracking | `orkym_usage` UPSERT mensal por tenant. View `v_orkym_usage_summary` com % e projeção |
-| UX | `/arena/dashboard/control-tower` (tenant) + `/admin/control-tower` (global). Badges em todas action cards |
-| Compat | Sem subscription = free tier. Sem policies = approve. Fase 9 inalterada. |
-| Segurança | Kill switch + guardrails > tier. Tier nunca desativa segurança. Refund/cancel continuam blocados. |
+**Gaps**: módulo `/admin/tenants` (lista, ativar/desativar, override de tier, ver consumo); visão "saúde da plataforma" (uptime ORKYM, % degraded, adoção); fila de aprovação consolidada (empresas + saques + ajustes + ações high-risk); conversacional para alertas críticos (kill switch ativado, payout grande, etc).
 
 ---
 
-## ENTREGA C — Riscos / Próximos passos
+## 7. TENANT ADMIN (Organizador-Owner) 🔴 Desorganizado
 
-**Limitações desta fase**:
-- Tier resolvido via subscription do owner — tenants sem owner→company subscription caem em `free`
-- Tempo economizado é heurística simples (5min/auto, 2min/sugg) — não medido real
-- Sem cobrança automática quando upgrade — CTA leva a "Fale conosco"
+**Não tem layout próprio distinto**. Reusa `OrganizerLayout`. Identidade derivada de `tenant_memberships.role IN ('owner','admin')` via `useIsTenantAdmin()`.
 
-**Próximos passos (Fase 11+)**:
-- Pay-per-use real: cobrar por call extra acima do limite via Stripe
-- Score de qualidade ORKYM por tenant (ROI medido)
-- Tier `enterprise` com SLA contratual + dashboard admin de SLA
-- Auto-upgrade temporário com cobrança proporcional
-- Webhook quando atinge 80%/100% limite (email/notif)
-- Métricas de impacto financeiro real (ações que geraram receita)
+**Rotas/Telas/Ações**: idênticas ao Organizer — mas com poderes adicionais via RLS de tenant (gerir membros, domínios, branding, regras de split somente leitura).
 
-**Permanece crítico (não muda)**:
-- Refund/cancel/change_split — bloqueados independente de tier
-- Guardrails de rate-limit e cooldown — ativos em todos tiers
-- Kill switch global — soberano
+**ORKYM**: ❌ Nenhuma sugestão de tenant (briefing por organizador completo, alertas de adoção das arenas filhas, etc).
 
-**Critérios de sucesso**:
-- ✅ Tier resolvido por plano (free/pro/business)
-- ✅ Quota mensal em calls + suggestions + auto-actions
-- ✅ Domain gating (finance só em business+)
-- ✅ Auto risk gating (medium só em business+, high só enterprise)
-- ✅ Fallback rebaixa modo, nunca quebra
-- ✅ Control Tower mostra uso/projeção/valor
-- ✅ Admin pode editar limites por plano
-- ✅ Zero IA local, kill switch + guardrails preservados, Fase 9 inalterada
+**Problemas**:
+- Não existe distinção UX entre Organizer (papel app) e Tenant Owner (papel multi-tenant). Confusão conceitual.
+- Tenant Admin não tem visão consolidada das arenas que pertencem ao seu tenant — `OrganizerArenas` lista mas não dá KPIs.
+- Não há "switch de tenant" UI (apesar de `TenantContext.switchTenant` existir).
+
+**Gaps**: dashboard tenant (todas as arenas + todos torneios + financeiro consolidado); seletor de tenant; ORKYM por tenant; permissões granulares (admin vs staff vs member já existem no schema mas não na UI).
+
+---
+
+## 8. SPONSOR (Company com aprovação) 🟡 Parcial
+
+**Rotas**: `/sponsor/dashboard`, `/sponsor/tournaments`, `/sponsor/sponsorships/:id`. Layout: `SponsorLayout` (só 2 itens nav).
+
+**Telas**: `SponsorDashboard.tsx` (cards de patrocínios + métricas views/clicks), `SponsorTournaments.tsx` (torneios disponíveis), `SponsorshipDetail.tsx`.
+
+**Dados**: `tournament_sponsorships`, `tournament_sponsor_plans`, `tournaments`, `companies`, `gifts`.
+
+**Ações**: comprar patrocínio, ver métricas, atualizar marca (link para `/marketplace/my-company` — sai do contexto sponsor).
+
+**ORKYM**: ❌ Nada.
+
+**Conversacional**: ❌ Nada.
+
+**Problemas**:
+- **Mesma entidade `companies` opera em 2 layouts** (`AppLayout` para marketplace + `SponsorLayout` para patrocínios) — usuário precisa "saltar" entre eles.
+- Métricas básicas (views/clicks) sem ROI calculado.
+- Botão "Atualizar marca" leva para fora do `SponsorLayout`.
+
+**Gaps**: hub único da empresa; ORKYM (sugerir torneios alvo); insights de público alcançado; conversacional para relatórios.
+
+---
+
+## 9. ANÁLISE GLOBAL
+
+### O QUE ESTÁ BOM ✅
+- **Arena**: módulo mais completo, com ORKYM ponta-a-ponta (briefing → action proposal → policy → execution → audit → control tower).
+- **Multi-tenant + branding**: arquitetura sólida (`tenants`, `tenant_settings`, `tenant_domains`, `resolve_tenant_by_host`, `set_current_tenant`).
+- **Financeiro canônico**: `financial_transactions` + `transaction_splits` + `split_rules` + adjustments + settlement readiness.
+- **ORKYM bridge**: contrato bem definido, fail-safe (sempre 200, dedup, rate-limit, retry, audit).
+- **Autonomy stack** (Fases 8–10): policies + guardrails + kill switch + tier + quota + UI completa para arena/admin.
+- **Roles via tabela separada** (`user_roles`) + `has_role` SECURITY DEFINER — modelo seguro.
+
+### O QUE ESTÁ DUPLICADO ⚠️
+- Bloco de rotas `/organizer` repetido em `App.tsx` (192-200 = 183-191).
+- "Publicidade (legado)" + "Campanhas Ads" no AdminLayout.
+- "Patrocínios Atleta" + "Patrocínios Torneio" sem hierarquia.
+- 4 telas relacionadas a ORKYM no admin (Monitor, Actions, Autonomy, Control Tower) sem hub.
+- `Dashboard.tsx` (legacy organizer) vs `OrganizerLayout` — duas portas para o mesmo papel.
+- Saldo/saque do organizer aparece em `Profile.tsx` E em `OrganizerFinance.tsx` (parcialmente).
+- `MyCompany` (marketplace) + `SponsorDashboard` (patrocínios) = mesma empresa, dois layouts.
+
+### O QUE ESTÁ CONFUSO 🌀
+- "Organizer" (app role) vs "Tenant Owner" (multi-tenant) — sem UX que diferencie.
+- 18 itens na nav horizontal da arena, 22 na sidebar admin, sem agrupamento.
+- Arena vinculada a tenant via `OrganizerArenas` mas o `ArenaLayout` resolve por `arenas.owner_user_id` — duas formas de associação convivem.
+- `/dashboard` é home para organizer mas redireciona admin e atleta — múltiplas finalidades.
+- `tournaments.arena` é string (não FK) — `ArenaTournaments` filtra por `eq("arena", arena.name)`.
+- Naming PT vs EN inconsistente entre arena (`alunos`, `quadras`) e admin (`users`, `tournaments`).
+- ProfileSwitcher manda admin para `/dashboard` antes de `/admin`.
+
+### O QUE ESTÁ FALTANDO 🚧
+- **Hub central por perfil** para Athlete (sem dashboard pessoal), Organizer (sem `/organizer/dashboard`), Tenant Admin (sem visão consolidada de arenas), Company (sem hub unificado), Sponsor (mais que cards básicos).
+- **Camada conversacional** ZERO: nenhum perfil opera por WhatsApp. Notificações, confirmações, lembretes, relatórios — tudo só no app.
+- **Central de notificações** (Bell em `FeedTopBar` é estático).
+- **ORKYM fora da Arena**: Athlete/Organizer/Tenant/Company/Sponsor não recebem briefing/sugestões/actions.
+- **Módulo `/admin/tenants`** para gerir os tenants brancos.
+- **Agenda unificada** por perfil (próximos compromissos: jogos, aulas, reservas, vencimentos).
+- **Inbox consolidada** de tarefas pendentes por perfil.
+- **Webhook de alerta** quando guardrail bloqueia auto N vezes ou quando kill switch é ativado.
+- **Roles mais granulares** na UI (staff, member já existem em DB).
+
+### O QUE DEVERIA SER CENTRALIZADO 🎯
+- **Identidade Empresa**: `companies` com um único hub que aglutina marketplace + patrocínios + plano + financeiro + ORKYM.
+- **Identidade Atleta**: tudo de athlete (perfil + agenda + conquistas + inscrições + saldos se também organizer) num único `/me` ou expandido em `/profile`.
+- **Hub Organizer/Tenant**: `/organizer` deveria ter `dashboard` (KPIs) como índice, `tournaments`, `arenas`, `finance`, `members`, `settings`, `domains`, `payment` como sub-rotas — eliminando `/dashboard` legacy e `/tournaments/create|manage` órfãos.
+- **Centro ORKYM Admin**: hub único agregando Monitor + Actions + Autonomy + Control Tower em abas.
+- **Financeiro do Organizer**: saldo/saque hoje em `Profile.tsx` deveria estar 100% em `OrganizerFinance`.
+
+### O QUE DEVERIA IR PARA WHATSAPP 💬
+**Athlete**: lembrete de jogo, confirmação de inscrição, recibo de pagamento, alerta de match encontrado, mensagem direta de outro usuário, resultado de partida.
+
+**Organizer**: nova inscrição paga, torneio sub-inscrito, atleta cancelou, saque processado, ORKYM briefing semanal.
+
+**Arena**: confirmação de reserva, lembrete de aluno em aula, inadimplência detectada, ocorrência aberta, action ORKYM proposta para aprovar via reply, check-in (em vez de QR), relatório diário.
+
+**Company/Sponsor**: novo pedido marketplace, estoque baixo, métricas semanais de patrocínio, sugestão ORKYM de novo torneio para patrocinar.
+
+**Admin**: alerta crítico (kill switch ativado, ORKYM degraded > X min, payout > limite, fraude suspeita).
+
+---
+
+## 10. CLASSIFICAÇÃO FINAL
+
+| Perfil | Status | Justificativa curta |
+|---|---|---|
+| **Athlete** | 🟡 Parcial | Social + tournaments funcionais, mas sem hub pessoal, sem ORKYM, sem conversacional, perfil polui-se com infos de organizer |
+| **Organizer** | 🔴 Desorganizado | Dashboard legacy + OrganizerLayout sobrepostos, rotas duplicadas em App.tsx, financeiro dividido, sem hub, sem ORKYM |
+| **Arena** | 🟢 Estruturado | ORKYM ponta-a-ponta, 18 sub-rotas funcionais — só sofre de excesso de nav sem agrupamento e 3 telas IA sem hub |
+| **Company** | 🟡 Parcial | Marketplace e Sponsor são dois mundos para a mesma entidade; hub monolítico; sem ORKYM; pedidos sem filtro evidente |
+| **Sponsor** | 🟡 Parcial | Layout enxuto, métricas básicas, métrica de ROI ausente, sai do contexto para editar marca |
+| **Super Admin** | 🟡 Parcial | Cobertura ampla mas sem hierarquia; falta `/admin/tenants`; 4 telas ORKYM sem hub; "publicidade legado" coexiste com nova |
+| **Tenant Admin** | 🔴 Desorganizado | Sem identidade UX própria; reusa OrganizerLayout; sem dashboard consolidado; sem switch tenant na UI; ORKYM ausente |
+
+---
+
+## 11. Próximos passos sugeridos (apenas direção, sem implementação)
+
+1. **Resolver duplicação imediata em `App.tsx`** (rotas `/organizer` repetidas).
+2. **Definir IA = um único hub por perfil** (Arena, Admin) com tabs internas.
+3. **Decidir conceitualmente**: Organizer = Tenant Owner? Se sim, fundir telas. Se não, separar UX.
+4. **Definir Company como entidade única** com layout próprio aglutinando marketplace + sponsor.
+5. **Criar `/admin/tenants`** antes de continuar evolução multi-tenant.
+6. **Estabelecer camada conversacional** (WhatsApp) como princípio transversal — começar por Arena (perfil mais maduro) e Athlete (volume).
+7. **Padronizar naming** (PT em todo lado ou EN em todo lado).
+8. **Consolidar financeiro do organizer** numa única tela (remover saldo/saque de `Profile.tsx`).
 
