@@ -51,7 +51,8 @@ const AdminOrkymActions = () => {
     if (statusFilter !== "all") filters.status = statusFilter as OrkymActionStatus;
     if (domainFilter !== "all") filters.domain = domainFilter;
     const data = await listActionProposals(filters);
-    setItems(data);
+    const filtered = modeFilter === "all" ? data : data.filter((p) => (p.execution_mode ?? "approve") === modeFilter);
+    setItems(filtered);
 
     // métricas (últimos 30 dias)
     const { data: m } = await (supabase as any)
