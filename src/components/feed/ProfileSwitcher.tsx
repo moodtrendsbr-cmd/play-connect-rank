@@ -284,6 +284,17 @@ const ProfileSwitcher = () => {
                   <span className="text-sm" style={{ color: "#2BFF88" }}>Painel Atleta</span>
                 </button>
               )}
+              {(userRole === "company" || userRole === "empresa") && (
+                <button
+                  onClick={() => { setOpen(false); navigate("/company/dashboard"); }}
+                  className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-white/5 transition-colors"
+                >
+                  <div className="h-8 w-8 rounded-full flex items-center justify-center" style={{ background: "rgba(43,255,136,0.1)" }}>
+                    <LayoutDashboard className="h-4 w-4" style={{ color: "#2BFF88" }} />
+                  </div>
+                  <span className="text-sm" style={{ color: "#2BFF88" }}>Painel Empresa</span>
+                </button>
+              )}
               {userRole === "arena" && (
                 <button
                   onClick={() => { setOpen(false); navigate("/arena/dashboard"); }}

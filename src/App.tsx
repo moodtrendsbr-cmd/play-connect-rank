@@ -109,6 +109,8 @@ import ArenaShell from "./layouts/ArenaShell";
 import OrganizerShell from "./layouts/OrganizerShell";
 import AthleteShell from "./layouts/AthleteShell";
 import CompanyShell from "./layouts/CompanyShell";
+import CompanyDashboard from "./pages/company/CompanyDashboard";
+import CompanySponsorBridge from "./pages/company/CompanySponsorBridge";
 import { Navigate } from "react-router-dom";
 
 const queryClient = new QueryClient();
@@ -222,14 +224,25 @@ const App = () => (
               <Route path="descobrir" element={<Explore />} />
               <Route path="mensagens" element={<Messages />} />
             </Route>
+            {/* Phase 11.6 — Company Commercial Profile */}
             <Route path="/company" element={<CompanyShell />}>
-              <Route index element={<Navigate to="/company/marketplace" replace />} />
+              <Route index element={<Navigate to="/company/dashboard" replace />} />
+              <Route path="dashboard" element={<CompanyDashboard />} />
               <Route path="marketplace" element={<MyCompany />} />
               <Route path="produtos" element={<MyCompany />} />
               <Route path="pedidos" element={<MyCompany />} />
-              <Route path="campanhas" element={<SponsorDashboard />} />
-              <Route path="torneios-patrocinados" element={<SponsorTournaments />} />
-              <Route path="performance" element={<SponsorDashboard />} />
+              <Route path="campanhas" element={<CompanyDashboard />} />
+              <Route path="performance" element={<CompanyDashboard />} />
+              <Route path="visibilidade" element={<CompanyDashboard />} />
+              {/* Sponsor bridge: provides `company` via Outlet context */}
+              <Route path="sponsor" element={<CompanySponsorBridge />}>
+                <Route path="torneios" element={<SponsorTournaments />} />
+                <Route path="resumo" element={<SponsorDashboard />} />
+              </Route>
+              {/* Legacy alias — also passes through bridge */}
+              <Route path="torneios-patrocinados" element={<CompanySponsorBridge />}>
+                <Route index element={<SponsorTournaments />} />
+              </Route>
             </Route>
             <Route path="/tenant" element={<TenantShell />}>
               <Route index element={<Navigate to="/tenant/dashboard" replace />} />
