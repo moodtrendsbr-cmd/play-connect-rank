@@ -100,6 +100,12 @@ import OrganizerMembers from "./pages/organizer/OrganizerMembers";
 import OrganizerArenas from "./pages/organizer/OrganizerArenas";
 import OrganizerDomains from "./pages/organizer/OrganizerDomains";
 import OrganizerPayment from "./pages/organizer/OrganizerPayment";
+import AdminShell from "./layouts/AdminShell";
+import TenantShell from "./layouts/TenantShell";
+import ArenaShell from "./layouts/ArenaShell";
+import OrganizerShell from "./layouts/OrganizerShell";
+import AthleteShell from "./layouts/AthleteShell";
+import CompanyShell from "./layouts/CompanyShell";
 import { Navigate } from "react-router-dom";
 
 const queryClient = new QueryClient();
