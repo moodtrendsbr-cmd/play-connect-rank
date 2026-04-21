@@ -284,6 +284,22 @@ Deno.serve(async (req) => {
       else tasksCreated = ingested ?? 0;
     }
 
+    // 8b. Ingest action proposals (Phase 8)
+    let actionsProposed = 0;
+    if (Array.isArray(parsed.actions) && parsed.actions.length > 0) {
+      const { data: ingestedActions, error: actErr } = await adminClient.rpc("orkym_ingest_actions", {
+        _payload: {
+          tenant_id: payload.tenant_id,
+          arena_id: payload.arena_id ?? null,
+          correlation_id: correlationId,
+          request_id: requestId,
+          actions: parsed.actions,
+        },
+      });
+      if (actErr) console.error("orkym_ingest_actions error", actErr);
+      else actionsProposed = ingestedActions ?? 0;
+    }
+
     // 9. Dedup insert (5min TTL)
     await adminClient.from("orkym_dedup").insert({
       dedup_key: dKey,
@@ -296,6 +312,7 @@ Deno.serve(async (req) => {
       tasks_count: parsed.tasks?.length ?? 0,
       suggestions_count: parsed.suggestions?.length ?? 0,
       alerts_count: parsed.alerts?.length ?? 0,
+      actions_count: parsed.actions?.length ?? 0,
       meta: parsed.meta,
     });
     await finishLog();
@@ -303,6 +320,7 @@ Deno.serve(async (req) => {
     return safeJson({
       ok: true,
       tasks_created: tasksCreated,
+      actions_proposed: actionsProposed,
       suggestions: parsed.suggestions ?? [],
       alerts: parsed.alerts ?? [],
       meta: parsed.meta ?? {},

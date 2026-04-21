@@ -3038,6 +3038,143 @@ export type Database = {
           },
         ]
       }
+      orkym_action_executions: {
+        Row: {
+          attempt_number: number
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          executed_by: string | null
+          id: string
+          proposal_id: string
+          result: Json | null
+          status: string
+        }
+        Insert: {
+          attempt_number?: number
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          executed_by?: string | null
+          id?: string
+          proposal_id: string
+          result?: Json | null
+          status: string
+        }
+        Update: {
+          attempt_number?: number
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          executed_by?: string | null
+          id?: string
+          proposal_id?: string
+          result?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orkym_action_executions_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "orkym_action_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orkym_action_proposals: {
+        Row: {
+          action_type: string
+          approved_at: string | null
+          approved_by: string | null
+          arena_id: string | null
+          correlation_id: string | null
+          created_at: string
+          description: string | null
+          domain: string
+          executed_at: string | null
+          execution_result: Json | null
+          expires_at: string
+          failed_at: string | null
+          failure_reason: string | null
+          human_summary: Json
+          id: string
+          orkym_request_id: string | null
+          priority: string
+          proposed_payload: Json
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          related_entity_id: string | null
+          related_entity_type: string | null
+          source: string
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          action_type: string
+          approved_at?: string | null
+          approved_by?: string | null
+          arena_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          description?: string | null
+          domain: string
+          executed_at?: string | null
+          execution_result?: Json | null
+          expires_at?: string
+          failed_at?: string | null
+          failure_reason?: string | null
+          human_summary?: Json
+          id?: string
+          orkym_request_id?: string | null
+          priority?: string
+          proposed_payload?: Json
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          source?: string
+          status?: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          arena_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          description?: string | null
+          domain?: string
+          executed_at?: string | null
+          execution_result?: Json | null
+          expires_at?: string
+          failed_at?: string | null
+          failure_reason?: string | null
+          human_summary?: Json
+          id?: string
+          orkym_request_id?: string | null
+          priority?: string
+          proposed_payload?: Json
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          source?: string
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       orkym_api_calls: {
         Row: {
           action: string
@@ -4896,6 +5033,24 @@ export type Database = {
         }
         Relationships: []
       }
+      v_orkym_action_metrics: {
+        Row: {
+          action_type: string | null
+          approved_count: number | null
+          avg_execution_ms: number | null
+          avg_time_to_approval_ms: number | null
+          day: string | null
+          domain: string | null
+          executed_count: number | null
+          expired_count: number | null
+          failed_count: number | null
+          proposed_count: number | null
+          rejected_count: number | null
+          tenant_id: string | null
+          total_count: number | null
+        }
+        Relationships: []
+      }
       v_orkym_metrics: {
         Row: {
           action: string | null
@@ -5046,6 +5201,108 @@ export type Database = {
         Args: { _tournament_id: string; _user_id: string }
         Returns: boolean
       }
+      orkym_action_approve: {
+        Args: { _proposal_id: string }
+        Returns: {
+          action_type: string
+          approved_at: string | null
+          approved_by: string | null
+          arena_id: string | null
+          correlation_id: string | null
+          created_at: string
+          description: string | null
+          domain: string
+          executed_at: string | null
+          execution_result: Json | null
+          expires_at: string
+          failed_at: string | null
+          failure_reason: string | null
+          human_summary: Json
+          id: string
+          orkym_request_id: string | null
+          priority: string
+          proposed_payload: Json
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          related_entity_id: string | null
+          related_entity_type: string | null
+          source: string
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orkym_action_proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      orkym_action_expire_stale: { Args: never; Returns: number }
+      orkym_action_mark_executed: {
+        Args: {
+          _duration_ms?: number
+          _executed_by: string
+          _proposal_id: string
+          _result: Json
+        }
+        Returns: undefined
+      }
+      orkym_action_mark_executing: {
+        Args: { _proposal_id: string }
+        Returns: boolean
+      }
+      orkym_action_mark_failed: {
+        Args: {
+          _duration_ms?: number
+          _executed_by: string
+          _proposal_id: string
+          _reason: string
+        }
+        Returns: undefined
+      }
+      orkym_action_reject: {
+        Args: { _proposal_id: string; _reason: string }
+        Returns: {
+          action_type: string
+          approved_at: string | null
+          approved_by: string | null
+          arena_id: string | null
+          correlation_id: string | null
+          created_at: string
+          description: string | null
+          domain: string
+          executed_at: string | null
+          execution_result: Json | null
+          expires_at: string
+          failed_at: string | null
+          failure_reason: string | null
+          human_summary: Json
+          id: string
+          orkym_request_id: string | null
+          priority: string
+          proposed_payload: Json
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          related_entity_id: string | null
+          related_entity_type: string | null
+          source: string
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orkym_action_proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      orkym_ingest_actions: { Args: { _payload: Json }; Returns: number }
       orkym_ingest_tasks: { Args: { _payload: Json }; Returns: number }
       orkym_purge_dedup: { Args: never; Returns: number }
       resolve_tenant_by_host: { Args: { _host: string }; Returns: string }
