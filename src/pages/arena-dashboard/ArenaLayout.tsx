@@ -22,6 +22,7 @@ const navItems = [
   { to: "/arena/dashboard/horarios", label: "Horários", icon: Clock },
   { to: "/arena/dashboard/reservas", label: "Reservas", icon: CalendarCheck },
   { to: "/arena/dashboard/patrocinios", label: "Patrocínios", icon: Handshake },
+  { to: "/arena/dashboard/acoes-ia", label: "Ações IA", icon: Sparkles },
 ];
 
 const ArenaLayout = () => {
