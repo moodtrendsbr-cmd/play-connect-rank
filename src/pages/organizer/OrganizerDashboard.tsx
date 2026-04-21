@@ -153,7 +153,7 @@ const OrganizerDashboard = () => {
           .in("tournament_id", tournIds);
         const modIds = (mods || []).map((m: any) => m.id);
         if (modIds.length > 0) {
-          const { data: matches } = await supabase
+          const { data: matches } = await (supabase as any)
             .from("match_results")
             .select("id, modality_id, status, created_at, scheduled_at")
             .in("modality_id", modIds)
