@@ -44,6 +44,7 @@ const ArenaActions = () => {
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [detail, setDetail] = useState<OrkymActionProposal | null>(null);
+  const [modeFilter, setModeFilter] = useState<string>("all");
 
   const load = async () => {
     if (!arena?.id || !arena?.tenant_id) return;
@@ -52,11 +53,12 @@ const ArenaActions = () => {
     const data = await listActionProposals({
       tenantId: arena.tenant_id, arenaId: arena.id, status: statuses, limit: 100,
     });
-    setItems(data);
+    const filtered = modeFilter === "all" ? data : data.filter((p) => (p.execution_mode ?? "approve") === modeFilter);
+    setItems(filtered);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [tab, arena?.id]);
+  useEffect(() => { load(); }, [tab, arena?.id, modeFilter]);
 
   const handleApprove = async (p: OrkymActionProposal) => {
     setBusyId(p.id);
