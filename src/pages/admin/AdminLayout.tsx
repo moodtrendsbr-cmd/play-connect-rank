@@ -27,6 +27,7 @@ const navItems = [
   { title: "Ajustes", url: "/admin/adjustments", icon: ScrollText },
   { title: "Arenas", url: "/admin/arenas", icon: Building2 },
   { title: "Monitor ORKYM", url: "/admin/orkym", icon: Bot },
+  { title: "Ações ORKYM", url: "/admin/orkym-actions", icon: Sparkles },
 ];
 
 const marketplaceNavItems = [
