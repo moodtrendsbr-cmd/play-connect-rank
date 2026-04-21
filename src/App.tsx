@@ -81,6 +81,7 @@ import OrganizerFinance from "./pages/organizer/OrganizerFinance";
 import AdminSplitRules from "./pages/admin/AdminSplitRules";
 import AdminAdjustments from "./pages/admin/AdminAdjustments";
 import AdminAdCampaigns from "./pages/admin/AdminAdCampaigns";
+import AdminOrkymMonitor from "./pages/admin/AdminOrkymMonitor";
 import Explore from "./pages/Explore";
 import AthletesList from "./pages/AthletesList";
 import ArenasList from "./pages/arenas/ArenasList";
@@ -207,6 +208,7 @@ const App = () => (
               <Route path="split-rules" element={<AdminSplitRules />} />
               <Route path="adjustments" element={<AdminAdjustments />} />
               <Route path="ad-campaigns" element={<AdminAdCampaigns />} />
+              <Route path="orkym" element={<AdminOrkymMonitor />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
