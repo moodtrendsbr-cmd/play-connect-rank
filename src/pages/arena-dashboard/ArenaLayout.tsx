@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, Grid3X3, Clock, CalendarCheck, Handshake, Zap, ArrowLeft, Users, GraduationCap, CalendarClock, ClipboardList, Tag, RefreshCw, Receipt, AlertTriangle, Trophy, DollarSign, ListOrdered } from "lucide-react";
+import { LayoutDashboard, Grid3X3, Clock, CalendarCheck, Handshake, Zap, ArrowLeft, Users, GraduationCap, CalendarClock, ClipboardList, Tag, RefreshCw, Receipt, AlertTriangle, Trophy, DollarSign, ListOrdered, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const navItems = [
