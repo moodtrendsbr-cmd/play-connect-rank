@@ -249,6 +249,7 @@ const App = () => (
               <Route path="orkym-actions" element={<AdminOrkymActions />} />
               <Route path="autonomy" element={<AdminAutonomy />} />
               <Route path="control-tower" element={<AdminControlTower />} />
+              <Route path="tenants" element={<AdminArenas />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
