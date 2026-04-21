@@ -1566,6 +1566,209 @@ export type Database = {
           },
         ]
       }
+      autonomy_kill_switches: {
+        Row: {
+          action_type: string | null
+          activated_at: string
+          activated_by: string | null
+          arena_id: string | null
+          deactivated_at: string | null
+          deactivated_by: string | null
+          domain: string | null
+          id: string
+          is_active: boolean
+          reason: string
+          scope_level: string
+          tenant_id: string | null
+        }
+        Insert: {
+          action_type?: string | null
+          activated_at?: string
+          activated_by?: string | null
+          arena_id?: string | null
+          deactivated_at?: string | null
+          deactivated_by?: string | null
+          domain?: string | null
+          id?: string
+          is_active?: boolean
+          reason: string
+          scope_level: string
+          tenant_id?: string | null
+        }
+        Update: {
+          action_type?: string | null
+          activated_at?: string
+          activated_by?: string | null
+          arena_id?: string | null
+          deactivated_at?: string | null
+          deactivated_by?: string | null
+          domain?: string | null
+          id?: string
+          is_active?: boolean
+          reason?: string
+          scope_level?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autonomy_kill_switches_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "autonomy_kill_switches_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "autonomy_kill_switches_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      autonomy_policies: {
+        Row: {
+          action_type: string | null
+          arena_id: string | null
+          conditions: Json
+          created_at: string
+          created_by: string | null
+          domain: string | null
+          execution_mode: string
+          id: string
+          is_enabled: boolean
+          priority: number
+          risk_level: string
+          scope_level: string
+          tenant_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          action_type?: string | null
+          arena_id?: string | null
+          conditions?: Json
+          created_at?: string
+          created_by?: string | null
+          domain?: string | null
+          execution_mode?: string
+          id?: string
+          is_enabled?: boolean
+          priority?: number
+          risk_level?: string
+          scope_level: string
+          tenant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          action_type?: string | null
+          arena_id?: string | null
+          conditions?: Json
+          created_at?: string
+          created_by?: string | null
+          domain?: string | null
+          execution_mode?: string
+          id?: string
+          is_enabled?: boolean
+          priority?: number
+          risk_level?: string
+          scope_level?: string
+          tenant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autonomy_policies_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "autonomy_policies_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "autonomy_policies_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      autonomy_policy_logs: {
+        Row: {
+          action_type: string | null
+          arena_id: string | null
+          created_at: string
+          domain: string | null
+          guardrail_blocked: string | null
+          id: string
+          metadata: Json
+          policy_id: string | null
+          policy_source: string
+          proposal_id: string | null
+          resolved_mode: string
+          tenant_id: string | null
+        }
+        Insert: {
+          action_type?: string | null
+          arena_id?: string | null
+          created_at?: string
+          domain?: string | null
+          guardrail_blocked?: string | null
+          id?: string
+          metadata?: Json
+          policy_id?: string | null
+          policy_source: string
+          proposal_id?: string | null
+          resolved_mode: string
+          tenant_id?: string | null
+        }
+        Update: {
+          action_type?: string | null
+          arena_id?: string | null
+          created_at?: string
+          domain?: string | null
+          guardrail_blocked?: string | null
+          id?: string
+          metadata?: Json
+          policy_id?: string | null
+          policy_source?: string
+          proposal_id?: string | null
+          resolved_mode?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autonomy_policy_logs_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "autonomy_policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "autonomy_policy_logs_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "orkym_action_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           amount: number
@@ -3088,18 +3291,23 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           arena_id: string | null
+          auto_executed: boolean | null
           correlation_id: string | null
           created_at: string
           description: string | null
           domain: string
           executed_at: string | null
+          execution_mode: string | null
           execution_result: Json | null
           expires_at: string
           failed_at: string | null
           failure_reason: string | null
           human_summary: Json
           id: string
+          initial_status: string | null
           orkym_request_id: string | null
+          policy_id: string | null
+          policy_source: string | null
           priority: string
           proposed_payload: Json
           rejected_at: string | null
@@ -3118,18 +3326,23 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           arena_id?: string | null
+          auto_executed?: boolean | null
           correlation_id?: string | null
           created_at?: string
           description?: string | null
           domain: string
           executed_at?: string | null
+          execution_mode?: string | null
           execution_result?: Json | null
           expires_at?: string
           failed_at?: string | null
           failure_reason?: string | null
           human_summary?: Json
           id?: string
+          initial_status?: string | null
           orkym_request_id?: string | null
+          policy_id?: string | null
+          policy_source?: string | null
           priority?: string
           proposed_payload?: Json
           rejected_at?: string | null
@@ -3148,18 +3361,23 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           arena_id?: string | null
+          auto_executed?: boolean | null
           correlation_id?: string | null
           created_at?: string
           description?: string | null
           domain?: string
           executed_at?: string | null
+          execution_mode?: string | null
           execution_result?: Json | null
           expires_at?: string
           failed_at?: string | null
           failure_reason?: string | null
           human_summary?: Json
           id?: string
+          initial_status?: string | null
           orkym_request_id?: string | null
+          policy_id?: string | null
+          policy_source?: string | null
           priority?: string
           proposed_payload?: Json
           rejected_at?: string | null
@@ -3173,7 +3391,15 @@ export type Database = {
           title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "orkym_action_proposals_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "autonomy_policies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       orkym_api_calls: {
         Row: {
@@ -5021,6 +5247,22 @@ export type Database = {
           },
         ]
       }
+      v_autonomy_metrics: {
+        Row: {
+          action_type: string | null
+          approve_count: number | null
+          auto_count: number | null
+          auto_executed_count: number | null
+          blocked_by_guardrail: number | null
+          blocked_by_kill_switch: number | null
+          day: string | null
+          resolved_mode: string | null
+          suggest_count: number | null
+          tenant_id: string | null
+          total: number | null
+        }
+        Relationships: []
+      }
       v_organizer_balances_canonical: {
         Row: {
           gross_total: number | null
@@ -5104,6 +5346,50 @@ export type Database = {
       arena_mark_overdue_cycles: {
         Args: { _arena_id: string }
         Returns: number
+      }
+      autonomy_action_risk: { Args: { _action_type: string }; Returns: string }
+      autonomy_check_guardrails: {
+        Args: {
+          _action_type: string
+          _arena_id: string
+          _conditions?: Json
+          _payload: Json
+          _tenant_id: string
+        }
+        Returns: {
+          allowed: boolean
+          reason: string
+        }[]
+      }
+      autonomy_log_decision: {
+        Args: {
+          _action_type: string
+          _arena_id: string
+          _domain: string
+          _guardrail_blocked?: string
+          _metadata?: Json
+          _policy_id: string
+          _policy_source: string
+          _proposal_id: string
+          _resolved_mode: string
+          _tenant_id: string
+        }
+        Returns: string
+      }
+      autonomy_purge_old_logs: { Args: never; Returns: number }
+      autonomy_resolve_policy: {
+        Args: {
+          _action_type: string
+          _arena_id: string
+          _domain: string
+          _tenant_id: string
+        }
+        Returns: {
+          execution_mode: string
+          policy_id: string
+          policy_source: string
+          risk_level: string
+        }[]
       }
       create_organizer_tenant: {
         Args: { _display_name?: string; _name: string; _slug: string }
@@ -5208,18 +5494,23 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           arena_id: string | null
+          auto_executed: boolean | null
           correlation_id: string | null
           created_at: string
           description: string | null
           domain: string
           executed_at: string | null
+          execution_mode: string | null
           execution_result: Json | null
           expires_at: string
           failed_at: string | null
           failure_reason: string | null
           human_summary: Json
           id: string
+          initial_status: string | null
           orkym_request_id: string | null
+          policy_id: string | null
+          policy_source: string | null
           priority: string
           proposed_payload: Json
           rejected_at: string | null
@@ -5270,18 +5561,23 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           arena_id: string | null
+          auto_executed: boolean | null
           correlation_id: string | null
           created_at: string
           description: string | null
           domain: string
           executed_at: string | null
+          execution_mode: string | null
           execution_result: Json | null
           expires_at: string
           failed_at: string | null
           failure_reason: string | null
           human_summary: Json
           id: string
+          initial_status: string | null
           orkym_request_id: string | null
+          policy_id: string | null
+          policy_source: string | null
           priority: string
           proposed_payload: Json
           rejected_at: string | null
