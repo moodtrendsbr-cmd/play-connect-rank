@@ -227,8 +227,14 @@ export const policySourceLabel: Record<string, string> = {
   global_action: "Política global (ação)",
   global_domain: "Política global (domínio)",
   fallback: "Padrão seguro (aprovar)",
+  fallback_hardcoded: "Padrão seguro (aprovar)",
   guardrail_block: "Rebaixada por guardrail",
   legacy: "Migrada (legada)",
+  // Phase 10 — Tier/Quota gating
+  tier_domain_block: "Domínio bloqueado pelo plano",
+  tier_no_auto: "Plano não permite auto-execução",
+  quota_auto: "Cota mensal de auto-execuções esgotada",
+  quota_suggestions: "Cota mensal de sugestões esgotada",
 };
 
 export const modeLabel: Record<ExecutionMode, string> = {
