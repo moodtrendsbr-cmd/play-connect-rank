@@ -1,160 +1,177 @@
 
 
-# Fase 11.3 — Tenant Control Tower (UX-only)
+# Fase 11.4 — Organizer Event Engine (UX-only)
 
-> **Princípio**: zero banco, zero edge, zero RLS, zero ORKYM. Apenas reorganização de `/tenant/*` em uma central executiva da rede, reusando queries e componentes já existentes. Toda rota legacy (`/organizer/*`) permanece intacta.
+> **Princípio**: zero banco, zero edge, zero RLS, zero ORKYM. Apenas reorganizar `/organizer/*` para que o Organizer deixe de parecer "tenant admin" e passe a ser o motor de eventos. Toda rota legacy (`/organizer/settings`, `/organizer/members`, `/organizer/arenas`, `/organizer/domains`, `/organizer/payment`, `/organizer/finance`) permanece intacta.
 
 ---
 
-## 1. Os 5 blocos do Tenant Dashboard
+## Diagnóstico atual (resumido)
 
-Nova página `src/pages/tenant/TenantDashboard.tsx` (única tela nova — wrapper de leitura, sem lógica de negócio):
+- `OrganizerShell` (Fase 11.1) existe mas **não está montado em `App.tsx`** — `/organizer` ainda usa `OrganizerLayout` (tenant-flavored: branding, domínios, pagamento).
+- `OrganizerSidebar` lista itens para `/organizer/torneios`, `/organizer/inscricoes`, `/organizer/jogos` que **não existem como rota**.
+- Não há `OrganizerDashboard` próprio — fluxo cai em `OrganizerSettings`.
+- Lógica de eventos do organizer já existe espalhada: `Dashboard.tsx` (tourns por `organizer_id`), `ManageTournament` (enrollments/check-in), `Brackets`, `TabCheckin`, `Tournaments`.
+
+---
+
+## 1. Os 5 blocos do Organizer Dashboard
+
+Nova página `src/pages/organizer/OrganizerDashboard.tsx` (única tela nova — wrapper de leitura, reusa queries de `Dashboard.tsx` e `ManageTournament`):
 
 ```text
-┌───────────────────────────────────────────────────────────────┐
-│ HEADER — "Control Tower da Rede" + nome tenant + tier + ↻     │
-├───────────────────────────────────────────────────────────────┤
-│ BLOCO 1 — CONTROL TOWER (DOMINANTE)                           │
-│ ├─ KPI grid: Arenas total · Arenas ativas · Receita 30d ·     │
-│ │   Chamadas ORKYM 30d · Auto-actions 30d · Alertas abertos   │
-│ └─ Strip de alertas (kill switch / limite quota / overdue)    │
-├───────────────────────────────────────────────────────────────┤
-│ BLOCO 2 — REDE                                                │
-│ ├─ Lista resumida de arenas (top 5 por atividade) [reuso]     │
-│ ├─ Mini-stats: organizadores · empresas vinculadas            │
-│ └─ Atalhos: Ver arenas · Membros · Empresas                   │
-├───────────────────────────────────────────────────────────────┤
-│ BLOCO 3 — MONETIZAÇÃO                                         │
-│ ├─ Receita total · Liquidado · A receber (canonical balance)  │
-│ ├─ Últimas 5 transações [reuso de OrganizerFinance queries]   │
-│ └─ Atalhos: Financeiro · Pagamento                            │
-├───────────────────────────────────────────────────────────────┤
-│ BLOCO 4 — OPERAÇÕES                                           │
-│ ├─ Eventos operacionais recentes (arena_operational_events)   │
-│ ├─ Torneios ativos da rede                                    │
-│ └─ Ocorrências abertas (agregadas)                            │
-├───────────────────────────────────────────────────────────────┤
-│ BLOCO 5 — AUTONOMIA / IA                                      │
-│ ├─ UsageMeter (calls/suggestions/auto) [reuso]                │
-│ ├─ Status kill switch · policies ativas (count)               │
-│ └─ Atalho: IA / Autonomia                                     │
-└───────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ HEADER — "Event Control Tower" + nome organizer + ↻         │
+├─────────────────────────────────────────────────────────────┤
+│ BLOCO 1 — EVENT CONTROL TOWER (DOMINANTE)                   │
+│ ├─ KPI grid: Eventos ativos · Próximos · Inscritos hoje ·   │
+│ │   Check-ins pendentes · Partidas próximas · Alertas       │
+│ └─ Strip alertas (eventos sem categorias, sem partidas etc) │
+├─────────────────────────────────────────────────────────────┤
+│ BLOCO 2 — MEUS EVENTOS                                      │
+│ ├─ Cards (top 6): nome, arena, datas, status, inscrições    │
+│ └─ Atalhos: Ver · Editar (manage) · Brackets · Inscrições   │
+├─────────────────────────────────────────────────────────────┤
+│ BLOCO 3 — INSCRIÇÕES (resumo agregado)                      │
+│ ├─ KPIs: Total · Pendentes · Pagas · Confirmadas · Check-in │
+│ └─ Lista 5 últimas inscrições (todas tourns do organizer)   │
+├─────────────────────────────────────────────────────────────┤
+│ BLOCO 4 — OPERAÇÃO DE JOGOS                                 │
+│ ├─ Eventos em andamento → atalho Brackets / Match / Resul.  │
+│ └─ Próximas partidas (se já houver match_results agendado)  │
+├─────────────────────────────────────────────────────────────┤
+│ BLOCO 5 — PERFORMANCE                                       │
+│ ├─ KPIs por evento: ocupação · receita estimada (já exists) │
+│ └─ Atalho: Financeiro do organizer                          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Queries (todas já existentes)**:
-- `tenants` (já no contexto via `useTenant()`)
-- `arenas` filtrado por `tenant_id`
-- `tenant_memberships` filtrado por `tenant_id`
-- `companies` (count)
-- `v_organizer_balances_canonical` para receita do owner
-- `transaction_splits` (top 5)
-- `arena_operational_events` últimos 10 (filtro `tenant_id`)
-- `tournaments` ativos por arena_id da rede
-- `arena_occurrences` open
-- `fetchTenantTier(tenantId)` + `fetchUsageSummary(tenantId)` de `@/lib/autonomyTier`
-- `autonomy_policies` count + `tenants.kill_switch_active`
+**Queries (todas já existem em outras telas)**:
+- `tournaments` filtrado por `organizer_id = user.id`
+- `enrollments` agregado por torneios do organizer
+- `tournament_modalities` / `match_results` para jogos próximos (mesmo padrão de `Brackets.tsx`)
+- `arena_operational_tasks` filtradas por arena vinculada (opcional, leve)
 
-Nenhuma query nova; tudo já é chamado em `OrganizerFinance`, `ArenaControlTower`, `AdminControlTower` ou `ArenaDashboard`.
-
-**Helpers locais ao arquivo** (não exportados, ~10 linhas cada): `SectionHeader`, `KpiCard`, `ShortcutLink` — mesmo padrão da Arena Control Tower (Fase 11.2) para coerência visual.
+**Helpers locais ao arquivo** (não exportados): `SectionHeader`, `KpiCard`, `EventCard`, `ShortcutLink` — mesmo padrão visual das Fases 11.2 e 11.3.
 
 ---
 
-## 2. Rota nova (aditiva)
+## 2. Montar `OrganizerShell` no roteamento (aditivo)
 
-Em `src/App.tsx`, dentro do bloco `<Route path="/tenant">`:
+Em `src/App.tsx`, adicionar **bloco paralelo** `/organizer/dashboard/*` que usa `OrganizerShell` (a sidebar nova). O bloco legacy `/organizer/*` (com `OrganizerLayout` tenant-flavored) **permanece intacto**.
 
 ```text
-+ <Route path="dashboard" element={<TenantDashboard />} />
-  <Route index element={<Navigate to="/tenant/dashboard" replace />} />  ← muda destino do index
-  <Route path="overview" element={<OrganizerSettings />} />              ← mantém para back-compat
-  ... (todas as outras rotas /tenant/* permanecem)
++ <Route path="/organizer/dashboard" element={<OrganizerShell />}>
++   <Route index element={<OrganizerDashboard />} />
++   <Route path="eventos" element={<Tournaments />} />
++   <Route path="criar" element={<CreateTournament />} />
++   <Route path="inscricoes" element={<OrganizerDashboard />} />  /* âncora #inscricoes */
++   <Route path="jogos" element={<OrganizerDashboard />} />        /* âncora #jogos */
++   <Route path="performance" element={<OrganizerDashboard />} />  /* âncora #performance */
++   <Route path="financeiro" element={<OrganizerFinance />} />
++ </Route>
+  /* legacy bloco /organizer permanece intacto */
 ```
 
-`/tenant/overview` segue funcionando (back-compat). `/tenant` agora abre o dashboard executivo.
+Sem rota nova de página real além do dashboard. "Inscrições/Jogos/Performance" são âncoras dentro do mesmo dashboard (mesmo padrão da Fase 11.3 para `/tenant`).
 
 ---
 
-## 3. Sidebar reorganizada (`src/layouts/sidebars/TenantSidebar.tsx`)
+## 3. Nova `OrganizerSidebar` (substitui a atual)
 
-Reordenar grupos para refletir a hierarquia executiva:
+Reescrever `src/layouts/sidebars/OrganizerSidebar.tsx` removendo qualquer eco de tenant admin (sem branding, domínios, membros, arenas globais, pagamento global) e refletindo missão "operador de eventos":
 
-| Grupo | Itens |
+| Grupo | Itens | Destino |
+|---|---|---|
+| **Event Control Tower** | Dashboard | `/organizer/dashboard` |
+| **Eventos** | Meus eventos · Criar evento | `/organizer/dashboard` (#eventos) · `/tournaments/create` |
+| **Inscrições** | Inscrições | `/organizer/dashboard/inscricoes` |
+| **Jogos** | Jogos & Brackets | `/organizer/dashboard/jogos` |
+| **Check-in** | Check-in | `/organizer/dashboard#checkin` |
+| **Performance** | Performance | `/organizer/dashboard/performance` |
+| **Financeiro** | Financeiro do evento | `/organizer/dashboard/financeiro` |
+
+Configurações administrativas (settings/branding/dominios/payment/members/arenas) **não aparecem** nesta sidebar — elas continuam acessíveis em `/organizer/*` legacy se o usuário for também tenant admin.
+
+---
+
+## 4. Pequeno ajuste no `OrganizerShell`
+
+`src/layouts/OrganizerShell.tsx` — trocar legenda do header "Organizador" por "Organizador de eventos" (1 string). Guard de role (`organizer` | `admin`) permanece.
+
+---
+
+## 5. Convergência opcional do `ProfileSwitcher`
+
+`src/components/feed/ProfileSwitcher.tsx` — atalho `organizer` muda destino de `/organizer` para `/organizer/dashboard` (1 linha). Legacy `/organizer` continua respondendo (cai em `/organizer/settings`).
+
+---
+
+## 6. Naming (apenas labels)
+
+| Antes | Depois |
 |---|---|
-| **Control Tower** | Dashboard (`/tenant/dashboard`) |
-| **Rede** | Arenas · Organizadores (membros) · Empresas |
-| **Monetização** | Financeiro · Splits (alias → `/admin/split-rules` se admin, senão oculto) · Pagamento |
-| **Operações** | Eventos (link para `/tenant/dashboard#operacoes` âncora) — sem rota nova |
-| **IA / Autonomia** | Autonomia |
-| **Configurações** | Branding · Domínios |
+| "Meus Torneios" (sidebar) | "Meus eventos" |
+| "Todos Torneios" | (removido da sidebar do organizer; vive em `/tournaments` público) |
+| "Criar Torneio" | "Criar evento" |
+| "Jogos / Brackets" | "Jogos & Brackets" |
+| "Configurações" (sidebar) | (removido do shell de eventos) |
+| Header "Organizador" | "Organizador de eventos" |
 
-> Itens "Splits" e "Operações" hoje não têm página dedicada — viram **âncoras dentro do dashboard** (scroll para o bloco) ou redirecionam para tela existente quando houver. Sem rota nova, sem tela nova. Itens cujo destino não existe ficam listados mas levam ao dashboard com âncora.
-
-**Renomes (apenas labels)**:
-- "Membros" → "Organizadores"
-- "Pagamento" → "Conta de pagamento"
-- "Autonomia" → "IA / Autonomia"
-- "Identidade" (grupo) → "Configurações"
+URLs legacy não mudam.
 
 ---
 
-## 4. Header do TenantShell
-
-Pequeno polimento em `src/layouts/TenantShell.tsx` (sem mudar guard nem layout):
-- Trocar legenda "Tenant" por "Rede white-label"
-- Adicionar badge tier (lido via `fetchTenantTier`) ao lado do nome — **opcional**, só se trivial; senão fica no dashboard apenas.
-
----
-
-## 5. Arquivos tocados
+## 7. Arquivos tocados
 
 | Tipo | Arquivo |
 |---|---|
-| Novo | `src/pages/tenant/TenantDashboard.tsx` (~280 linhas, wrapper de leitura) |
-| Edit | `src/App.tsx` — adicionar rota `dashboard` + redirecionar index |
-| Edit | `src/layouts/sidebars/TenantSidebar.tsx` — reorganizar grupos + relabel + adicionar Dashboard |
-| Edit | `src/layouts/TenantShell.tsx` — relabel header (1 string) |
-| Memory | `mem://features/tenant-control-tower` (novo) — registra estrutura dos 5 blocos |
+| Novo | `src/pages/organizer/OrganizerDashboard.tsx` (~280 linhas, leitura) |
+| Edit | `src/App.tsx` — adicionar bloco `/organizer/dashboard/*` (legacy `/organizer/*` intacto) |
+| Edit | `src/layouts/sidebars/OrganizerSidebar.tsx` — reescrever 6 grupos focados em eventos |
+| Edit | `src/layouts/OrganizerShell.tsx` — relabel header (1 string) |
+| Edit | `src/components/feed/ProfileSwitcher.tsx` — 1 linha (atalho organizer) |
+| Memory | `mem/features/organizer-event-engine.md` (novo) |
 
-**Total**: 1 arquivo novo, 3 edits mínimos, 1 memory.
-
----
-
-## 6. Garantias de não-regressão
-
-- Todas as rotas `/tenant/*` antigas continuam (`overview`, `arenas`, `membros`, `financeiro`, `branding`, `dominios`, `pagamento`, `autonomia`).
-- Todas as rotas `/organizer/*` legacy intocadas.
-- Nenhuma migration, nenhuma mudança de RLS, nenhum import novo de tipos.
-- Componentes reusados sem alteração: `Card`, `Badge`, `Button`, `UsageMeter`, `UpgradeCTA`, `Alert`.
-- Build TS limpo (mesmo padrão de cast `as any` para views já em uso no projeto).
+**Total**: 1 arquivo novo, 4 edits mínimos, 1 memory.
 
 ---
 
-## 7. ENTREGA B — Relatório (resumo final)
+## 8. Garantias de não-regressão
+
+- `/organizer`, `/organizer/settings`, `/organizer/members`, `/organizer/arenas`, `/organizer/domains`, `/organizer/payment`, `/organizer/finance` — todos intocados.
+- `/tournaments/:id/manage`, `/tournaments/:id/brackets`, `/tournaments/:id/results`, `/tournaments/create` — intocados.
+- `/tenant/*`, `/arena/*`, `/admin/*`, `/athlete/*`, `/company/*` — intocados.
+- Nenhuma migration, nenhuma RLS, nenhum edge, nenhum tipo Supabase novo.
+- Build TS: limpo (mesmo padrão de cast `as any` para joins quando necessário).
+
+---
+
+## 9. ENTREGA B — Relatório
 
 | Item | Resultado |
 |---|---|
-| Reaproveitado | `useTenant`, `fetchTenantTier`, `fetchUsageSummary`, `UsageMeter`, queries de OrganizerFinance/ArenaControlTower, padrão visual da Fase 11.2 |
-| Reorganizado | sidebar do TenantShell em 6 grupos executivos; index do `/tenant` aponta para dashboard |
-| Renomeado | "Tenant" → "Rede white-label"; "Membros" → "Organizadores"; "Identidade" → "Configurações" |
-| Melhor agrupado | KPIs da rede no topo dominante; monetização e IA visíveis sem clique; operações agregadas |
-| Para subfases | Dashboard executivo é leitura — edição continua nas telas atuais |
+| Reaproveitado | Queries de `Dashboard.tsx` (organizer_id), `ManageTournament` (enrollments), `Brackets` (modalities/matches), `Tournaments`, `OrganizerFinance`, padrão visual das Fases 11.2/11.3 |
+| Reorganizado | Shell `/organizer/dashboard` montado pela primeira vez; sidebar reescrita com missão "event engine" |
+| Renomeado | "Torneios" → "Eventos"; header "Organizador" → "Organizador de eventos"; "Configurações" removido do shell de eventos |
+| Deixou de parecer tenant admin | Sidebar agora não tem branding/domínios/membros/arenas globais/pagamento; apenas operação de eventos |
+| Para subfases | Inscrições/Jogos/Performance ainda são âncoras — viram páginas dedicadas em 11.5+ |
 
-## 8. ENTREGA C — Pendências para próximas subfases
+## 10. ENTREGA C — Pendências
 
-- **11.4**: Hub Company unificado (marketplace + sponsor + plano)
-- **11.5**: Hub Athlete (`/athlete/dashboard` com agenda + notificações)
-- **11.6**: módulo `/admin/tenants` (admin gere todos os tenants)
-- **11.7**: rota dedicada `/tenant/operacoes` com timeline real
-- **11.8**: WhatsApp para tenant (briefing semanal da rede + alertas de overdue agregado)
-- **11.9**: gráfico de evolução 30d/90d da rede (depende de view agregada nova — fase futura com migration)
+- **11.5**: rota dedicada `/organizer/dashboard/inscricoes` com tabela completa (não só resumo)
+- **11.6**: rota dedicada `/organizer/dashboard/jogos` com agenda visual e conflitos de quadra
+- **11.7**: rota dedicada `/organizer/dashboard/performance` com gráficos 30d
+- **11.8**: WhatsApp para organizer (lembrete de check-in, alerta de inscrições paradas, briefing pré-evento)
+- **11.9**: separar definitivamente `/organizer` legacy do tenant admin via redirect 301 para `/tenant/*` quando user for tenant admin
+- **11.10**: deprecar `/dashboard` legacy (que ainda é usado por organizer simples)
 
-## 9. Critério de sucesso
+## 11. Critério de sucesso
 
-- ✅ `/tenant/dashboard` mostra os 5 blocos executivos
-- ✅ Tenant entende rapidamente: tamanho da rede, receita, IA, operações
-- ✅ ORKYM/Autonomia visíveis no dashboard
-- ✅ Sidebar com hierarquia executiva (Control Tower no topo)
-- ✅ Todas rotas antigas funcionam
+- ✅ `/organizer/dashboard` existe e mostra os 5 blocos (Event Control Tower dominante)
+- ✅ Organizer entende rapidamente: eventos ativos, inscrições, jogos próximos, check-ins pendentes
+- ✅ Sidebar do `OrganizerShell` reflete missão "operador de eventos" (sem branding/domínios/etc)
+- ✅ Todas as rotas legacy `/organizer/*` continuam funcionando
 - ✅ Zero migration, zero edge, zero RLS, zero ORKYM bridge alterado
+- ✅ Build limpo
 
