@@ -4,12 +4,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sparkles, Check, X, Loader2 } from "lucide-react";
 import {
   listActionProposals, approveAction, executeAction, rejectAction,
   type OrkymActionProposal, type OrkymActionStatus,
 } from "@/lib/orkym";
 import { ActionProposalDetail } from "@/components/orkym/ActionProposalDetail";
+import { PolicyDecisionBadge } from "@/components/autonomy/PolicyDecisionBadge";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
