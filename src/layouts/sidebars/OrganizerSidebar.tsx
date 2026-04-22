@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   TrendingUp,
   DollarSign,
+  MessageCircle,
 } from "lucide-react";
 
 const groups = [
@@ -28,6 +29,7 @@ const groups = [
     label: "Event Control Tower",
     items: [
       { title: "Dashboard", url: "/organizer/dashboard", icon: LayoutDashboard, end: true },
+      { title: "Comandos", url: "/organizer/dashboard/comandos", icon: MessageCircle },
     ],
   },
   {

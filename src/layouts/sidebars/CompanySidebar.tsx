@@ -14,7 +14,7 @@ import {
 import { WhatsAppCTA } from "@/components/conversational/WhatsAppCTA";
 import {
   LayoutDashboard, Store, Package, ShoppingBag, ExternalLink,
-  Megaphone, Trophy, LineChart, Eye, Compass, Rss,
+  Megaphone, Trophy, LineChart, Eye, Compass, Rss, MessageCircle,
 } from "lucide-react";
 
 const groups = [
@@ -22,6 +22,7 @@ const groups = [
     label: "Control Tower",
     items: [
       { title: "Dashboard", url: "/company/dashboard", icon: LayoutDashboard },
+      { title: "Comandos", url: "/company/comandos", icon: MessageCircle },
     ],
   },
   {

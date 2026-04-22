@@ -14,6 +14,7 @@ import { OrkymInsightsCard } from "@/components/orkym/InsightsCard";
 import { OrkymActionsCard } from "@/components/orkym/OrkymActionsCard";
 import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
 import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { QrEntryCard } from "@/components/conversational/QrEntryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 import { cn } from "@/lib/utils";
@@ -211,6 +212,13 @@ const ArenaDashboard = () => {
           ctaLabel="Abrir check-in"
         />
       </div>
+      {arena?.id && (
+        <CommandHistoryCard
+          scope="arena"
+          scopeId={arena.id}
+          seeAllHref="/arena/dashboard/comandos"
+        />
+      )}
 
       {/* BLOCO 2 — OPERAÇÃO DO DIA */}
       <section className="space-y-3">

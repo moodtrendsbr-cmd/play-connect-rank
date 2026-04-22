@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
 import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { QrEntryCard } from "@/components/conversational/QrEntryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 
@@ -388,6 +389,13 @@ const OrganizerDashboard = () => {
           ctaLabel="Abrir check-in dos jogos"
         />
       </div>
+      {user?.id && (
+        <CommandHistoryCard
+          scope="user"
+          scopeId={user.id}
+          seeAllHref="/organizer/dashboard/comandos"
+        />
+      )}
 
       {/* BLOCO 2 — MEUS EVENTOS */}
       <section className="space-y-3">

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 import { WhatsAppCTA } from "@/components/conversational/WhatsAppCTA";
 import {
-  LayoutDashboard, Gauge, Sparkles, ShieldCheck,
+  LayoutDashboard, Gauge, Sparkles, ShieldCheck, MessageCircle,
   QrCode, Grid3x3, CalendarDays, BookOpen, GraduationCap, ClipboardList, AlertCircle,
   Users, UserCog,
   DollarSign, Receipt, Layers, Repeat, FileText,
@@ -28,6 +28,7 @@ const groups = [
       { title: "Visão geral", url: "/arena/dashboard/control-tower", icon: Gauge },
       { title: "Ações ORKYM", url: "/arena/dashboard/acoes-ia", icon: Sparkles },
       { title: "Autonomia", url: "/arena/dashboard/autonomia", icon: ShieldCheck },
+      { title: "Comandos", url: "/arena/dashboard/comandos", icon: MessageCircle },
     ],
   },
   {

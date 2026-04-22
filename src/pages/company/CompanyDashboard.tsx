@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
 import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 
 // ---------- Local helpers (not exported) ----------
@@ -264,6 +265,13 @@ const CompanyDashboard = () => {
         subtitle="Comandos rápidos para sua presença comercial"
         examples={COMMANDS.company}
       />
+      {user?.id && (
+        <CommandHistoryCard
+          scope="user"
+          scopeId={user.id}
+          seeAllHref="/company/comandos"
+        />
+      )}
 
       {/* BLOCO 2 — Marketplace */}
       <section>
