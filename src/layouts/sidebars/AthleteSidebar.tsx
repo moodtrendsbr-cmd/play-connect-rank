@@ -17,6 +17,7 @@ import {
   User,
   Sun,
   MessageSquare,
+  MessageCircle,
   Trophy,
   Swords,
   Medal,
@@ -31,6 +32,7 @@ const groups = [
     items: [
       { title: "Dashboard", url: "/athlete/dashboard", icon: LayoutDashboard },
       { title: "Meu perfil", url: "/athlete/perfil", icon: User },
+      { title: "Comandos", url: "/athlete/comandos", icon: MessageCircle },
     ],
   },
   {

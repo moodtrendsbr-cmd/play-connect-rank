@@ -14,7 +14,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag, Handshake, BarChart3, Gift, Layers, Building2, Percent, ScrollText, Bot, Sparkles, ShieldCheck, Gauge } from "lucide-react";
+import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag, Handshake, BarChart3, Gift, Layers, Building2, Percent, ScrollText, Bot, Sparkles, ShieldCheck, Gauge, MessageCircle } from "lucide-react";
 
 type NavGroup = {
   label: string;
@@ -28,6 +28,7 @@ const navGroups: NavGroup[] = [
       { title: "Dashboard", url: "/admin", icon: LayoutDashboard, end: true },
       { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
       { title: "Control Tower", url: "/admin/control-tower", icon: Gauge },
+      { title: "Comandos", url: "/admin/commands", icon: MessageCircle },
     ],
   },
   {
