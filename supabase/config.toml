@@ -32,3 +32,9 @@ verify_jwt = false
 
 [functions.wa-prepare-command]
 verify_jwt = true
+
+[functions.moodplay-execute-action]
+verify_jwt = false
+
+[functions.wa-send-message]
+verify_jwt = false
