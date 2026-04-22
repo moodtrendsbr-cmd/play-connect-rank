@@ -125,6 +125,24 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  // 0. Resolve which WhatsApp instance received this message (by inbound number)
+  let instanceId: string | null = null;
+  const targetPhoneRaw =
+    req.headers.get("x-wa-instance-phone") ||
+    body?.to ||
+    body?.To ||
+    body?.entry?.[0]?.changes?.[0]?.value?.metadata?.display_phone_number ||
+    "";
+  const targetPhone = String(targetPhoneRaw).replace(/\D/g, "");
+  if (targetPhone) {
+    const { data: inst } = await supa.rpc("resolve_whatsapp_instance_by_phone", {
+      _phone: targetPhone,
+    });
+    if (inst && (inst as any).success) {
+      instanceId = (inst as any).instance_id;
+    }
+  }
+
   // 1. Identity lookup
   const { data: ident } = await supa
     .from("wa_identities")
@@ -140,6 +158,8 @@ Deno.serve(async (req) => {
       profile_type: "athlete",
       input_text: text,
       status: "identity_required",
+      direction: "inbound",
+      whatsapp_instance_id: instanceId,
       response_text:
         "Olá! Conecte seu WhatsApp em moodplay.app/profile para usar comandos.",
     });
@@ -209,6 +229,9 @@ Deno.serve(async (req) => {
         input_text: text,
         status: "pending",
         qr_token: qrTokenUuid,
+        direction: "inbound",
+        initiated_by: "user",
+        whatsapp_instance_id: instanceId,
         parsed_intent: qrIntent ? { qr_intent: qrIntent, qr_payload: qrPayload } : null,
       })
       .select("id")
@@ -223,7 +246,7 @@ Deno.serve(async (req) => {
   } else {
     await supa
       .from("conversational_commands")
-      .update({ status: "pending", input_text: text })
+      .update({ status: "pending", input_text: text, whatsapp_instance_id: instanceId })
       .eq("id", commandId);
   }
 
