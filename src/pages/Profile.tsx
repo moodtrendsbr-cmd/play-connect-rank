@@ -268,7 +268,7 @@ const Profile = () => {
       />
 
       {/* WhatsApp da ORKYM (Phase 12) */}
-      <WaIdentityPanel defaultProfile={isOrganizer ? "organizer" : "athlete"} />
+      <WaIdentityPanel userId={user!.id} />
 
       {/* Edit form */}
       {editing && (
