@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.expire-pending-payments]
 verify_jwt = true
+
+[functions.wa-bridge]
+verify_jwt = false
+
+[functions.wa-prepare-command]
+verify_jwt = true
