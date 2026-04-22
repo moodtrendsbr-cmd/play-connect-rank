@@ -16,6 +16,7 @@ import ProfileHeader from "@/components/profile/ProfileHeader";
 import { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
 import PostGrid from "@/components/profile/PostGrid";
+import { WaIdentityPanel } from "@/components/conversational/WaIdentityPanel";
 
 const Profile = () => {
   const { user, signOut, loading: authLoading } = useAuth();
