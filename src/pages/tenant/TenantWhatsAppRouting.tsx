@@ -39,7 +39,8 @@ const SCOPES = [
 ];
 
 const TenantWhatsAppRouting = () => {
-  const { tenantId } = useTenant();
+  const { tenant } = useTenant();
+  const tenantId = tenant?.id;
   const [instances, setInstances] = useState<Instance[]>([]);
   const [bindings, setBindings] = useState<Binding[]>([]);
   const [arenas, setArenas] = useState<Arena[]>([]);
