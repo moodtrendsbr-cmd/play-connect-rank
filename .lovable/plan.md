@@ -1,193 +1,233 @@
 
 
-# Fase 11.7 — WhatsApp-First Conversational Layer (UX-only)
+# Fase 11.8 — Cleanup Final + Naming Unification + UX Consolidation
 
-> **Princípio**: zero banco, zero edge, zero RLS, zero ORKYM core. Apenas adicionar uma **camada visual conversacional** consistente em todos os 6 dashboards das Fases 11.2–11.6, deixando claro que a operação rápida acontece no WhatsApp e que dashboards são camada de controle.
-
----
-
-## Diagnóstico atual
-
-- 6 dashboards já reorganizados (Arena/Tenant/Organizer/Athlete/Company/Admin) — todos com padrão visual similar (`SectionHeader` + `KpiCard` + `ShortcutLink`).
-- ORKYM já integrada via `OrkymActionsCard` + `OrkymInsightsCard` (usado no Arena).
-- QR Check-in já existe em `/arena/checkin` + `ArenaClassEnrollments` (geração de QR), mas é **invisível** fora desses 2 contextos.
-- Campo `whatsapp` existe em `profiles`, `bookings`, `companies`, `arenas`, `tournament_entries` — mas **não há nenhum CTA `wa.me://` em nenhum lugar do produto**.
-- Nenhum componente conversacional/comando-exemplo existe.
+> **Princípio**: zero banco, zero rotas removidas, zero edge, zero RLS, zero ORKYM. Apenas **renomear, reagrupar e padronizar headers/sidebars/CTAs** dos 6 perfis para fechar a reorganização das Fases 11.1–11.7 com acabamento premium.
 
 ---
 
-## 1. Componentes novos (4 arquivos compartilhados)
+## Diagnóstico — inconsistências identificadas
 
-Pasta nova: `src/components/conversational/`
-
-### 1.1 `WhatsAppCTA.tsx` (~60 linhas)
-Botão padronizado verde-WhatsApp que abre `https://wa.me/<numero>?text=<comando>` em nova aba. Variantes: `primary` (botão grande), `inline` (chip), `card` (card de ação).
-```ts
-<WhatsAppCTA command="Resumo da operação de hoje" label="Pedir pelo WhatsApp" variant="card" />
-```
-Número-alvo lido de `VITE_ORKYM_WHATSAPP` (env já configurável; fallback para placeholder `+55 11 99999-9999` com toast "Conecte o WhatsApp da sua arena").
-
-### 1.2 `CommandExamplesCard.tsx` (~90 linhas)
-Card "O que você pode pedir pelo WhatsApp" — lista de 3-6 exemplos de comandos por perfil, cada exemplo é um `WhatsAppCTA` inline. Props: `title`, `examples: { icon, command, hint? }[]`.
-
-### 1.3 `OperationModeBanner.tsx` (~50 linhas)
-Banner sutil no topo do dashboard explicando: **"Este painel é para visão e controle. Operações rápidas → WhatsApp · Entrada física → QR · Inteligência → ORKYM"**. Dismissable via `localStorage` por perfil (`mp_op_banner_arena_dismissed` etc).
-
-### 1.4 `QrEntryCard.tsx` (~70 linhas)
-Card destacado "Entrada por QR" com ícone grande, descrição do uso (check-in / acesso / ativação) e CTA. Aceita props `title`, `subtitle`, `ctaTo`, `ctaLabel`. Reusa `lucide-react QrCode` + estilo já consagrado.
+| Área | Problema |
+|---|---|
+| Headers de shells | 6 formatos diferentes ("Arena", "Rede white-label", "Organizador de eventos", "Atleta · Mood Play", "Empresa · Mood Play", "Admin") |
+| Sidebar Arena | "Central de Operação" + "Control Tower" + "Visão geral" + "Ações sugeridas" + "Controle automático" — 5 termos para IA/governança |
+| Sidebar Organizer | 7 grupos com 1 item cada (Eventos, Inscrições, Jogos, Check-in, Performance, Financeiro) — fragmentado |
+| Sidebar Admin (duplicado) | `AdminLayout.tsx` (em uso) tem lista plana; `AdminSidebar.tsx` (Fase 11.7) tem 5 grupos — **divergência ativa** |
+| Admin marketplace | "Publicidade (legado)" + "Campanhas Ads" + "Patrocínios Atleta" + "Patrocínios Torneio" — 4 verbetes redundantes |
+| AdminDashboard H1 | `PAINEL ADMINISTRATIVO` 4xl uppercase quebra padrão dos outros 5 dashboards |
+| Banner conversacional | Diz "Dashboard → Controle" enquanto sidebars usam "Control Tower" / "Central de Operação" / "Painel" |
+| OrganizerSidebar Check-in | Aponta para `/organizer/dashboard/jogos` (mesma URL que "Jogos & Brackets") — duplicado |
 
 ---
 
-## 2. Catálogo de comandos por perfil
+## 1. Glossário oficial (single source of truth)
 
-Arquivo novo `src/lib/conversationalCommands.ts` (~150 linhas, **pure data**, zero lógica):
+Arquivo novo `src/lib/profileNaming.ts` (~50 linhas, pure data):
 
 ```ts
-export const COMMANDS = {
-  arena: [
-    { icon: "Trophy", command: "Criar torneio sábado beach tennis 16 vagas", hint: "Cria torneio em segundos" },
-    { icon: "Receipt", command: "Abrir cobrança do João", hint: "Envia link de pagamento" },
-    { icon: "Activity", command: "Como está a operação de hoje?", hint: "Resumo do dia" },
-    { icon: "Users", command: "Quais alunos faltaram?", hint: "Lista de ausências" },
-    { icon: "AlertTriangle", command: "Abrir ocorrência da quadra 2", hint: "Registra ticket" },
-  ],
-  organizer: [ /* 5 comandos */ ],
-  athlete:   [ /* 4 comandos */ ],
-  company:   [ /* 4 comandos */ ],
-  tenant:    [ /* 4 comandos */ ],
-  admin:     [ /* 4 comandos */ ],
+export const PROFILE_NAMING = {
+  admin:     { shellLabel: "Admin · MoodPlay global",   towerLabel: "Control Tower" },
+  tenant:    { shellLabel: "Rede · {tenantName}",       towerLabel: "Control Tower da Rede" },
+  arena:     { shellLabel: "Arena · {arenaName}",       towerLabel: "Control Tower da Arena" },
+  organizer: { shellLabel: "Organizador · MoodPlay",    towerLabel: "Event Control Tower" },
+  athlete:   { shellLabel: "Atleta · MoodPlay",         towerLabel: "Athlete Hub" },
+  company:   { shellLabel: "Empresa · {companyName}",   towerLabel: "Company Control Tower" },
+} as const;
+
+export const SECTION_LABELS = {
+  controlTower: "Control Tower",   // todos os perfis
+  orkymActions: "Ações ORKYM",     // padroniza "Ações sugeridas" / "Ações IA"
+  autonomy:     "Autonomia",       // padroniza "Controle automático"
+  finance:      "Financeiro",      // padroniza "billing / cobranças / finance"
+  marketplace:  "Marketplace",
+  campaigns:    "Campanhas",       // padroniza "ads / publicidade / sponsor"
+  sponsorships: "Patrocínios",     // singular para o domínio "patrocinador"
 } as const;
 ```
 
-Cada comando vira um `wa.me?text=` quando clicado.
+Padrões fixos:
+- **MoodPlay** (CamelCase, sem espaço) — substitui "Mood Play".
+- **Patrocínios** (não "sponsor / sponsorship / patrocinador").
+- **Campanhas** (não "ads / publicidade / advertising"; legacy fica como sub-item).
+- **Ações ORKYM** (não "Ações sugeridas" / "Ações IA").
+- **Autonomia** (não "Controle automático" / "Governança IA").
 
 ---
 
-## 3. Aplicação por dashboard (6 edits cirúrgicos)
+## 2. Headers dos 6 shells (padronizados)
 
-Para **cada um dos 6 dashboards**, adicionar logo abaixo do hero/control tower:
+Layout único: `[chip de papel] · [nome contextual]`, todos `text-sm font-medium`.
 
-```tsx
-<OperationModeBanner profile="arena" />          {/* dismissable */}
-<div className="grid md:grid-cols-2 gap-4">
-  <CommandExamplesCard
-    title="Operar pelo WhatsApp"
-    examples={COMMANDS.arena}
-  />
-  <QrEntryCard
-    title="Entrada física"
-    subtitle="Check-in de aulas, torneios e quadras"
-    ctaTo="/arena/dashboard/aulas-matriculas"
-    ctaLabel="Gerar QR de check-in"
-  />
-</div>
-```
-
-Posicionamento por dashboard:
-
-| Dashboard | Inserção | QrEntryCard aponta para |
+| Shell | Antes | Depois |
 |---|---|---|
-| `ArenaDashboard.tsx` | Após Control Tower | `/arena/dashboard/aulas-matriculas` (QR já existe) |
-| `OrganizerDashboard.tsx` | Após Event Control Tower | Manage tournament check-in |
-| `AthleteDashboard.tsx` | Após Hero | `/arena/checkin` (instrução: aponte a câmera no QR da arena) |
-| `CompanyDashboard.tsx` | Após Control Tower | (sem QR — esconde QrEntryCard, full-width nos comandos) |
-| `TenantDashboard.tsx` | Após Control Tower | (sem QR — esconde) |
-| `AdminDashboard.tsx` | Após métricas | (sem QR — esconde) |
+| `AdminShell.tsx` | "Admin" | "**Admin** · MoodPlay global" |
+| `TenantShell.tsx` | "Rede white-label" + name | "**Rede** · {tenant.name}" |
+| `ArenaShell.tsx` | "Arena" | "**Arena** · {arena.name}" (busca via outlet context, fallback "Arena") |
+| `OrganizerShell.tsx` | "Organizador de eventos" | "**Organizador** · MoodPlay" |
+| `AthleteShell.tsx` | "Atleta · Mood Play" | "**Atleta** · MoodPlay" |
+| `CompanyShell.tsx` | "Empresa · Mood Play — {name}" | "**Empresa** · {companyName}" (fallback "MoodPlay") |
+
+Implementação: chip com `text-xs uppercase tracking-wider text-muted-foreground` para o papel + ` · ` + nome em `text-foreground`.
 
 ---
 
-## 4. ORKYM como cérebro conversacional (reforço visual)
+## 3. Sidebars — reorganização e renomeação
 
-No `OrkymActionsCard` já existente, adicionar em cada proposta um terceiro botão **"Continuar no WhatsApp"** (variante ghost) que abre `wa.me?text=Aprovar ação <id> — <título>`. Edit cirúrgico de ~10 linhas.
+### 3.1 ArenaSidebar (5 grupos consolidados)
+Antes: "Central de Operação" (4 itens misturados), "Operação" (9), "Financeiro" (5), "Torneios" (1), "Growth" (1) = 5 grupos desbalanceados.
 
-Sem alterar a lógica de `approveAction`/`executeAction` — apenas mais um caminho de execução para o usuário humano.
+Depois: **Control Tower / Operação / Financeiro / Torneios / Growth** — itens de IA reagrupados em "Control Tower":
+- Control Tower → Dashboard · Visão geral · **Ações ORKYM** (era "Ações sugeridas") · **Autonomia** (era "Controle automático")
+
+### 3.2 OrganizerSidebar (consolidar 7 → 4 grupos)
+Antes: 7 grupos com 1 item cada.
+Depois:
+- **Event Control Tower** → Dashboard
+- **Eventos** → Meus eventos · Criar evento · Inscrições
+- **Operação** → Jogos & Brackets · Check-in (URL distinta `#checkin`)
+- **Performance & Financeiro** → Performance · Financeiro do evento
+
+### 3.3 AdminSidebar (resolver duplicação ATIVA)
+**Decisão**: `/admin` usa `AdminLayout.tsx` (legacy, lista plana). O `AdminSidebar.tsx` (Phase 11.7, com 5 grupos) está ÓRFÃO. Duas opções:
+
+**Opção escolhida**: Migrar `AdminLayout.tsx` para usar a estrutura de 5 grupos do `AdminSidebar.tsx` (sem trocar componente — só copiar os groups), e padronizar nomes:
+- "Publicidade (legado)" → remove (mantém rota `/admin/ads`, vira sub-item de Campanhas como "Legado")
+- "Campanhas Ads" → "**Campanhas**"
+- "Patrocínios Atleta" + "Patrocínios Torneio" → grupo único "**Patrocínios**" com 2 sub-itens (Atletas, Torneios)
+- "Monitor ORKYM" / "Ações ORKYM" / "Autonomia" / "Control Tower" → grupo "**ORKYM & Autonomia**"
+
+### 3.4 TenantSidebar / AthleteSidebar / CompanySidebar
+Já estão bem agrupadas (Phases 11.3/11.5/11.6). Apenas:
+- Renomear "Sponsor Dashboard" → "Visão de patrocínios" se ainda existir
+- "Mood Play" → "MoodPlay" em qualquer label
 
 ---
 
-## 5. Sidebars — destaque visual leve
+## 4. AdminDashboard H1 — alinhar com os outros 5
 
-Em cada uma das 6 sidebars (`ArenaSidebar`, `TenantSidebar`, `OrganizerSidebar`, `AthleteSidebar`, `CompanySidebar`, `AdminSidebar`), adicionar **no rodapé** um item discreto:
-
+Trocar:
 ```tsx
-<SidebarMenuItem>
-  <WhatsAppCTA variant="inline" command="Olá" label="Falar com a ORKYM" />
-</SidebarMenuItem>
+<h1 className="text-4xl font-display text-foreground">PAINEL ADMINISTRATIVO</h1>
 ```
-
-1 linha por sidebar.
-
----
-
-## 6. Configuração
-
-`.env` permanece intocado (auto-gerado). Adicionar fallback no `WhatsAppCTA`:
-- Lê `import.meta.env.VITE_ORKYM_WHATSAPP` se existir.
-- Caso contrário, usa placeholder visual `+55 (11) 99999-9999` com badge "configure no admin" — apenas informativo.
-
-Sem secret novo obrigatório nesta fase. (Se o usuário quiser fixar o número real, adiciona via Connectors → secret depois.)
+Por SectionHeader equivalente (mesmo padrão dos outros): "**Control Tower**" + subtítulo "Visão global do MoodPlay".
 
 ---
 
-## 7. Arquivos tocados
+## 5. Banner conversacional — alinhar wording
+
+`OperationModeBanner.tsx`:
+- "Dashboard → Controle" → "**Control Tower** → Visão e controle"
+- Demais labels mantidos.
+
+---
+
+## 6. CTAs padronizados
+
+Único catálogo (já implícito, agora explícito via `src/lib/conversationalCommands.ts`):
+
+| Intenção | CTA oficial |
+|---|---|
+| Iniciar conversa | "**Falar com a ORKYM**" |
+| Continuar fluxo | "**Continuar no WhatsApp**" |
+| Pedir ação | "**Pedir pelo WhatsApp**" |
+| Ativar QR | "**Gerar QR**" / "**Abrir QR**" |
+| Detalhes | "**Ver detalhes**" |
+
+Auditoria nos 6 sidebars + `OrkymActionsCard` + `WhatsAppCTA`: trocar variações soltas. (Já está 90% padronizado; apenas 2-3 strings divergentes.)
+
+---
+
+## 7. Aliases visíveis — limpeza UX (sem quebrar)
+
+Manter rotas legacy 100% funcionais; apenas garantir que **menus apontem para a rota nova**:
+
+| Sidebar Item | Rota antiga (mantida) | Rota nova (alvo do menu) |
+|---|---|---|
+| Company "Patrocinar torneio" | `/sponsor/tournaments` | `/company/sponsor/torneios` ✅ já correto |
+| Company "Meus patrocínios" | `/sponsor/dashboard` | `/company/sponsor/resumo` ✅ já correto |
+| Athlete "Feed" (legacy item) | `/feed` | `/athlete/feed` (alias do shell) — ajustar |
+| Athlete "Torneios" | `/tournaments` | `/athlete/torneios` — ajustar |
+
+Verificar e migrar 2-3 links para rotas dentro do shell.
+
+---
+
+## 8. Polimento visual leve
+
+- Headers dos shells: altura `h-12` mantida; chip do papel ganha cor sutil `bg-primary/5 text-primary` quando aplicável.
+- SectionHeader: padrão único copiado do `OrganizerDashboard` (h-9 w-9 round-md bg-primary/10) — aplicar nos 6 dashboards onde divergir (Arena já usa variante minimal; Tenant tem variante colorida; padronizar para o do Organizer).
+- Espaçamento: confirmar `space-y-6` no container raiz dos 6 dashboards.
+
+---
+
+## 9. Arquivos tocados
 
 | Tipo | Arquivo |
 |---|---|
-| Novo | `src/components/conversational/WhatsAppCTA.tsx` |
-| Novo | `src/components/conversational/CommandExamplesCard.tsx` |
-| Novo | `src/components/conversational/OperationModeBanner.tsx` |
-| Novo | `src/components/conversational/QrEntryCard.tsx` |
-| Novo | `src/lib/conversationalCommands.ts` |
-| Edit | `src/pages/arena-dashboard/ArenaDashboard.tsx` (~12 linhas) |
-| Edit | `src/pages/organizer/OrganizerDashboard.tsx` (~12 linhas) |
-| Edit | `src/pages/athlete/AthleteDashboard.tsx` (~12 linhas) |
-| Edit | `src/pages/company/CompanyDashboard.tsx` (~12 linhas) |
-| Edit | `src/pages/tenant/TenantDashboard.tsx` (~12 linhas) |
-| Edit | `src/pages/admin/AdminDashboard.tsx` (~12 linhas) |
-| Edit | `src/components/orkym/OrkymActionsCard.tsx` (+1 botão) |
-| Edit | 6× sidebars (1 linha cada no rodapé) |
-| Memory | `mem/features/whatsapp-first-layer.md` (novo) |
+| Novo | `src/lib/profileNaming.ts` (glossário) |
+| Edit | `src/layouts/AdminShell.tsx` (header) |
+| Edit | `src/layouts/TenantShell.tsx` (header) |
+| Edit | `src/layouts/ArenaShell.tsx` (header) |
+| Edit | `src/layouts/OrganizerShell.tsx` (header) |
+| Edit | `src/layouts/AthleteShell.tsx` (header) |
+| Edit | `src/layouts/CompanyShell.tsx` (header) |
+| Edit | `src/layouts/sidebars/ArenaSidebar.tsx` (renomear grupo IA) |
+| Edit | `src/layouts/sidebars/OrganizerSidebar.tsx` (consolidar 7→4 grupos) |
+| Edit | `src/layouts/sidebars/CompanySidebar.tsx` (MoodPlay + label fixes) |
+| Edit | `src/layouts/sidebars/AthleteSidebar.tsx` (links para shell aliases) |
+| Edit | `src/pages/admin/AdminLayout.tsx` (migrar para 5 grupos + renomear) |
+| Edit | `src/pages/admin/AdminDashboard.tsx` (H1 SectionHeader) |
+| Edit | `src/components/conversational/OperationModeBanner.tsx` (wording) |
+| Edit | `src/pages/tenant/TenantDashboard.tsx` (SectionHeader → padrão Organizer) — opcional |
+| Edit | `src/pages/arena-dashboard/ArenaDashboard.tsx` (SectionHeader → padrão) — opcional |
+| Memory | `mem/style/profile-naming.md` (novo — glossário oficial) |
 
-**Total**: 5 arquivos novos + 13 edits mínimos + 1 memory.
+**Total**: 1 novo + ~12 edits cirúrgicos (cada um < 15 linhas) + 1 memory.
 
 ---
 
-## 8. Garantias de não-regressão
+## 10. Garantias de não-regressão
 
-- Zero rotas novas, zero rotas removidas.
-- Zero migration, zero edge, zero RLS, zero alteração ORKYM core.
-- `OrkymActionsCard` ganha 1 botão extra — `approveAction`/`executeAction`/`rejectAction` intactos.
-- `WhatsAppCTA` é puramente client-side (`window.open(wa.me)`); sem fetch, sem mutation.
-- Banner é dismissable (não polui retornos futuros).
+- Zero rotas adicionadas/removidas.
+- Zero migration, edge, RLS, ORKYM core, lógica de negócio.
+- Componentes existentes preservados — apenas labels/agrupamentos.
+- Sidebar `AdminSidebar.tsx` (Phase 11.7) permanece exportado mas não-usado → marcar como deprecated em comentário (não deletar).
 - Build TS limpo.
 
 ---
 
-## 9. ENTREGA B — Relatório
+## 11. ENTREGA B — Relatório
 
 | Item | Resultado |
 |---|---|
-| Reaproveitado | Padrão visual `SectionHeader`/`KpiCard` das Fases 11.2–11.6, `OrkymActionsCard`, `/arena/checkin` existente, ícones `lucide-react QrCode`, campo `whatsapp` já presente em várias tabelas |
-| Reorganizado | 6 dashboards passam a ter, no topo, `OperationModeBanner` + duo `CommandExamplesCard` × `QrEntryCard` — deixa claro que dashboard é camada de controle |
-| Renomeado | Nada — apenas adições |
-| WhatsApp-first | `wa.me://` aparece em 7 superfícies: 6 dashboards + ORKYM action card; sidebars têm atalho rodapé "Falar com a ORKYM" |
-| QR como entrada | `QrEntryCard` torna QR visível em Arena/Organizer/Athlete (perfis físicos); aponta para fluxos já existentes |
-| ORKYM cérebro | `OrkymActionsCard` ganha CTA "Continuar no WhatsApp" — dashboard mostra estado, WhatsApp executa |
+| Renomeado | "Mood Play" → "MoodPlay" em 6 shells; "Ações sugeridas / Ações IA" → "Ações ORKYM"; "Controle automático" → "Autonomia"; "Painel Administrativo" → "Control Tower"; "Sponsor Dashboard" → "Visão de patrocínios" |
+| Consolidado | 6 headers shell em formato único `[Chip] · [Nome]`; OrganizerSidebar 7→4 grupos; AdminSidebar lista plana → 5 grupos coerentes com Tenant/Arena |
+| Limpo | "Publicidade (legado)" sai do menu top; "Campanhas Ads" vira só "Campanhas"; Patrocínios Atleta+Torneio viram grupo único; Athlete sidebar deixa de apontar para `/feed` direto (usa `/athlete/feed`) |
+| Padronizado | Glossário `profileNaming.ts` como single source of truth; CTAs em 5 variações canônicas |
+| Inconsistente antes | 6 estilos de header, 5 termos para IA na Arena, AdminSidebar.tsx órfão divergente do AdminLayout em uso, H1 4xl uppercase só no Admin |
+| Mais claro agora | Cada perfil tem 1 chip de papel + 1 nome contextual; cada Control Tower é nomeado com modificador do papel (Arena/Rede/Event/Athlete/Company); IA = ORKYM em toda UI |
 
-## 10. ENTREGA C — Pendências
+## 12. ENTREGA C — Pendências
 
-- **11.8**: edge function `wa-bridge` que recebe webhook do WhatsApp e dispara `orkym-invoke` com o comando
-- **11.9**: secret `VITE_ORKYM_WHATSAPP` configurado per-tenant (cada tenant tem seu próprio número)
-- **11.10**: deeplinks de QR para fluxos não-arena (acesso a evento, ativação de campanha)
-- **11.11**: histórico de comandos WhatsApp visível no dashboard (depende de tabela nova)
-- **11.12**: voice notes → ORKYM (transcrição via OpenAI Whisper)
-- **11.13**: rich messages do ORKYM (botões nativos do WhatsApp Business)
+- **11.9**: deprecar fisicamente `AdminSidebar.tsx` órfão (após uma versão estável)
+- **11.10**: substituir `AdminLayout.tsx` por `AdminShell.tsx` (alinhar à arquitetura de shells dos outros 5 perfis)
+- **11.11**: redirect 301 de `/sponsor/*` para `/company/sponsor/*`
+- **11.12**: redirect 301 de `/marketplace/my-company` para `/company/marketplace`
+- **11.13**: extrair `SectionHeader` / `KpiCard` / `ShortcutLink` para `src/components/dashboard/*` (eliminar duplicação local em 6 dashboards)
+- **12.0**: camada conversacional profunda (edge `wa-bridge` recebendo webhooks)
 
-## 11. Critério de sucesso
+---
 
-- ✅ Cada dashboard mostra claramente "operar pelo WhatsApp" + "entrada por QR"
-- ✅ Banner dismissable explica os 3 canais (WhatsApp / QR / Dashboard)
-- ✅ Cada perfil tem 4-5 comandos prontos para clicar
-- ✅ ORKYM action card permite continuar no WhatsApp
-- ✅ Zero migration, zero edge, zero RLS, zero ORKYM core alterado
-- ✅ Build limpo, todas rotas intactas
+## 13. Critério de sucesso
+
+- ✅ Todos os 6 shells têm header em formato único `[Papel] · [Contexto]`
+- ✅ "MoodPlay" (sem espaço) em toda UI
+- ✅ "Ações ORKYM" / "Autonomia" / "Control Tower" como termos oficiais
+- ✅ AdminSidebar com 5 grupos coerentes (igual Tenant/Arena)
+- ✅ OrganizerSidebar com 4 grupos balanceados
+- ✅ AdminDashboard H1 alinhado ao padrão dos outros 5
+- ✅ Banner conversacional fala "Control Tower" (não "Dashboard")
+- ✅ Glossário `profileNaming.ts` documenta naming oficial
+- ✅ Zero rota quebrada, build TS limpo
 
