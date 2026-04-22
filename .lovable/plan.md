@@ -1,308 +1,340 @@
 
 
-# Fase 12 — Deep Conversational Operations (WhatsApp-First Execution)
+# Phase 12.5 — Enterprise WhatsApp Routing + ORKYM Execution Bridge
 
-> **Princípio**: zero IA local, zero duplicação. WhatsApp passa de "entry point UX" para canal real de execução. Tudo passa pela ORKYM existente; MoodPlay apenas recebe, identifica, encaminha, executa via handlers já existentes e registra.
+> **Princípio**: ORKYM decide, MoodPlay executa. Esta fase adiciona a camada faltante para que ORKYM possa **(a)** rotear por instância de WhatsApp por tenant/arena, **(b)** chamar MoodPlay server-to-server para executar ações sem precisar passar pelo wa-bridge, **(c)** registrar mensagens outbound proativas, e **(d)** receber feedback estruturado. Reusa 100% dos handlers existentes (`orkym-execute-action`, RPCs) — zero IA nova, zero decision engine local.
 
-## Diagnóstico
+## Diagnóstico do que já existe (reaproveitamento)
 
-- `orkym-invoke` já é a única porta de entrada da ORKYM (auth, dedup, rate-limit, quota, logs, ingest tasks/actions, auto-dispatch).
-- `orkym-execute-action` já dispatcha 9 action_types reusando `arena_operational_tasks`, `arena_occurrences`, `arena_generate_billing_cycle`, `ad_campaigns`.
-- `WhatsAppCTA` hoje só abre `wa.me?text=` — texto solto, sem payload, sem rastreio, sem retorno.
-- Não existe nenhuma tabela ou função de bridge WhatsApp.
-
-**Arquitetura-alvo**:
-```text
-[WhatsApp] → wa-bridge (webhook)
-              ↓ identifica user/tenant via wa_identities
-              ↓ insere conversational_commands (status=pending)
-              ↓ chama orkym-invoke (com prompt do usuário)
-              ↓ orkym retorna actions[] → ORKYM já ingesta + auto-dispatch (Fase 9)
-              ↓ wa-bridge espera resultado, atualiza command.status
-              ↓ envia mensagem de resposta de volta ao WhatsApp
-[Dashboard] ← lê conversational_commands em tempo real
-[QR]        → deep link wa.me com command pré-preenchido + token assinado
-```
+| Camada | Status atual | Reuso |
+|---|---|---|
+| Identity resolution | `wa_identities` + `wa_register/verify_identity` | ✅ Reusa |
+| Command history (inbound) | `conversational_commands` (channel: whatsapp/qr/dashboard_cta/api) | ✅ Reusa, adiciona `direction`, `whatsapp_instance_id`, `linked_entity_*` |
+| Inbound bridge | `wa-bridge` recebe webhook → ORKYM | ✅ Reusa, integra resolver de instância |
+| QR deep links | `wa_qr_tokens` + `wa_consume_qr_token` | ✅ Reusa |
+| Action execution | `orkym-execute-action` (9 action_types já dispatchados) | ✅ Reusa diretamente |
+| ORKYM-driven proposals | `orkym_action_proposals` + auto-dispatch (Fase 9) | ✅ Reusa |
+| Outbound messaging | **NÃO EXISTE** | 🆕 Cria |
+| Instance routing | **NÃO EXISTE** (só `VITE_ORKYM_WHATSAPP` global) | 🆕 Cria |
+| Server-to-server execution bridge | **NÃO EXISTE** (ORKYM só consegue chamar via wa-bridge) | 🆕 Cria |
 
 ---
 
-## 1. Migração — 3 tabelas + 2 RPCs
+## 1. Migration — 4 tabelas + 2 RPCs + 3 colunas
 
-### 1.1 `wa_identities` (mapeamento WhatsApp → user)
+### 1.1 `whatsapp_instances` (canal físico)
 ```sql
-CREATE TABLE public.wa_identities (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  wa_phone text NOT NULL,                 -- "5511999999999"
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  tenant_id uuid REFERENCES public.tenants(id),
-  default_arena_id uuid REFERENCES public.arenas(id),
-  default_profile_type text NOT NULL CHECK (default_profile_type IN
-    ('arena','organizer','athlete','company','tenant','admin')),
-  verified_at timestamptz,
-  verification_code text,                  -- 6 dígitos para opt-in
-  verification_expires_at timestamptz,
-  metadata jsonb DEFAULT '{}'::jsonb,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(wa_phone)
+CREATE TABLE public.whatsapp_instances (
+  id uuid PK,
+  provider text CHECK (provider IN ('twilio','meta','evolution','mock')),
+  display_name text,                    -- "Arena Praia Grande WA"
+  phone_number text NOT NULL,           -- E.164 sem +
+  external_instance_id text,            -- ID na Twilio/Meta
+  webhook_secret text,                  -- HMAC por instância (rotacionável)
+  outbound_endpoint text,               -- URL do provider para envio
+  outbound_credentials jsonb,           -- {token, sid} criptografado
+  status text CHECK (status IN ('active','paused','revoked')) DEFAULT 'active',
+  is_global_fallback boolean DEFAULT false,  -- só uma pode ser true
+  metadata jsonb DEFAULT '{}',
+  created_at, updated_at
 );
-ALTER TABLE public.wa_identities ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "self read" ON public.wa_identities FOR SELECT
-  USING (user_id = auth.uid() OR public.is_admin(auth.uid()));
-CREATE POLICY "self insert" ON public.wa_identities FOR INSERT
-  WITH CHECK (user_id = auth.uid());
-CREATE POLICY "self update" ON public.wa_identities FOR UPDATE
-  USING (user_id = auth.uid());
+-- RLS: read = admin only; nenhum cliente vê credenciais
 ```
 
-### 1.2 `conversational_commands` (histórico/auditoria)
+### 1.2 `whatsapp_bindings` (roteamento hierárquico — TABELA ÚNICA)
 ```sql
-CREATE TABLE public.conversational_commands (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id uuid REFERENCES public.tenants(id),
-  arena_id uuid REFERENCES public.arenas(id),
+CREATE TABLE public.whatsapp_bindings (
+  id uuid PK,
+  instance_id uuid REFERENCES whatsapp_instances(id),
+  scope_type text CHECK (scope_type IN ('arena','tenant','organizer','company','global')),
+  tenant_id uuid REFERENCES tenants(id),
+  arena_id uuid REFERENCES arenas(id),
+  organizer_user_id uuid REFERENCES auth.users(id),
+  company_id uuid REFERENCES companies(id),
+  profile_type text,                    -- nullable: filtro por papel
+  is_default boolean DEFAULT true,
+  priority int DEFAULT 100,             -- menor = mais específico
+  metadata jsonb DEFAULT '{}',
+  created_at
+);
+-- Índices parciais por scope_type; RLS: tenant_admin vê próprio binding
+```
+
+### 1.3 `whatsapp_messages` (histórico inbound + outbound)
+```sql
+CREATE TABLE public.whatsapp_messages (
+  id uuid PK,
+  instance_id uuid REFERENCES whatsapp_instances(id),
+  command_id uuid REFERENCES conversational_commands(id),  -- liga a inbound
+  direction text CHECK (direction IN ('inbound','outbound')),
+  wa_phone text NOT NULL,
+  user_id uuid,
+  tenant_id uuid,
+  arena_id uuid,
+  message_type text DEFAULT 'text',     -- text|template|interactive|media
+  body text,
+  template_name text,
+  template_vars jsonb,
+  external_message_id text,             -- ID retornado pelo provider
+  delivery_status text CHECK (delivery_status IN
+    ('queued','sent','delivered','read','failed')) DEFAULT 'queued',
+  failure_reason text,
+  initiated_by text CHECK (initiated_by IN ('user','orkym','system','manual')),
+  correlation_id text,                  -- liga a orkym_api_calls
+  created_at, sent_at, delivered_at
+);
+-- RLS: scoped read por user/arena/tenant/admin
+```
+
+### 1.4 `orkym_proactive_eligibility` (preferências outbound, opt-in)
+```sql
+CREATE TABLE public.orkym_proactive_eligibility (
+  id uuid PK,
   user_id uuid REFERENCES auth.users(id),
-  channel text NOT NULL DEFAULT 'whatsapp' CHECK (channel IN ('whatsapp','qr','dashboard_cta')),
-  profile_type text NOT NULL,
-  input_text text NOT NULL,
-  parsed_intent jsonb,                    -- domain/action sugerido pelo cliente
-  orkym_request_id text,                  -- liga em orkym_api_calls
-  orkym_correlation_id text,
-  status text NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending','dispatched','executed','failed','no_action','rate_limited')),
-  result_payload jsonb,
-  error_message text,
-  proposal_ids uuid[] DEFAULT '{}',       -- propostas geradas
-  response_text text,                     -- mensagem devolvida ao WhatsApp
-  qr_token uuid,                          -- nullable, liga a wa_qr_tokens
-  created_at timestamptz DEFAULT now(),
-  completed_at timestamptz
+  tenant_id uuid,
+  category text,                        -- 'billing','retention','marketing','operations'
+  channel text DEFAULT 'whatsapp',
+  opted_in boolean DEFAULT false,
+  opted_at timestamptz,
+  opted_out_at timestamptz,
+  metadata jsonb,
+  UNIQUE(user_id, tenant_id, category, channel)
 );
-CREATE INDEX idx_cc_tenant ON public.conversational_commands(tenant_id, created_at DESC);
-CREATE INDEX idx_cc_user ON public.conversational_commands(user_id, created_at DESC);
-CREATE INDEX idx_cc_arena ON public.conversational_commands(arena_id, created_at DESC) WHERE arena_id IS NOT NULL;
-ALTER TABLE public.conversational_commands ENABLE ROW LEVEL SECURITY;
--- RLS: arena_owner / tenant_admin / admin / próprio user
-CREATE POLICY "scoped read" ON public.conversational_commands FOR SELECT USING (
-  user_id = auth.uid()
-  OR public.is_admin(auth.uid())
-  OR (tenant_id IS NOT NULL AND public.is_tenant_admin(tenant_id, auth.uid()))
-  OR (arena_id IS NOT NULL AND public.is_arena_owner(arena_id, auth.uid()))
-);
--- INSERT/UPDATE bloqueados a clientes (apenas service role via wa-bridge)
+-- RLS: self read+write; tenant_admin read
 ```
 
-### 1.3 `wa_qr_tokens` (deep links assinados, TTL curto)
+### 1.5 Colunas adicionadas em `conversational_commands`
 ```sql
-CREATE TABLE public.wa_qr_tokens (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  token uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
-  intent text NOT NULL,                   -- ex: "checkin", "tournament_join", "billing_open"
-  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  tenant_id uuid REFERENCES public.tenants(id),
-  arena_id uuid REFERENCES public.arenas(id),
-  created_by uuid REFERENCES auth.users(id),
-  expires_at timestamptz NOT NULL,
-  consumed_at timestamptz,
-  consumed_by uuid REFERENCES auth.users(id)
-);
-CREATE INDEX idx_qr_token ON public.wa_qr_tokens(token) WHERE consumed_at IS NULL;
-ALTER TABLE public.wa_qr_tokens ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "creator + scoped read" ON public.wa_qr_tokens FOR SELECT USING (
-  created_by = auth.uid()
-  OR public.is_admin(auth.uid())
-  OR (tenant_id IS NOT NULL AND public.is_tenant_admin(tenant_id, auth.uid()))
-  OR (arena_id IS NOT NULL AND public.is_arena_owner(arena_id, auth.uid()))
-);
-CREATE POLICY "scoped insert" ON public.wa_qr_tokens FOR INSERT WITH CHECK (
-  created_by = auth.uid()
-);
+ALTER TABLE conversational_commands
+  ADD COLUMN direction text DEFAULT 'inbound' CHECK (direction IN ('inbound','outbound')),
+  ADD COLUMN whatsapp_instance_id uuid REFERENCES whatsapp_instances(id),
+  ADD COLUMN linked_entity_type text,
+  ADD COLUMN linked_entity_id uuid,
+  ADD COLUMN normalized_input text,
+  ADD COLUMN initiated_by text DEFAULT 'user' CHECK (initiated_by IN ('user','orkym','system'));
 ```
 
-### 1.4 RPCs auxiliares
-- `wa_register_identity(_phone text, _profile text)` — cria/atualiza `wa_identities` para `auth.uid()`, gera `verification_code` (6 dígitos, TTL 10min). Idempotente.
-- `wa_verify_identity(_phone text, _code text)` — confirma opt-in, marca `verified_at`.
-- `wa_create_qr_token(_intent text, _payload jsonb, _ttl_minutes int)` — SECURITY DEFINER, valida que user pode criar QR para o contexto, retorna `token`.
+### 1.6 RPCs (single source of truth)
+
+**`resolve_whatsapp_instance(_tenant_id, _arena_id, _profile_type, _organizer_user_id, _company_id)`** — SECURITY DEFINER, retorna `instance_id` aplicando hierarquia:
+1. Binding `arena` específico → 2. `organizer/company` específico → 3. `tenant` → 4. binding por `profile_type` → 5. fallback global (`is_global_fallback = true`).
+
+**`resolve_whatsapp_identity(_wa_phone, _instance_id)`** — SECURITY DEFINER, retorna JSONB com `{user_id, profile_type, tenant_id, arena_id, verified, is_lead}`. Se phone não verificado mas tem `wa_identities` parcial → retorna `is_lead: true`. Permite estado guest para ORKYM lidar.
 
 ---
 
-## 2. Edge function `wa-bridge` (nova, ~200 linhas)
+## 2. Edge function nova — `moodplay-execute-action` (server-to-server)
 
-`supabase/functions/wa-bridge/index.ts` — `verify_jwt = false` (webhook público com HMAC).
+`supabase/functions/moodplay-execute-action/index.ts` — `verify_jwt = false`.
 
-**Modos suportados**:
-1. **Webhook real** (`POST /wa-bridge` com header `X-WA-Signature`): payload Twilio/WhatsApp Business API ou genérico `{from, text}`.
-2. **Mock dev** (`POST /wa-bridge?mode=mock`): aceita JSON simples `{phone, text, qr_token?}` para testes.
+**Auth**: HMAC obrigatório (`X-MoodPlay-Signature`) + bearer token `ORKYM_SERVICE_TOKEN` em ambiente. Sem cliente JWT.
+
+**Payload aceito**:
+```json
+{
+  "tenant_id": "...",
+  "arena_id": "...",
+  "user_id": "...",            // contexto do operador (se houver)
+  "profile_type": "arena_manager",
+  "action_type": "create_tournament|create_followup|generate_billing_cycle|...",
+  "payload": { ... },
+  "source": "orkym_whatsapp|orkym_proactive|orkym_dashboard",
+  "correlation_id": "..."      // do lado ORKYM, para rastrear
+}
+```
 
 **Fluxo**:
-```ts
-1. Validar HMAC (Deno.env WA_WEBHOOK_SECRET) — modo mock pula
-2. Extrair {from_phone, text, qr_token?}
-3. Lookup wa_identities WHERE wa_phone = from_phone AND verified_at IS NOT NULL
-   - se não existe: responder "Conecte seu WhatsApp em moodplay.app/profile" + log com user_id=null
-4. Se qr_token presente: consumir wa_qr_tokens, mesclar payload no contexto
-5. INSERT conversational_commands (status='pending', input_text=text, profile_type=identity.default_profile_type)
-6. Service-role invoke orkym-invoke com:
-   - domain inferido do profile_type (arena→arena_operations, organizer→tournaments, company→growth, etc)
-   - action: "interpret_natural_command"
-   - payload.context.user_input = text
-   - payload.context.command_id = <conversational_commands.id>  ← liga retorno
-7. Aguardar response (timeout 10s)
-8. UPDATE conversational_commands SET orkym_request_id, status, proposal_ids, response_text
-9. Devolver mensagem WhatsApp:
-   - se actions_proposed > 0 e auto_executed > 0 → "✅ Feito: <descrição>"
-   - se proposed (sem auto) → "📋 Sugestão criada, aprove no painel: <link>"
-   - se nada → "🤖 Não consegui interpretar. Tente: <exemplos do profile_type>"
+1. Valida HMAC + tenant existe + (se arena_id) pertence ao tenant.
+2. Cria `conversational_commands` row com `channel='api'`, `initiated_by='orkym'`, `direction='inbound'`, `correlation_id`.
+3. **Reusa handlers**:
+   - Se `action_type` é um dos 9 já suportados em `orkym-execute-action` → cria proposal `auto_executed=false` e chama internamente o dispatcher (refatoração mínima: extrai handlers para `_shared/orkym-handlers.ts`).
+   - Se for ação **read-only** (`get_arena_summary`, `list_today_classes`, etc.) → executa via RPC e retorna inline (sem persistir proposal).
+   - Se for ação **nova operacional** mapeada (`create_tournament` via tabela `tournaments` insert, `create_class` via `arena_classes`, `create_billing` via `arena_generate_billing_cycle`) → handler que **só chama RPC/insert existente**. **Zero lógica de negócio nova.**
+4. Atualiza command com `status`, `linked_entity_*`, `result_payload`, `response_text`.
+5. Retorna feedback estruturado:
+```json
+{
+  "ok": true,
+  "command_id": "...",
+  "execution_status": "executed|failed|pending_approval",
+  "linked_entity": { "type": "tournament", "id": "..." },
+  "checkout_link": "...",     // opcional
+  "qr_link": "...",           // opcional
+  "response_summary": "Torneio criado para 23/05.",
+  "follow_up_actions": [ ... ]
+}
 ```
 
-**Resposta WhatsApp**: nesta fase apenas **logada** em `conversational_commands.response_text` + retornada como JSON. O envio real de mensagem (Twilio API, etc) fica para Fase 12.5 (depende de secret + provider escolhido pelo usuário).
-
-**Secrets necessários** (a pedir):
-- `WA_WEBHOOK_SECRET` (HMAC do webhook)
-- `WA_PROVIDER` (opcional: "twilio" / "meta" / "mock") — sem isso = só logging
-
----
-
-## 3. Frontend — 4 superfícies
-
-### 3.1 `WhatsAppCTA` enriquecido (~30 linhas adicionais)
-Aceita opcionalmente `payload?: object` e `commandId?: string`. Quando informado:
-- Antes de abrir `wa.me`, chama `supabase.functions.invoke("wa-prepare-command", {...})` que cria um row `conversational_commands` com `channel='dashboard_cta'`, status='pending', e retorna um shortcode (6 chars).
-- Texto enviado vira `<command> #${shortcode}` — wa-bridge reconhece o shortcode e amarra ao row já criado.
-- Fallback para comportamento atual quando sem payload.
-
-### 3.2 Página `/profile` — bloco "WhatsApp da ORKYM"
-Componente novo `src/components/conversational/WaIdentityPanel.tsx`:
-- Mostra status (não conectado / pendente verificação / verificado).
-- Input para telefone → chama `wa_register_identity` → toast com código (que deve ser enviado por WhatsApp para o número da ORKYM como "verificar 123456").
-- Quando verificado: mostra número + profile_type default + arena default (selectable).
-
-### 3.3 Histórico nos dashboards
-Componente novo `src/components/conversational/CommandHistoryCard.tsx` — lista os 5 últimos `conversational_commands` filtrados por escopo (arena_id no Arena, tenant_id no Tenant, user_id no Athlete, etc), com badge de status colorido + link "Ver tudo" para `/<profile>/commands`.
-
-Inserir em **6 dashboards** (após `OrkymActionsCard` quando existir, senão após hero):
-- ArenaDashboard (filter `arena_id`)
-- OrganizerDashboard (filter `user_id` = organizer)
-- AthleteDashboard (filter `user_id`)
-- CompanyDashboard (filter `user_id` = company owner)
-- TenantDashboard (filter `tenant_id`)
-- AdminDashboard (no filter, top 10 globais + métricas)
-
-Realtime subscription opcional via `supabase.channel('cc-<scope>')`.
-
-### 3.4 Página `/admin/commands` (nova)
-`src/pages/admin/AdminCommands.tsx` — tabela paginada com filtros (channel, status, profile_type, tenant), drawer com detalhes + link para `orkym_api_calls`.
-
-### 3.5 QR deep links reais
-- Atualizar `QrEntryCard.tsx` — aceita `intent` e `payload`. Ao clicar "Gerar QR" chama `wa_create_qr_token` e renderiza QR (lib `qrcode.react` já instalada? — senão usar `qrcode` SVG inline) que aponta para `wa.me/<numero>?text=${comando}%20%23QR-${token.slice(0,8)}`.
-- Aplicações imediatas:
-  - **Arena**: QR de check-in de aula → `intent='checkin'`, `payload={class_id}`
-  - **Organizer**: QR de check-in de torneio → `intent='tournament_checkin'`
-  - **Athlete**: QR para entrar em torneio → `intent='tournament_join'`
-  - **Company**: QR para ativar campanha/cupom → `intent='campaign_activate'`
+**Catálogo inicial de actions** (declarativo, reusa 100%):
+| action_type | Reusa |
+|---|---|
+| `create_followup`, `create_reminder`, `create_occurrence`, `propose_manual_charge`, `flag_enrollment_attention`, `propose_promotion`, `schedule_operational_review`, `open_communication_thread`, `recovery_campaign_draft` | `orkym-execute-action` handlers |
+| `create_tournament` | `INSERT tournaments` (rota já existente em `CreateTournament.tsx`) |
+| `create_class` | `INSERT arena_classes` |
+| `generate_billing_cycle` | `arena_generate_billing_cycle(_subscription_id)` |
+| `mark_cycle_paid` | `arena_mark_cycle_paid(_cycle_id)` |
+| `validate_checkin` | `arena_checkin_validate(_token)` |
+| `get_arena_summary`, `list_today_classes`, `list_pending_enrollments`, `get_revenue_today` | RPCs read-only (criar 4 RPCs `STABLE SECURITY DEFINER` finos) |
 
 ---
 
-## 4. CTAs existentes — payload real (5 trocas)
+## 3. Edge function nova — `wa-send-message` (outbound)
 
-- `OrkymActionsCard` — botão "Continuar no WhatsApp" passa `payload={proposal_id}`, `command="Aprovar ação <id> — <título>"` → wa-bridge reconhece intent="approve_action" e chama `orkym_action_approve` direto.
-- `OperationModeBanner` — sem mudança.
-- `CommandExamplesCard` — cada exemplo inclui `commandId` ao clicar (rastreio).
+`supabase/functions/wa-send-message/index.ts` — `verify_jwt = false`, HMAC + service token.
+
+**Responsabilidade**: enviar mensagem WhatsApp via instância correta, registrar em `whatsapp_messages`, sem decidir conteúdo.
+
+**Payload**:
+```json
+{
+  "to_phone": "5511...",
+  "tenant_id": "...",          // resolve instância via resolve_whatsapp_instance
+  "arena_id": "...",
+  "message_type": "text|template|interactive",
+  "body": "...",
+  "template_name": "...",
+  "template_vars": {...},
+  "category": "billing|retention|marketing|operations",
+  "user_id": "...",            // checa opt-in em orkym_proactive_eligibility
+  "correlation_id": "...",
+  "initiated_by": "orkym"
+}
+```
+
+**Fluxo**:
+1. Resolve instância via `resolve_whatsapp_instance`.
+2. Se categoria proativa: checa `orkym_proactive_eligibility.opted_in` para o user.
+3. Insere `whatsapp_messages` com `delivery_status='queued'`.
+4. Despacha ao provider:
+   - `provider='mock'` → log e marca `sent`.
+   - `provider='twilio'/'meta'` → chama API correspondente com creds da instância.
+   - Se sem credenciais → marca `failed` com `failure_reason='no_provider_configured'`. **UX degrada graciosamente.**
+5. Retorna `{ ok, message_id, delivery_status }`.
+
+**Webhook de delivery status** (futuro 12.6): `wa-delivery-webhook` consumindo callbacks do provider e atualizando `whatsapp_messages.delivery_status`.
 
 ---
 
-## 5. Reuso 100% da ORKYM existente
+## 4. Refatoração mínima em código existente
 
-A `wa-bridge` **NUNCA** decide nada por conta própria:
-- Domain inferido por `profile_type` (mapping puro).
-- Action sempre fixo: `interpret_natural_command` (já é um action válido — ORKYM lá fora interpreta o `payload.context.user_input` e devolve `actions[]` ou `suggestions[]`).
-- Execução: ORKYM ingere proposals → Fase 9 auto-dispatch já roda → handlers existentes já executam.
+### 4.1 `wa-bridge` — usar resolver de instância
+Adicionar antes do lookup de identidade:
+```ts
+const targetPhone = req.headers.get("x-wa-instance-phone") || /* parse from payload */;
+const { data: instance } = await supa.rpc("resolve_whatsapp_instance_by_phone", { _phone: targetPhone });
+// usar instance.id ao criar conversational_commands.whatsapp_instance_id
+```
 
-Para comandos de **leitura** ("ver meus jogos", "resumo do dia"): ORKYM devolve `suggestions[]` com `body` formatado → wa-bridge usa esse texto como `response_text`. Zero query SQL nova.
+E em `resolve_whatsapp_identity`: receber `_instance_id` para que ORKYM saiba **em qual contexto** o usuário escreveu (athlete A pode ser cliente da Arena X em uma instância e da Arena Y em outra).
 
-Para QR de **check-in** (já existe `arena_checkin_validate(_token)`): wa-bridge detecta `intent='checkin'`, chama RPC diretamente (caso especial documentado), pula ORKYM.
+### 4.2 `orkym-execute-action` — extrair handlers para shared
+Mover o `switch (p.action_type)` para `supabase/functions/_shared/orkym-handlers.ts` exportando `dispatchAction(admin, proposal)`. Tanto `orkym-execute-action` quanto `moodplay-execute-action` importam.
+
+### 4.3 `OrkymActionsCard` — preview de instância
+Mostrar qual instância será usada quando "Continuar no WhatsApp" for clicado (chip pequeno: "WA: Arena XPTO").
 
 ---
 
-## 6. Segurança
+## 5. Frontend — superfícies mínimas (UX-only)
 
-- **HMAC obrigatório no webhook** (rejeita se ausente em prod).
-- **Identity verificada**: comandos de phones não-verificados respondem com link de onboarding e log apenas (sem invocar ORKYM).
-- **Permissões**: ORKYM já valida via `orkym-execute-action.checkPermission`. wa-bridge nunca executa fora desse caminho.
-- **QR tokens**: TTL máximo 60min, single-use (`consumed_at`), escopo restrito por RLS no `wa_create_qr_token`.
-- **Sanitização de input_text**: trunca em 1000 chars, remove caracteres de controle.
-- **Rate limit**: reusa o `RATE_LIMIT_PER_MIN` do orkym-invoke (60/min/tenant).
+### 5.1 `/admin/whatsapp-instances` (nova)
+Tabela CRUD de `whatsapp_instances` (provider, phone, status, fallback global). Acesso: admin only.
+
+### 5.2 `/tenant/whatsapp-routing` (nova)
+Lista bindings do tenant + UI para criar binding tenant/arena → instância. Reusa formulário simples; valida via RPC.
+
+### 5.3 `WaIdentityPanel` — adicionar opt-in proativo
+Após verificação, mostrar 4 toggles (billing/retention/marketing/operations) que escrevem em `orkym_proactive_eligibility`.
+
+### 5.4 `CommandHistoryCard` — coluna "direção" + "instância"
+Badge colorido `inbound`/`outbound`, chip da instância quando aplicável.
+
+### 5.5 `/admin/whatsapp-messages` (nova) e `/<profile>/messages` (alias para escopo)
+Tabela paginada de `whatsapp_messages` (filtrar direction, status, instance, category).
+
+### 5.6 `src/lib/wa.ts` — funções novas
+`resolveInstance()`, `sendOutbound()` (apenas para admin/test), `setProactiveOptIn()`.
+
+---
+
+## 6. Segurança (mandatório)
+
+- **HMAC obrigatório** em `wa-bridge` (já existe), `moodplay-execute-action` e `wa-send-message` (novos).
+- **Validação cross-tenant**: toda chamada a `moodplay-execute-action` valida que `arena_id` pertence ao `tenant_id` informado e que o `user_id` (se passado) tem papel compatível.
+- **Credenciais de provider**: `outbound_credentials` em `whatsapp_instances` lido **apenas por edge function service-role**. Coluna não exposta em RLS para clientes.
+- **Replay protection**: header `X-Request-Timestamp` (rejeita > 5min); `X-Idempotency-Key` (dedup em `whatsapp_messages` e `conversational_commands` por correlation_id).
+- **Audit trail**: cada execução server-to-server insere `security_audit_log` (reusa função existente).
+- **Opt-in obrigatório** para `wa-send-message` em categorias `marketing`/`retention`. `billing`/`operations` permitidos por padrão (transacionais).
 
 ---
 
 ## 7. Arquivos tocados
 
-| Tipo | Arquivo |
-|---|---|
-| Migration | 3 tabelas + 3 RPCs + RLS |
-| Novo | `supabase/functions/wa-bridge/index.ts` (~200) |
-| Novo | `supabase/functions/wa-prepare-command/index.ts` (~60) — gera shortcode |
-| Edit | `supabase/config.toml` (`wa-bridge` verify_jwt=false, `wa-prepare-command` verify_jwt=true) |
-| Novo | `src/lib/wa.ts` — helpers `prepareCommand`, `createQrToken`, `registerIdentity` |
-| Edit | `src/components/conversational/WhatsAppCTA.tsx` — payload + commandId |
-| Edit | `src/components/conversational/QrEntryCard.tsx` — gera QR real via `wa_create_qr_token` |
-| Novo | `src/components/conversational/WaIdentityPanel.tsx` — onboarding |
-| Novo | `src/components/conversational/CommandHistoryCard.tsx` — 5 últimos |
-| Novo | `src/components/conversational/CommandStatusBadge.tsx` |
-| Edit | `src/pages/Profile.tsx` — adicionar `WaIdentityPanel` |
-| Edit | 6 dashboards — adicionar `CommandHistoryCard` |
-| Novo | `src/pages/admin/AdminCommands.tsx` (rota `/admin/commands`) |
-| Novo | `src/pages/<profile>/<Profile>Commands.tsx` para Arena/Tenant/Organizer/Company (rotas `/<profile>/commands`) |
-| Edit | `src/App.tsx` — 5 novas rotas |
-| Edit | `src/layouts/sidebars/AdminSidebar.tsx` + `TenantSidebar` + `ArenaSidebar` + `OrganizerSidebar` + `CompanySidebar` — item "Comandos" |
-| Edit | `src/components/orkym/OrkymActionsCard.tsx` — passar `payload={proposal_id}` no WhatsApp CTA |
-| Memory | `mem/features/whatsapp-deep-execution.md` |
-
-**Totais**: 1 migration, 2 edge functions novas, ~5 componentes novos, ~5 páginas novas, ~10 edits cirúrgicos.
+| Tipo | Arquivo | LOC |
+|---|---|---|
+| Migration | 1 nova (4 tabelas + 6 RPCs + 6 colunas + RLS + índices) | ~400 |
+| Edge | `supabase/functions/moodplay-execute-action/index.ts` (novo) | ~250 |
+| Edge | `supabase/functions/wa-send-message/index.ts` (novo) | ~180 |
+| Edge | `supabase/functions/_shared/orkym-handlers.ts` (extração) | ~200 |
+| Edge | `supabase/functions/orkym-execute-action/index.ts` (refac mínima) | -120/+15 |
+| Edge | `supabase/functions/wa-bridge/index.ts` (resolver instance) | +30 |
+| Config | `supabase/config.toml` (verify_jwt=false p/ 2 novos) | +6 |
+| Lib | `src/lib/wa.ts` (3 helpers) | +60 |
+| UI | `src/pages/admin/AdminWhatsAppInstances.tsx` (novo) | ~200 |
+| UI | `src/pages/admin/AdminWhatsAppMessages.tsx` (novo) | ~150 |
+| UI | `src/pages/tenant/TenantWhatsAppRouting.tsx` (novo) | ~180 |
+| UI | `WaIdentityPanel.tsx` (toggles opt-in) | +50 |
+| UI | `CommandHistoryCard.tsx` (badge direção + chip instância) | +20 |
+| UI | `src/App.tsx` (3 rotas) + sidebars (Admin + Tenant) | +12 |
+| Memory | `mem/integration/orkym-execution-bridge.md` | novo |
 
 ---
 
 ## 8. Garantias de não-regressão
 
-- `WhatsAppCTA` mantém comportamento atual quando chamado sem `payload` (todos os usos existentes continuam funcionando).
-- `QrEntryCard` mantém prop `ctaTo` legacy; QR real é opt-in via nova prop `intent`.
-- ORKYM core, RLS atuais, finance, autonomy: **intactos**.
-- `orkym-invoke` e `orkym-execute-action`: **não tocados**.
-- Sem secret WhatsApp configurado: bridge funciona em modo "log-only" (registra command mas não envia resposta) — UX degrada graciosamente.
+- `wa-bridge` continua funcionando em modo mock e com identidades existentes.
+- `orkym-execute-action` mantém contrato externo idêntico (apenas refatora handlers internamente).
+- `WhatsAppCTA` legacy (sem payload) inalterado.
+- Tabelas Phase 12 (`wa_identities`, `conversational_commands`, `wa_qr_tokens`) preservadas; só ganham colunas opcionais.
+- Sem provider configurado: `wa-send-message` retorna `failed` mas não bloqueia o sistema.
+- Zero lógica de negócio nova: todo `moodplay-execute-action` é wrapper que chama RPCs/handlers existentes.
 
 ---
 
-## 9. ENTREGA B — Relatório
+## 9. ENTREGA B — Relatório estrutural
 
-| Item | Resultado |
+| Pergunta | Resposta |
 |---|---|
-| Bridge real | `wa-bridge` recebe webhook HMAC + modo mock para teste |
-| Identidade | Tabela `wa_identities` com opt-in via código de 6 dígitos |
-| Histórico | `conversational_commands` com status lifecycle completo |
-| Execução real | 100% via ORKYM existente — zero nova lógica de decisão |
-| Dashboards | Card "últimos comandos" em 6 perfis + página dedicada |
-| QR funcional | `wa_qr_tokens` single-use → `wa.me?text=<cmd> #QR-<token>` |
-| CTAs ricas | `WhatsAppCTA` aceita payload + commandId para rastreio |
-| Segurança | HMAC + identity verificada + RLS por escopo + sanitize input |
+| Como instância é resolvida? | `resolve_whatsapp_instance(tenant, arena, profile, organizer, company)` — hierarquia arena → org/company → tenant → profile_type → fallback global |
+| Como identidade é resolvida? | `resolve_whatsapp_identity(phone, instance_id)` retorna {user, profile_type, tenant, arena, verified, is_lead}; lead state permite ORKYM iniciar fluxo de captura |
+| Como ORKYM chama MoodPlay? | `POST /moodplay-execute-action` com HMAC + service token, payload tipado, retorna feedback estruturado síncrono |
+| Como MoodPlay responde? | JSON: `{execution_status, linked_entity, checkout_link?, qr_link?, response_summary, follow_up_actions[]}` |
+| Como histórico é salvo? | `conversational_commands` ganha direction/instance/linked_entity; `whatsapp_messages` separa eventos de canal |
+| Como proatividade fica preparada? | `orkym_proactive_eligibility` (opt-in por categoria) + `wa-send-message` com resolver de instância + `whatsapp_messages` outbound |
+| O que foi reusado? | `orkym-execute-action` handlers, `wa_identities`, `conversational_commands`, `wa_qr_tokens`, `arena_*` RPCs, `is_admin/is_tenant_admin/is_arena_owner`, `security_audit_log` |
+| O que foi criado? | 4 tabelas (instances/bindings/messages/eligibility), 2 edge functions (execute-action server-to-server, send-message), 2 RPCs resolver, 3 telas de configuração admin/tenant |
 
-## 10. ENTREGA C — Pendências (Fase 12.5+)
+## 10. ENTREGA C — Riscos e pendências
 
-- **12.5**: integração real com Twilio/Meta WhatsApp Business para envio de mensagens (depende de provider + secret)
-- **12.6**: WhatsApp number per-tenant (substitui `VITE_ORKYM_WHATSAPP` global por lookup em `tenant_settings`)
-- **12.7**: rich messages (botões nativos do WhatsApp Business, listas, mídia)
-- **12.8**: voice notes → Whisper → texto → ORKYM
-- **12.9**: comandos compostos multi-turn (sessão de conversa)
-- **12.10**: notificações outbound proativas (ORKYM detecta evento → manda WhatsApp)
+- **Provider real (Twilio/Meta)**: `wa-send-message` envia em modo mock até secrets `WA_PROVIDER_*` serem configurados. Pendência da próxima fase.
+- **Delivery callbacks**: webhook `wa-delivery-webhook` para receber status `delivered/read/failed` do provider — Fase 12.6.
+- **Multi-instance per arena**: estrutura suporta, mas UI atual permite 1 binding/scope. Multi-line/canal segue Fase 12.7.
+- **Catálogo de actions read-only**: 4 RPCs criados (`get_arena_summary`, etc); expansão (rankings, jogos do dia, performance) fica para Fase 12.8.
+- **Voice notes / rich messages**: dependem do provider — fora do escopo.
+- **ORKYM precisa adaptar**: lado ORKYM precisa adotar endpoint `moodplay-execute-action` (auth HMAC, payload tipado). Documentação no memory file.
+- **Lead/guest state**: persistido em `wa_identities` sem `verified_at` mas `user_id` exigido. Pendência: tabela `wa_leads` separada se necessário (Fase 12.9).
 
 ---
 
 ## 11. Critério de sucesso
 
-- ✅ Atleta envia "fazer check-in" + QR scan → attendance criado
-- ✅ Arena owner envia "abrir cobrança do João" → `arena_generate_billing_cycle` rodado via ORKYM
-- ✅ Comando aparece no `CommandHistoryCard` da arena em <3s (realtime)
-- ✅ Admin vê todos comandos em `/admin/commands` com status real
-- ✅ QR de check-in gera `wa.me` com payload pré-preenchido + token consumível 1x
-- ✅ Sem secret WA configurado: sistema continua funcionando em log-only
-- ✅ Zero alteração em `orkym-invoke` / `orkym-execute-action`
-- ✅ Build TS limpo, todas rotas legacy intactas
+- ✅ ORKYM resolve instância correta para qualquer (tenant, arena, profile)
+- ✅ ORKYM chama `moodplay-execute-action` server-to-server e cria torneio/aula/cobrança real
+- ✅ Resposta estruturada com `linked_entity` + `response_summary`
+- ✅ Outbound proativo registrado em `whatsapp_messages` com opt-in respeitado
+- ✅ `conversational_commands` mostra inbound + outbound com direção e instância
+- ✅ Hierarquia de fallback funciona: arena → tenant → global
+- ✅ HMAC + replay protection + cross-tenant validation ativos
+- ✅ Zero lógica de IA local; zero duplicação de handlers
+- ✅ Sem provider configurado: sistema funciona em log-only sem quebrar
 
