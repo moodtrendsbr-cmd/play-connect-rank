@@ -267,6 +267,9 @@ const Profile = () => {
         onAvatarUpdate={(url) => setProfile({ ...profile, avatar_url: url })}
       />
 
+      {/* WhatsApp da ORKYM (Phase 12) */}
+      <WaIdentityPanel defaultProfile={isOrganizer ? "organizer" : "athlete"} />
+
       {/* Edit form */}
       {editing && (
         <div className="space-y-4 p-4 rounded-xl" style={{ background: "#0B0F12", border: "1px solid rgba(43,255,136,0.1)" }}>
