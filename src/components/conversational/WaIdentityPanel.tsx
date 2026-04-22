@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, CheckCircle2, AlertCircle, Loader2, Copy } from "lucide-react";
 import { toast } from "sonner";
-import { registerWaIdentity, verifyWaIdentity, getWaNumber, isWaConfigured } from "@/lib/wa";
+import { registerWaIdentity, verifyWaIdentity, getWaNumber, isWaConfigured, setProactiveOptIn, type ProactiveCategory } from "@/lib/wa";
+import { Switch } from "@/components/ui/switch";
 
 interface Props {
   userId: string;
@@ -105,16 +106,19 @@ export const WaIdentityPanel = ({ userId }: Props) => {
         {loading ? (
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : verified ? (
-          <div className="space-y-2">
-            <p className="text-sm">
-              Conectado como <span className="font-medium">+{identity?.wa_phone}</span>
-              {" "}— perfil padrão: <span className="font-medium">{
-                PROFILES.find(p => p.value === identity?.default_profile_type)?.label || identity?.default_profile_type
-              }</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Envie comandos para o WhatsApp da ORKYM (+{orkymNumber}). Eles aparecem no card "Últimos comandos" do seu painel em tempo real.
-            </p>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <p className="text-sm">
+                Conectado como <span className="font-medium">+{identity?.wa_phone}</span>
+                {" "}— perfil padrão: <span className="font-medium">{
+                  PROFILES.find(p => p.value === identity?.default_profile_type)?.label || identity?.default_profile_type
+                }</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Envie comandos para o WhatsApp da ORKYM (+{orkymNumber}). Eles aparecem no card "Últimos comandos" do seu painel em tempo real.
+              </p>
+            </div>
+            <ProactiveOptInPanel userId={userId} />
           </div>
         ) : (
           <>
