@@ -111,6 +111,12 @@ import AthleteShell from "./layouts/AthleteShell";
 import CompanyShell from "./layouts/CompanyShell";
 import CompanyDashboard from "./pages/company/CompanyDashboard";
 import CompanySponsorBridge from "./pages/company/CompanySponsorBridge";
+import AdminCommands from "./pages/admin/AdminCommands";
+import ArenaCommands from "./pages/arena-dashboard/ArenaCommands";
+import TenantCommands from "./pages/tenant/TenantCommands";
+import OrganizerCommands from "./pages/organizer/OrganizerCommands";
+import CompanyCommands from "./pages/company/CompanyCommands";
+import AthleteCommands from "./pages/athlete/AthleteCommands";
 import { Navigate } from "react-router-dom";
 
 const queryClient = new QueryClient();
@@ -189,6 +195,7 @@ const App = () => (
               <Route path="acoes-ia" element={<ArenaActions />} />
               <Route path="autonomia" element={<ArenaAutonomy />} />
               <Route path="control-tower" element={<ArenaControlTower />} />
+              <Route path="comandos" element={<ArenaCommands />} />
             </Route>
             <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
             {/* Phase 11.4 — Organizer Event Engine (additive shell) */}
@@ -199,6 +206,7 @@ const App = () => (
               <Route path="jogos" element={<OrganizerDashboard />} />
               <Route path="performance" element={<OrganizerDashboard />} />
               <Route path="financeiro" element={<OrganizerFinance />} />
+              <Route path="comandos" element={<OrganizerCommands />} />
             </Route>
             <Route path="/organizer" element={<OrganizerLayout />}>
               <Route index element={<Navigate to="/organizer/settings" replace />} />
@@ -223,6 +231,7 @@ const App = () => (
               <Route path="historico" element={<AthleteDashboard />} />
               <Route path="descobrir" element={<Explore />} />
               <Route path="mensagens" element={<Messages />} />
+              <Route path="comandos" element={<AthleteCommands />} />
             </Route>
             {/* Phase 11.6 — Company Commercial Profile */}
             <Route path="/company" element={<CompanyShell />}>
@@ -234,6 +243,7 @@ const App = () => (
               <Route path="campanhas" element={<CompanyDashboard />} />
               <Route path="performance" element={<CompanyDashboard />} />
               <Route path="visibilidade" element={<CompanyDashboard />} />
+              <Route path="comandos" element={<CompanyCommands />} />
               {/* Sponsor bridge: provides `company` via Outlet context */}
               <Route path="sponsor" element={<CompanySponsorBridge />}>
                 <Route path="torneios" element={<SponsorTournaments />} />
@@ -256,6 +266,7 @@ const App = () => (
               <Route path="branding" element={<OrganizerSettings />} />
               <Route path="dominios" element={<OrganizerDomains />} />
               <Route path="autonomia" element={<AdminAutonomy />} />
+              <Route path="comandos" element={<TenantCommands />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
@@ -281,6 +292,7 @@ const App = () => (
               <Route path="autonomy" element={<AdminAutonomy />} />
               <Route path="control-tower" element={<AdminControlTower />} />
               <Route path="tenants" element={<AdminArenas />} />
+              <Route path="commands" element={<AdminCommands />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
