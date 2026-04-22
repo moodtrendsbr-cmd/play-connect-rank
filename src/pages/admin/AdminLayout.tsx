@@ -14,7 +14,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag, Handshake, BarChart3, Gift, Layers, Building2, Percent, ScrollText, Bot, Sparkles, ShieldCheck, Gauge, MessageCircle } from "lucide-react";
+import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag, Handshake, BarChart3, Gift, Layers, Building2, Percent, ScrollText, Bot, Sparkles, ShieldCheck, Gauge, MessageCircle, Phone, Inbox } from "lucide-react";
 
 type NavGroup = {
   label: string;
@@ -68,6 +68,13 @@ const navGroups: NavGroup[] = [
       { title: "Monitor ORKYM", url: "/admin/orkym", icon: Bot },
       { title: "Ações ORKYM", url: "/admin/orkym-actions", icon: Sparkles },
       { title: "Autonomia", url: "/admin/autonomy", icon: ShieldCheck },
+    ],
+  },
+  {
+    label: "WhatsApp",
+    items: [
+      { title: "Instâncias", url: "/admin/whatsapp-instances", icon: Phone },
+      { title: "Mensagens", url: "/admin/whatsapp-messages", icon: Inbox },
     ],
   },
 ];

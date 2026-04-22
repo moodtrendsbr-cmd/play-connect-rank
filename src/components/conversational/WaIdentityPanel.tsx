@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, CheckCircle2, AlertCircle, Loader2, Copy } from "lucide-react";
 import { toast } from "sonner";
-import { registerWaIdentity, verifyWaIdentity, getWaNumber, isWaConfigured } from "@/lib/wa";
+import { registerWaIdentity, verifyWaIdentity, getWaNumber, isWaConfigured, setProactiveOptIn, type ProactiveCategory } from "@/lib/wa";
+import { Switch } from "@/components/ui/switch";
 
 interface Props {
   userId: string;
@@ -105,16 +106,19 @@ export const WaIdentityPanel = ({ userId }: Props) => {
         {loading ? (
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : verified ? (
-          <div className="space-y-2">
-            <p className="text-sm">
-              Conectado como <span className="font-medium">+{identity?.wa_phone}</span>
-              {" "}— perfil padrão: <span className="font-medium">{
-                PROFILES.find(p => p.value === identity?.default_profile_type)?.label || identity?.default_profile_type
-              }</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Envie comandos para o WhatsApp da ORKYM (+{orkymNumber}). Eles aparecem no card "Últimos comandos" do seu painel em tempo real.
-            </p>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <p className="text-sm">
+                Conectado como <span className="font-medium">+{identity?.wa_phone}</span>
+                {" "}— perfil padrão: <span className="font-medium">{
+                  PROFILES.find(p => p.value === identity?.default_profile_type)?.label || identity?.default_profile_type
+                }</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Envie comandos para o WhatsApp da ORKYM (+{orkymNumber}). Eles aparecem no card "Últimos comandos" do seu painel em tempo real.
+              </p>
+            </div>
+            <ProactiveOptInPanel userId={userId} />
           </div>
         ) : (
           <>
@@ -201,5 +205,60 @@ export const WaIdentityPanel = ({ userId }: Props) => {
         )}
       </CardContent>
     </Card>
+  );
+};
+
+const PROACTIVE_CATEGORIES: { value: ProactiveCategory; label: string; hint: string }[] = [
+  { value: "billing", label: "Cobranças", hint: "Avisos de vencimento e pagamento" },
+  { value: "operations", label: "Operação", hint: "Confirmações e lembretes operacionais" },
+  { value: "retention", label: "Retenção", hint: "Reengajamento e win-back" },
+  { value: "marketing", label: "Marketing", hint: "Promoções, campanhas e novidades" },
+];
+
+const ProactiveOptInPanel = ({ userId }: { userId: string }) => {
+  const [opts, setOpts] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("orkym_proactive_eligibility")
+        .select("category,opted_in")
+        .eq("user_id", userId)
+        .eq("channel", "whatsapp");
+      const map: Record<string, boolean> = {};
+      (data || []).forEach((r: any) => { map[r.category] = r.opted_in; });
+      setOpts(map);
+      setLoading(false);
+    })();
+  }, [userId]);
+
+  const toggle = async (cat: ProactiveCategory, v: boolean) => {
+    setOpts((prev) => ({ ...prev, [cat]: v }));
+    const ok = await setProactiveOptIn(userId, cat, v, null);
+    if (!ok) {
+      toast.error("Não foi possível salvar a preferência");
+      setOpts((prev) => ({ ...prev, [cat]: !v }));
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="rounded-md border border-border p-3 space-y-2.5">
+      <p className="text-xs font-medium">Mensagens proativas da ORKYM</p>
+      {PROACTIVE_CATEGORIES.map((c) => (
+        <div key={c.value} className="flex items-center justify-between gap-2">
+          <div className="space-y-0.5">
+            <p className="text-xs font-medium">{c.label}</p>
+            <p className="text-[11px] text-muted-foreground">{c.hint}</p>
+          </div>
+          <Switch
+            checked={!!opts[c.value]}
+            onCheckedChange={(v) => toggle(c.value, v)}
+          />
+        </div>
+      ))}
+    </div>
   );
 };

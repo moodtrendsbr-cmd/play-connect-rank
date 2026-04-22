@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, ArrowRight, RefreshCw, QrCode, MousePointerClick } from "lucide-react";
+import { MessageCircle, ArrowRight, RefreshCw, QrCode, MousePointerClick, ArrowDownLeft, ArrowUpRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommandStatusBadge } from "./CommandStatusBadge";
 import { formatDistanceToNow } from "date-fns";
@@ -24,11 +24,15 @@ interface Command {
   status: string;
   response_text: string | null;
   created_at: string;
+  direction: string | null;
+  initiated_by: string | null;
+  whatsapp_instance_id: string | null;
 }
 
 const channelIcon = (c: string) => {
   if (c === "qr") return <QrCode className="h-3 w-3" />;
   if (c === "dashboard_cta") return <MousePointerClick className="h-3 w-3" />;
+  if (c === "api") return <Sparkles className="h-3 w-3" />;
   return <MessageCircle className="h-3 w-3" />;
 };
 
@@ -46,7 +50,7 @@ export const CommandHistoryCard = ({
     setLoading(true);
     let q = supabase
       .from("conversational_commands")
-      .select("id,channel,input_text,status,response_text,created_at")
+      .select("id,channel,input_text,status,response_text,created_at,direction,initiated_by,whatsapp_instance_id")
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -98,7 +102,20 @@ export const CommandHistoryCard = ({
         {items.map((c) => (
           <div key={c.id} className="p-3 rounded-lg bg-muted/30 space-y-1.5">
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground flex-wrap">
+                {c.direction === "outbound" ? (
+                  <Badge variant="outline" className="h-4 px-1 gap-0.5 text-[9px]">
+                    <ArrowUpRight className="h-2.5 w-2.5" /> ORKYM
+                  </Badge>
+                ) : c.initiated_by === "orkym" ? (
+                  <Badge variant="outline" className="h-4 px-1 gap-0.5 text-[9px] border-emerald-500/30 text-emerald-700">
+                    <Sparkles className="h-2.5 w-2.5" /> ORKYM
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="h-4 px-1 gap-0.5 text-[9px]">
+                    <ArrowDownLeft className="h-2.5 w-2.5" /> User
+                  </Badge>
+                )}
                 {channelIcon(c.channel)}
                 <span className="uppercase tracking-wide">{c.channel === "dashboard_cta" ? "CTA" : c.channel}</span>
                 <span>·</span>
