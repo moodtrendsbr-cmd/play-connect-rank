@@ -16,6 +16,9 @@ import {
   type TenantTier, type UsageSummary,
 } from "@/lib/autonomyTier";
 import { UsageMeter } from "@/components/autonomy/UsageMeter";
+import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
+import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { COMMANDS } from "@/lib/conversationalCommands";
 
 // ─────────────── helpers locais (não exportados) ───────────────
 const SectionHeader = ({
@@ -325,6 +328,14 @@ const TenantDashboard = () => {
           <KpiCard label="Alertas abertos" value={openOccurrences + overdueCount} icon={<AlertTriangle className="h-4 w-4" />} hint={`${openOccurrences} ocorrências`} />
         </div>
       </section>
+
+      {/* CAMADA CONVERSACIONAL */}
+      <OperationModeBanner profile="tenant" />
+      <CommandExamplesCard
+        title="Operar pelo WhatsApp"
+        subtitle="Comandos executivos para sua rede"
+        examples={COMMANDS.tenant}
+      />
 
       {/* BLOCO 2 — REDE */}
       <section id="rede">

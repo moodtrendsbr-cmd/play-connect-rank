@@ -10,6 +10,9 @@ import {
   LineChart, Eye, Compass, Rss, ExternalLink, AlertTriangle, MousePointerClick,
   TrendingUp, ArrowRight, Loader2,
 } from "lucide-react";
+import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
+import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { COMMANDS } from "@/lib/conversationalCommands";
 
 // ---------- Local helpers (not exported) ----------
 const SectionHeader = ({ id, icon: Icon, title, subtitle, action }: any) => (
@@ -253,6 +256,14 @@ const CompanyDashboard = () => {
           <KpiCard icon={MousePointerClick} label="Cliques" value={totalClicks.toLocaleString("pt-BR")} />
         </div>
       </section>
+
+      {/* CAMADA CONVERSACIONAL */}
+      <OperationModeBanner profile="company" />
+      <CommandExamplesCard
+        title="Operar pelo WhatsApp"
+        subtitle="Comandos rápidos para sua presença comercial"
+        examples={COMMANDS.company}
+      />
 
       {/* BLOCO 2 — Marketplace */}
       <section>

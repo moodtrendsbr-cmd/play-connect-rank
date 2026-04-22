@@ -12,6 +12,10 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { OrkymInsightsCard } from "@/components/orkym/InsightsCard";
 import { OrkymActionsCard } from "@/components/orkym/OrkymActionsCard";
+import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
+import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { QrEntryCard } from "@/components/conversational/QrEntryCard";
+import { COMMANDS } from "@/lib/conversationalCommands";
 import { cn } from "@/lib/utils";
 
 // ---------- Local UI helpers (not exported) ----------
@@ -191,6 +195,22 @@ const ArenaDashboard = () => {
           </CardContent>
         </Card>
       </section>
+
+      {/* CAMADA CONVERSACIONAL */}
+      <OperationModeBanner profile="arena" />
+      <div className="grid md:grid-cols-2 gap-4">
+        <CommandExamplesCard
+          title="Operar pelo WhatsApp"
+          subtitle="Comandos rápidos para a operação da arena"
+          examples={COMMANDS.arena}
+        />
+        <QrEntryCard
+          title="Entrada física por QR"
+          subtitle="Check-in de aulas, torneios e quadras"
+          ctaTo="/arena/checkin"
+          ctaLabel="Abrir check-in"
+        />
+      </div>
 
       {/* BLOCO 2 — OPERAÇÃO DO DIA */}
       <section className="space-y-3">
