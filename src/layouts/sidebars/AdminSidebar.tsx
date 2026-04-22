@@ -1,3 +1,7 @@
+/**
+ * @deprecated Phase 11.8 — não usado em produção. /admin usa AdminLayout.tsx (já alinhado a 5 grupos).
+ * Mantido apenas para compatibilidade enquanto a Fase 11.10 não migrar /admin para o padrão Shell.
+ */
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,

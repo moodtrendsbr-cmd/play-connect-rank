@@ -52,7 +52,7 @@ const groups = [
     items: [
       { title: "Como apareço", url: "/company/visibilidade", icon: Eye },
       { title: "Explore", url: "/explore", icon: Compass },
-      { title: "Feed", url: "/feed", icon: Rss },
+      { title: "Feed MoodPlay", url: "/feed", icon: Rss },
     ],
   },
 ];

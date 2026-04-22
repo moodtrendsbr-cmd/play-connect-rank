@@ -111,7 +111,15 @@ const AdminDashboard = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-4xl font-display text-foreground">PAINEL ADMINISTRATIVO</h1>
+      <div className="flex items-start gap-3">
+        <div className="h-9 w-9 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+          <Users className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-semibold leading-tight text-foreground">Control Tower</h1>
+          <p className="text-sm text-muted-foreground">Visão global do MoodPlay</p>
+        </div>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((c) => (
           <Card key={c.label}>
