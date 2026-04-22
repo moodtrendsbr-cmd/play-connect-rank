@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
 import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { QrEntryCard } from "@/components/conversational/QrEntryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 
@@ -413,6 +414,13 @@ const AthleteDashboard = () => {
           ctaLabel="Abrir scanner"
         />
       </div>
+      {user?.id && (
+        <CommandHistoryCard
+          scope="user"
+          scopeId={user.id}
+          seeAllHref="/athlete/comandos"
+        />
+      )}
 
       {/* BLOCO 2 — MEU ESPORTE HOJE */}
       <section className="space-y-3">

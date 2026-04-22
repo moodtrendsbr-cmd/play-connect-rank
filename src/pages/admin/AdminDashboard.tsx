@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Trophy, ClipboardList, DollarSign, AlertTriangle, UserCheck, Store, Package, ShoppingCart, CreditCard } from "lucide-react";
 import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
 import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 
 const AdminDashboard = () => {
@@ -140,6 +141,11 @@ const AdminDashboard = () => {
         title="Operar pelo WhatsApp"
         subtitle="Comandos globais da plataforma"
         examples={COMMANDS.admin}
+      />
+      <CommandHistoryCard
+        scope="global"
+        title="Comandos · Visão global"
+        seeAllHref="/admin/commands"
       />
     </div>
   );

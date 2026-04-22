@@ -18,6 +18,7 @@ import {
 import { UsageMeter } from "@/components/autonomy/UsageMeter";
 import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
 import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 
 // ─────────────── helpers locais (não exportados) ───────────────
@@ -335,6 +336,11 @@ const TenantDashboard = () => {
         title="Operar pelo WhatsApp"
         subtitle="Comandos executivos para sua rede"
         examples={COMMANDS.tenant}
+      />
+      <CommandHistoryCard
+        scope="tenant"
+        scopeId={tenant.id}
+        seeAllHref="/tenant/comandos"
       />
 
       {/* BLOCO 2 — REDE */}
