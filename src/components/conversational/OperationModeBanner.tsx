@@ -54,7 +54,7 @@ export const OperationModeBanner = ({ profile }: Props) => {
           </span>
           <span className="inline-flex items-center gap-1">
             <Gauge className="h-3 w-3 text-primary" />
-            Dashboard → Controle
+            Control Tower → Visão e controle
           </span>
         </div>
       </div>

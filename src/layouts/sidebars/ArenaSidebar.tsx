@@ -22,12 +22,12 @@ import {
 
 const groups = [
   {
-    label: "Central de Operação",
+    label: "Control Tower",
     items: [
-      { title: "Control Tower", url: "/arena/dashboard", icon: LayoutDashboard, end: true },
+      { title: "Dashboard", url: "/arena/dashboard", icon: LayoutDashboard, end: true },
       { title: "Visão geral", url: "/arena/dashboard/control-tower", icon: Gauge },
-      { title: "Ações sugeridas", url: "/arena/dashboard/acoes-ia", icon: Sparkles },
-      { title: "Controle automático", url: "/arena/dashboard/autonomia", icon: ShieldCheck },
+      { title: "Ações ORKYM", url: "/arena/dashboard/acoes-ia", icon: Sparkles },
+      { title: "Autonomia", url: "/arena/dashboard/autonomia", icon: ShieldCheck },
     ],
   },
   {

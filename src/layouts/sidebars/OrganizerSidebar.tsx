@@ -35,35 +35,20 @@ const groups = [
     items: [
       { title: "Meus eventos", url: "/organizer/dashboard/eventos", icon: Trophy },
       { title: "Criar evento", url: "/tournaments/create", icon: PlusCircle },
-    ],
-  },
-  {
-    label: "Inscrições",
-    items: [
       { title: "Inscrições", url: "/organizer/dashboard/inscricoes", icon: ClipboardList },
     ],
   },
   {
-    label: "Jogos",
+    label: "Operação",
     items: [
       { title: "Jogos & Brackets", url: "/organizer/dashboard/jogos", icon: GitBranch },
+      { title: "Check-in", url: "/organizer/dashboard/jogos#checkin", icon: CheckCircle2 },
     ],
   },
   {
-    label: "Check-in",
-    items: [
-      { title: "Check-in", url: "/organizer/dashboard/jogos", icon: CheckCircle2 },
-    ],
-  },
-  {
-    label: "Performance",
+    label: "Performance & Financeiro",
     items: [
       { title: "Performance", url: "/organizer/dashboard/performance", icon: TrendingUp },
-    ],
-  },
-  {
-    label: "Financeiro",
-    items: [
       { title: "Financeiro do evento", url: "/organizer/dashboard/financeiro", icon: DollarSign },
     ],
   },
