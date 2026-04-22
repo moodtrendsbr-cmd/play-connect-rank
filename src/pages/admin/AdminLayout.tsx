@@ -16,32 +16,59 @@ import {
 } from "@/components/ui/sidebar";
 import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag, Handshake, BarChart3, Gift, Layers, Building2, Percent, ScrollText, Bot, Sparkles, ShieldCheck, Gauge } from "lucide-react";
 
-const navItems = [
-  { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
-  { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
-  { title: "Usuários", url: "/admin/users", icon: Users },
-  { title: "Torneios", url: "/admin/tournaments", icon: Trophy },
-  { title: "Inscrições", url: "/admin/enrollments", icon: ClipboardList },
-  { title: "Financeiro", url: "/admin/finances", icon: DollarSign },
-  { title: "Regras de Split", url: "/admin/split-rules", icon: Percent },
-  { title: "Ajustes", url: "/admin/adjustments", icon: ScrollText },
-  { title: "Arenas", url: "/admin/arenas", icon: Building2 },
-  { title: "Monitor ORKYM", url: "/admin/orkym", icon: Bot },
-  { title: "Ações ORKYM", url: "/admin/orkym-actions", icon: Sparkles },
-  { title: "Autonomia", url: "/admin/autonomy", icon: ShieldCheck },
-  { title: "Control Tower", url: "/admin/control-tower", icon: Gauge },
-];
+type NavGroup = {
+  label: string;
+  items: { title: string; url: string; icon: typeof LayoutDashboard; end?: boolean }[];
+};
 
-const marketplaceNavItems = [
-  { title: "Empresas", url: "/admin/companies", icon: Store },
-  { title: "Produtos", url: "/admin/products", icon: Package },
-  { title: "Publicidade (legado)", url: "/admin/ads", icon: Megaphone },
-  { title: "Campanhas Ads", url: "/admin/ad-campaigns", icon: Megaphone },
-  { title: "Patrocínios Atleta", url: "/admin/sponsors", icon: Heart },
-  { title: "Patrocínios Torneio", url: "/admin/sponsorships", icon: Handshake },
-  { title: "Planos", url: "/admin/plans", icon: Layers },
-  { title: "Brindes", url: "/admin/gifts", icon: Gift },
-  { title: "Monetização", url: "/admin/monetization", icon: CreditCard },
+const navGroups: NavGroup[] = [
+  {
+    label: "Control Tower",
+    items: [
+      { title: "Dashboard", url: "/admin", icon: LayoutDashboard, end: true },
+      { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
+      { title: "Control Tower", url: "/admin/control-tower", icon: Gauge },
+    ],
+  },
+  {
+    label: "Operação",
+    items: [
+      { title: "Usuários", url: "/admin/users", icon: Users },
+      { title: "Torneios", url: "/admin/tournaments", icon: Trophy },
+      { title: "Inscrições", url: "/admin/enrollments", icon: ClipboardList },
+      { title: "Arenas", url: "/admin/arenas", icon: Building2 },
+    ],
+  },
+  {
+    label: "Financeiro",
+    items: [
+      { title: "Financeiro", url: "/admin/finances", icon: DollarSign },
+      { title: "Regras de Split", url: "/admin/split-rules", icon: Percent },
+      { title: "Ajustes", url: "/admin/adjustments", icon: ScrollText },
+      { title: "Monetização", url: "/admin/monetization", icon: CreditCard },
+      { title: "Planos", url: "/admin/plans", icon: Layers },
+    ],
+  },
+  {
+    label: "Marketplace & Campanhas",
+    items: [
+      { title: "Empresas", url: "/admin/companies", icon: Store },
+      { title: "Produtos", url: "/admin/products", icon: Package },
+      { title: "Campanhas", url: "/admin/ad-campaigns", icon: Megaphone },
+      { title: "Campanhas (legado)", url: "/admin/ads", icon: Megaphone },
+      { title: "Patrocínios — Atletas", url: "/admin/sponsors", icon: Heart },
+      { title: "Patrocínios — Torneios", url: "/admin/sponsorships", icon: Handshake },
+      { title: "Brindes", url: "/admin/gifts", icon: Gift },
+    ],
+  },
+  {
+    label: "ORKYM & Autonomia",
+    items: [
+      { title: "Monitor ORKYM", url: "/admin/orkym", icon: Bot },
+      { title: "Ações ORKYM", url: "/admin/orkym-actions", icon: Sparkles },
+      { title: "Autonomia", url: "/admin/autonomy", icon: ShieldCheck },
+    ],
+  },
 ];
 
 const userNavItems = [
