@@ -105,43 +105,33 @@ const AdminLayout = () => {
         <Sidebar className="border-r border-border">
           <SidebarContent>
             <div className="p-4">
-              <Link to="/" className="text-xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
+              <Link to="/" className="text-xl font-display text-primary text-glow">🏐 MOODPLAY</Link>
               <p className="mt-1 text-xs text-muted-foreground">Painel Admin</p>
             </div>
-            <SidebarGroup>
-              <SidebarGroupLabel>Navegação</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {navItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild>
-                        <NavLink to={item.url} end={item.url === "/admin"} className="hover:bg-muted/50" activeClassName="bg-muted text-primary font-medium">
-                          <item.icon className="mr-2 h-4 w-4" />
-                          <span>{item.title}</span>
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-            <SidebarGroup>
-              <SidebarGroupLabel>Marketplace</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {marketplaceNavItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild>
-                        <NavLink to={item.url} className="hover:bg-muted/50" activeClassName="bg-muted text-primary font-medium">
-                          <item.icon className="mr-2 h-4 w-4" />
-                          <span>{item.title}</span>
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+            {navGroups.map((group) => (
+              <SidebarGroup key={group.label}>
+                <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {group.items.map((item) => (
+                      <SidebarMenuItem key={item.url}>
+                        <SidebarMenuButton asChild>
+                          <NavLink
+                            to={item.url}
+                            end={item.end}
+                            className="hover:bg-muted/50"
+                            activeClassName="bg-muted text-primary font-medium"
+                          >
+                            <item.icon className="mr-2 h-4 w-4" />
+                            <span>{item.title}</span>
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))}
             <SidebarGroup>
               <SidebarGroupLabel>Navegar como Usuário</SidebarGroupLabel>
               <SidebarGroupContent>
