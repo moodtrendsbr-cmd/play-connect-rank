@@ -2,6 +2,7 @@ import { MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { buildWaUrl, isWaConfigured, prepareCommand, type PrepareCommandInput } from "@/lib/wa";
 
 type Variant = "primary" | "inline" | "card";
 
@@ -11,17 +12,13 @@ interface Props {
   variant?: Variant;
   className?: string;
   hint?: string;
+  /**
+   * Optional rich payload. When provided, the CTA pre-creates a
+   * conversational_commands row server-side and appends a #SHORTCODE
+   * to the message so wa-bridge can amarrar a execução ao registro.
+   */
+  payload?: PrepareCommandInput;
 }
-
-const FALLBACK_NUMBER = "5511999999999";
-
-const getNumber = () => {
-  const raw = (import.meta.env.VITE_ORKYM_WHATSAPP as string | undefined) || "";
-  const digits = raw.replace(/\D/g, "");
-  return digits || FALLBACK_NUMBER;
-};
-
-const isConfigured = () => Boolean(import.meta.env.VITE_ORKYM_WHATSAPP);
 
 export const WhatsAppCTA = ({
   command,
@@ -29,17 +26,23 @@ export const WhatsAppCTA = ({
   variant = "primary",
   className,
   hint,
+  payload,
 }: Props) => {
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!isConfigured()) {
+    if (!isWaConfigured()) {
       toast.message("WhatsApp da ORKYM ainda não configurado", {
         description: "Configure VITE_ORKYM_WHATSAPP nas integrações.",
       });
       return;
     }
-    const url = `https://wa.me/${getNumber()}?text=${encodeURIComponent(command)}`;
+    let suffix: string | undefined;
+    if (payload) {
+      const prep = await prepareCommand(payload);
+      if (prep?.shortcode) suffix = `#${prep.shortcode}`;
+    }
+    const url = buildWaUrl(command, suffix);
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
