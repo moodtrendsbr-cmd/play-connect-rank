@@ -166,7 +166,6 @@ export const OrkymActionsCard = ({
                 command={`Aprovar ação ${p.id} — ${p.title}`}
                 label="Continuar no WhatsApp"
                 payload={{
-                  channel: "dashboard_cta",
                   profile_type: arenaSlug ? "arena" : "tenant",
                   input_text: `Aprovar ação ${p.id} — ${p.title}`,
                   parsed_intent: { intent: "approve_action", proposal_id: p.id },
