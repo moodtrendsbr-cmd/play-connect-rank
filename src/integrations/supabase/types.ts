@@ -2074,9 +2074,14 @@ export type Database = {
           channel: string
           completed_at: string | null
           created_at: string
+          direction: string
           error_message: string | null
           id: string
+          initiated_by: string
           input_text: string
+          linked_entity_id: string | null
+          linked_entity_type: string | null
+          normalized_input: string | null
           orkym_correlation_id: string | null
           orkym_request_id: string | null
           parsed_intent: Json | null
@@ -2089,15 +2094,21 @@ export type Database = {
           status: string
           tenant_id: string | null
           user_id: string | null
+          whatsapp_instance_id: string | null
         }
         Insert: {
           arena_id?: string | null
           channel?: string
           completed_at?: string | null
           created_at?: string
+          direction?: string
           error_message?: string | null
           id?: string
+          initiated_by?: string
           input_text: string
+          linked_entity_id?: string | null
+          linked_entity_type?: string | null
+          normalized_input?: string | null
           orkym_correlation_id?: string | null
           orkym_request_id?: string | null
           parsed_intent?: Json | null
@@ -2110,15 +2121,21 @@ export type Database = {
           status?: string
           tenant_id?: string | null
           user_id?: string | null
+          whatsapp_instance_id?: string | null
         }
         Update: {
           arena_id?: string | null
           channel?: string
           completed_at?: string | null
           created_at?: string
+          direction?: string
           error_message?: string | null
           id?: string
+          initiated_by?: string
           input_text?: string
+          linked_entity_id?: string | null
+          linked_entity_type?: string | null
+          normalized_input?: string | null
           orkym_correlation_id?: string | null
           orkym_request_id?: string | null
           parsed_intent?: Json | null
@@ -2131,6 +2148,7 @@ export type Database = {
           status?: string
           tenant_id?: string | null
           user_id?: string | null
+          whatsapp_instance_id?: string | null
         }
         Relationships: [
           {
@@ -2152,6 +2170,13 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversational_commands_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
             referencedColumns: ["id"]
           },
         ]
@@ -3581,6 +3606,56 @@ export type Database = {
           tenant_id?: string | null
         }
         Relationships: []
+      }
+      orkym_proactive_eligibility: {
+        Row: {
+          category: string
+          channel: string
+          created_at: string
+          id: string
+          metadata: Json
+          opted_at: string | null
+          opted_in: boolean
+          opted_out_at: string | null
+          tenant_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          channel?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          opted_at?: string | null
+          opted_in?: boolean
+          opted_out_at?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          channel?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          opted_at?: string | null
+          opted_in?: boolean
+          opted_out_at?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orkym_proactive_eligibility_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       orkym_usage: {
         Row: {
@@ -5126,6 +5201,260 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_bindings: {
+        Row: {
+          arena_id: string | null
+          company_id: string | null
+          created_at: string
+          id: string
+          instance_id: string
+          is_default: boolean
+          metadata: Json
+          organizer_user_id: string | null
+          priority: number
+          profile_type: string | null
+          scope_type: string
+          tenant_id: string | null
+        }
+        Insert: {
+          arena_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          instance_id: string
+          is_default?: boolean
+          metadata?: Json
+          organizer_user_id?: string | null
+          priority?: number
+          profile_type?: string | null
+          scope_type: string
+          tenant_id?: string | null
+        }
+        Update: {
+          arena_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          instance_id?: string
+          is_default?: boolean
+          metadata?: Json
+          organizer_user_id?: string | null
+          priority?: number
+          profile_type?: string | null
+          scope_type?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_bindings_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_bindings_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_bindings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_bindings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_bindings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_bindings_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_bindings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_instances: {
+        Row: {
+          created_at: string
+          display_name: string
+          external_instance_id: string | null
+          id: string
+          is_global_fallback: boolean
+          metadata: Json
+          outbound_credentials: Json | null
+          outbound_endpoint: string | null
+          phone_number: string
+          provider: string
+          status: string
+          updated_at: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          external_instance_id?: string | null
+          id?: string
+          is_global_fallback?: boolean
+          metadata?: Json
+          outbound_credentials?: Json | null
+          outbound_endpoint?: string | null
+          phone_number: string
+          provider: string
+          status?: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          external_instance_id?: string | null
+          id?: string
+          is_global_fallback?: boolean
+          metadata?: Json
+          outbound_credentials?: Json | null
+          outbound_endpoint?: string | null
+          phone_number?: string
+          provider?: string
+          status?: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_messages: {
+        Row: {
+          arena_id: string | null
+          body: string | null
+          category: string | null
+          command_id: string | null
+          correlation_id: string | null
+          created_at: string
+          delivered_at: string | null
+          delivery_status: string
+          direction: string
+          external_message_id: string | null
+          failure_reason: string | null
+          id: string
+          idempotency_key: string | null
+          initiated_by: string
+          instance_id: string | null
+          message_type: string
+          sent_at: string | null
+          template_name: string | null
+          template_vars: Json | null
+          tenant_id: string | null
+          user_id: string | null
+          wa_phone: string
+        }
+        Insert: {
+          arena_id?: string | null
+          body?: string | null
+          category?: string | null
+          command_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          delivery_status?: string
+          direction: string
+          external_message_id?: string | null
+          failure_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          initiated_by?: string
+          instance_id?: string | null
+          message_type?: string
+          sent_at?: string | null
+          template_name?: string | null
+          template_vars?: Json | null
+          tenant_id?: string | null
+          user_id?: string | null
+          wa_phone: string
+        }
+        Update: {
+          arena_id?: string | null
+          body?: string | null
+          category?: string | null
+          command_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          delivery_status?: string
+          direction?: string
+          external_message_id?: string | null
+          failure_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          initiated_by?: string
+          instance_id?: string | null
+          message_type?: string
+          sent_at?: string | null
+          template_name?: string | null
+          template_vars?: Json | null
+          tenant_id?: string | null
+          user_id?: string | null
+          wa_phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_command_id_fkey"
+            columns: ["command_id"]
+            isOneToOne: false
+            referencedRelation: "conversational_commands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       withdrawal_requests: {
         Row: {
           amount: number
@@ -5769,6 +6098,8 @@ export type Database = {
         Args: { _instructor_id: string }
         Returns: string
       }
+      get_arena_summary: { Args: { _arena_id: string }; Returns: Json }
+      get_revenue_today: { Args: { _arena_id: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -5813,6 +6144,8 @@ export type Database = {
         Args: { _tournament_id: string; _user_id: string }
         Returns: boolean
       }
+      list_pending_enrollments: { Args: { _arena_id: string }; Returns: Json }
+      list_today_classes: { Args: { _arena_id: string }; Returns: Json }
       orkym_action_approve: {
         Args: { _proposal_id: string }
         Returns: {
@@ -5968,6 +6301,24 @@ export type Database = {
       orkym_ingest_tasks: { Args: { _payload: Json }; Returns: number }
       orkym_purge_dedup: { Args: never; Returns: number }
       resolve_tenant_by_host: { Args: { _host: string }; Returns: string }
+      resolve_whatsapp_identity: {
+        Args: { _instance_id?: string; _wa_phone: string }
+        Returns: Json
+      }
+      resolve_whatsapp_instance: {
+        Args: {
+          _arena_id?: string
+          _company_id?: string
+          _organizer_user_id?: string
+          _profile_type?: string
+          _tenant_id?: string
+        }
+        Returns: Json
+      }
+      resolve_whatsapp_instance_by_phone: {
+        Args: { _phone: string }
+        Returns: Json
+      }
       search_global: { Args: { _term: string }; Returns: Json }
       set_current_tenant: { Args: { _tenant_id: string }; Returns: undefined }
       set_tenant_from_user: { Args: { _user_id: string }; Returns: string }
