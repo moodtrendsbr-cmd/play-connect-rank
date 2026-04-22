@@ -2,6 +2,7 @@ import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
@@ -10,6 +11,7 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { WhatsAppCTA } from "@/components/conversational/WhatsAppCTA";
 import {
   LayoutDashboard, Store, Package, ShoppingBag, ExternalLink,
   Megaphone, Trophy, LineChart, Eye, Compass, Rss,
@@ -85,6 +87,16 @@ export function CompanySidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
+      {!collapsed && (
+        <SidebarFooter className="p-2">
+          <WhatsAppCTA
+            variant="inline"
+            command="Olá, sou da empresa e quero falar com a ORKYM"
+            label="Falar com a ORKYM"
+            className="w-full justify-center"
+          />
+        </SidebarFooter>
+      )}
     </Sidebar>
   );
 }
