@@ -118,7 +118,7 @@ export async function resolveInstance(
     _company_id: input.company_id ?? null,
   });
   if (error) return null;
-  return data as ResolvedInstance;
+  return data as unknown as ResolvedInstance;
 }
 
 export type ProactiveCategory = "billing" | "retention" | "marketing" | "operations";
