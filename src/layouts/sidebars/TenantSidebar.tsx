@@ -14,7 +14,7 @@ import {
 import { WhatsAppCTA } from "@/components/conversational/WhatsAppCTA";
 import {
   Gauge, Building2, Users, Store, DollarSign, CreditCard,
-  Activity, Sparkles, Palette, Globe, MessageCircle,
+  Activity, Sparkles, Palette, Globe, MessageCircle, Network,
 } from "lucide-react";
 
 const groups = [
@@ -50,6 +50,7 @@ const groups = [
     label: "IA / Autonomia",
     items: [
       { title: "Autonomia", url: "/tenant/autonomia", icon: Sparkles },
+      { title: "Roteamento WhatsApp", url: "/tenant/whatsapp-routing", icon: Network },
     ],
   },
   {

@@ -117,6 +117,9 @@ import TenantCommands from "./pages/tenant/TenantCommands";
 import OrganizerCommands from "./pages/organizer/OrganizerCommands";
 import CompanyCommands from "./pages/company/CompanyCommands";
 import AthleteCommands from "./pages/athlete/AthleteCommands";
+import AdminWhatsAppInstances from "./pages/admin/AdminWhatsAppInstances";
+import AdminWhatsAppMessages from "./pages/admin/AdminWhatsAppMessages";
+import TenantWhatsAppRouting from "./pages/tenant/TenantWhatsAppRouting";
 import { Navigate } from "react-router-dom";
 
 const queryClient = new QueryClient();
@@ -267,6 +270,7 @@ const App = () => (
               <Route path="dominios" element={<OrganizerDomains />} />
               <Route path="autonomia" element={<AdminAutonomy />} />
               <Route path="comandos" element={<TenantCommands />} />
+              <Route path="whatsapp-routing" element={<TenantWhatsAppRouting />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
@@ -293,6 +297,8 @@ const App = () => (
               <Route path="control-tower" element={<AdminControlTower />} />
               <Route path="tenants" element={<AdminArenas />} />
               <Route path="commands" element={<AdminCommands />} />
+              <Route path="whatsapp-instances" element={<AdminWhatsAppInstances />} />
+              <Route path="whatsapp-messages" element={<AdminWhatsAppMessages />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
