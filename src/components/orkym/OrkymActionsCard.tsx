@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner";
 import { ActionProposalDetail } from "./ActionProposalDetail";
 import { PolicyDecisionBadge } from "@/components/autonomy/PolicyDecisionBadge";
+import { WhatsAppCTA } from "@/components/conversational/WhatsAppCTA";
 import { Link } from "react-router-dom";
 
 interface Props {
@@ -160,6 +161,11 @@ export const OrkymActionsCard = ({
                   Detalhes
                 </Button>
               </div>
+              <WhatsAppCTA
+                variant="inline"
+                command={`Aprovar ação ${p.id} — ${p.title}`}
+                label="Continuar no WhatsApp"
+              />
             </div>
           ))}
           {showSeeAllLink && arenaSlug && (

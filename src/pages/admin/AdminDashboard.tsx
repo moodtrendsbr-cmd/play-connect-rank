@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Trophy, ClipboardList, DollarSign, AlertTriangle, UserCheck, Store, Package, ShoppingCart, CreditCard } from "lucide-react";
+import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
+import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { COMMANDS } from "@/lib/conversationalCommands";
 
 const AdminDashboard = () => {
   const [metrics, setMetrics] = useState({
@@ -107,8 +110,8 @@ const AdminDashboard = () => {
   ];
 
   return (
-    <div>
-      <h1 className="mb-6 text-4xl font-display text-foreground">PAINEL ADMINISTRATIVO</h1>
+    <div className="space-y-6">
+      <h1 className="text-4xl font-display text-foreground">PAINEL ADMINISTRATIVO</h1>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((c) => (
           <Card key={c.label}>
@@ -122,6 +125,14 @@ const AdminDashboard = () => {
           </Card>
         ))}
       </div>
+
+      {/* CAMADA CONVERSACIONAL */}
+      <OperationModeBanner profile="admin" />
+      <CommandExamplesCard
+        title="Operar pelo WhatsApp"
+        subtitle="Comandos globais da plataforma"
+        examples={COMMANDS.admin}
+      />
     </div>
   );
 };

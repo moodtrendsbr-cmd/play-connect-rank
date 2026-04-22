@@ -23,6 +23,10 @@ import {
   Flame,
   Clock,
 } from "lucide-react";
+import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
+import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { QrEntryCard } from "@/components/conversational/QrEntryCard";
+import { COMMANDS } from "@/lib/conversationalCommands";
 
 // ----- Helpers locais -----
 const SectionHeader = ({
@@ -393,6 +397,22 @@ const AthleteDashboard = () => {
           </CardContent>
         </Card>
       </section>
+
+      {/* CAMADA CONVERSACIONAL */}
+      <OperationModeBanner profile="athlete" />
+      <div className="grid md:grid-cols-2 gap-4">
+        <CommandExamplesCard
+          title="Pedir pelo WhatsApp"
+          subtitle="Atalhos rápidos para sua vida esportiva"
+          examples={COMMANDS.athlete}
+        />
+        <QrEntryCard
+          title="Check-in por QR"
+          subtitle="Aponte a câmera no QR da arena para confirmar presença"
+          ctaTo="/arena/checkin"
+          ctaLabel="Abrir scanner"
+        />
+      </div>
 
       {/* BLOCO 2 — MEU ESPORTE HOJE */}
       <section className="space-y-3">

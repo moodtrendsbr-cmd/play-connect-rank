@@ -21,6 +21,10 @@ import {
   ChevronRight,
   TrendingUp,
 } from "lucide-react";
+import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
+import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
+import { QrEntryCard } from "@/components/conversational/QrEntryCard";
+import { COMMANDS } from "@/lib/conversationalCommands";
 
 // ----- Helpers (locais, não exportados) -----
 const SectionHeader = ({
@@ -368,6 +372,22 @@ const OrganizerDashboard = () => {
           </div>
         )}
       </section>
+
+      {/* CAMADA CONVERSACIONAL */}
+      <OperationModeBanner profile="organizer" />
+      <div className="grid md:grid-cols-2 gap-4">
+        <CommandExamplesCard
+          title="Operar pelo WhatsApp"
+          subtitle="Comandos rápidos para gerir seus eventos"
+          examples={COMMANDS.organizer}
+        />
+        <QrEntryCard
+          title="Check-in dos eventos"
+          subtitle="Confirme presença de atletas via QR"
+          ctaTo="/organizer/dashboard/jogos"
+          ctaLabel="Abrir check-in dos jogos"
+        />
+      </div>
 
       {/* BLOCO 2 — MEUS EVENTOS */}
       <section className="space-y-3">
