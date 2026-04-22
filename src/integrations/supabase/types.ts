@@ -2068,6 +2068,94 @@ export type Database = {
         }
         Relationships: []
       }
+      conversational_commands: {
+        Row: {
+          arena_id: string | null
+          channel: string
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          input_text: string
+          orkym_correlation_id: string | null
+          orkym_request_id: string | null
+          parsed_intent: Json | null
+          profile_type: string
+          proposal_ids: string[]
+          qr_token: string | null
+          response_text: string | null
+          result_payload: Json | null
+          shortcode: string | null
+          status: string
+          tenant_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          arena_id?: string | null
+          channel?: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_text: string
+          orkym_correlation_id?: string | null
+          orkym_request_id?: string | null
+          parsed_intent?: Json | null
+          profile_type: string
+          proposal_ids?: string[]
+          qr_token?: string | null
+          response_text?: string | null
+          result_payload?: Json | null
+          shortcode?: string | null
+          status?: string
+          tenant_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          arena_id?: string | null
+          channel?: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_text?: string
+          orkym_correlation_id?: string | null
+          orkym_request_id?: string | null
+          parsed_intent?: Json | null
+          profile_type?: string
+          proposal_ids?: string[]
+          qr_token?: string | null
+          response_text?: string | null
+          result_payload?: Json | null
+          shortcode?: string | null
+          status?: string
+          tenant_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversational_commands_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversational_commands_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversational_commands_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       court_availability: {
         Row: {
           court_id: string
@@ -4880,6 +4968,137 @@ export type Database = {
         }
         Relationships: []
       }
+      wa_identities: {
+        Row: {
+          created_at: string
+          default_arena_id: string | null
+          default_profile_type: string
+          id: string
+          metadata: Json
+          tenant_id: string | null
+          updated_at: string
+          user_id: string
+          verification_code: string | null
+          verification_expires_at: string | null
+          verified_at: string | null
+          wa_phone: string
+        }
+        Insert: {
+          created_at?: string
+          default_arena_id?: string | null
+          default_profile_type: string
+          id?: string
+          metadata?: Json
+          tenant_id?: string | null
+          updated_at?: string
+          user_id: string
+          verification_code?: string | null
+          verification_expires_at?: string | null
+          verified_at?: string | null
+          wa_phone: string
+        }
+        Update: {
+          created_at?: string
+          default_arena_id?: string | null
+          default_profile_type?: string
+          id?: string
+          metadata?: Json
+          tenant_id?: string | null
+          updated_at?: string
+          user_id?: string
+          verification_code?: string | null
+          verification_expires_at?: string | null
+          verified_at?: string | null
+          wa_phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_identities_default_arena_id_fkey"
+            columns: ["default_arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_identities_default_arena_id_fkey"
+            columns: ["default_arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_identities_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wa_qr_tokens: {
+        Row: {
+          arena_id: string | null
+          consumed_at: string | null
+          consumed_by: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          intent: string
+          payload: Json
+          tenant_id: string | null
+          token: string
+        }
+        Insert: {
+          arena_id?: string | null
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          intent: string
+          payload?: Json
+          tenant_id?: string | null
+          token?: string
+        }
+        Update: {
+          arena_id?: string | null
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          intent?: string
+          payload?: Json
+          tenant_id?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_qr_tokens_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_qr_tokens_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_qr_tokens_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_events: {
         Row: {
           created_at: string
@@ -5752,6 +5971,29 @@ export type Database = {
       search_global: { Args: { _term: string }; Returns: Json }
       set_current_tenant: { Args: { _tenant_id: string }; Returns: undefined }
       set_tenant_from_user: { Args: { _user_id: string }; Returns: string }
+      wa_consume_qr_token: {
+        Args: { _consumer_user_id: string; _token: string }
+        Returns: Json
+      }
+      wa_create_qr_token: {
+        Args: {
+          _arena_id?: string
+          _intent: string
+          _payload?: Json
+          _tenant_id?: string
+          _ttl_minutes?: number
+        }
+        Returns: Json
+      }
+      wa_register_identity: {
+        Args: { _phone: string; _profile?: string }
+        Returns: Json
+      }
+      wa_resolve_shortcode: { Args: { _shortcode: string }; Returns: string }
+      wa_verify_identity: {
+        Args: { _code: string; _phone: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "organizer" | "athlete" | "admin" | "arena" | "company"
