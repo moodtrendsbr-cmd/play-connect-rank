@@ -2068,6 +2068,101 @@ export type Database = {
         }
         Relationships: []
       }
+      conversation_sessions: {
+        Row: {
+          arena_id: string | null
+          command_id: string | null
+          completed_at: string | null
+          context_data: Json
+          context_snapshot: Json | null
+          correlation_id: string | null
+          created_at: string
+          current_intent: string
+          execution_result: Json | null
+          expires_at: string
+          id: string
+          idempotency_key: string | null
+          is_locked: boolean
+          last_message_at: string
+          lock_expires_at: string | null
+          locked_at: string | null
+          locked_by: string | null
+          metadata: Json
+          profile_type: string
+          resumable_until: string | null
+          snapshot_hash: string | null
+          state: string
+          tenant_id: string
+          updated_at: string
+          user_id: string
+          whatsapp_instance_id: string
+        }
+        Insert: {
+          arena_id?: string | null
+          command_id?: string | null
+          completed_at?: string | null
+          context_data?: Json
+          context_snapshot?: Json | null
+          correlation_id?: string | null
+          created_at?: string
+          current_intent: string
+          execution_result?: Json | null
+          expires_at: string
+          id?: string
+          idempotency_key?: string | null
+          is_locked?: boolean
+          last_message_at?: string
+          lock_expires_at?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          metadata?: Json
+          profile_type: string
+          resumable_until?: string | null
+          snapshot_hash?: string | null
+          state?: string
+          tenant_id: string
+          updated_at?: string
+          user_id: string
+          whatsapp_instance_id: string
+        }
+        Update: {
+          arena_id?: string | null
+          command_id?: string | null
+          completed_at?: string | null
+          context_data?: Json
+          context_snapshot?: Json | null
+          correlation_id?: string | null
+          created_at?: string
+          current_intent?: string
+          execution_result?: Json | null
+          expires_at?: string
+          id?: string
+          idempotency_key?: string | null
+          is_locked?: boolean
+          last_message_at?: string
+          lock_expires_at?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          metadata?: Json
+          profile_type?: string
+          resumable_until?: string | null
+          snapshot_hash?: string | null
+          state?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+          whatsapp_instance_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_sessions_command_id_fkey"
+            columns: ["command_id"]
+            isOneToOne: false
+            referencedRelation: "conversational_commands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversational_commands: {
         Row: {
           arena_id: string | null
@@ -6053,6 +6148,22 @@ export type Database = {
       }
     }
     Functions: {
+      abandon_session: {
+        Args: {
+          _reason?: string
+          _resume_window_minutes?: number
+          _session_id: string
+        }
+        Returns: undefined
+      }
+      acquire_session_lock: {
+        Args: {
+          _request_id: string
+          _session_id: string
+          _ttl_seconds?: number
+        }
+        Returns: boolean
+      }
       ad_record_event: {
         Args: { _campaign_id: string; _event_type: string; _slot_id: string }
         Returns: string
@@ -6132,12 +6243,20 @@ export type Database = {
           risk_level: string
         }[]
       }
+      complete_session: {
+        Args: { _result: Json; _session_id: string; _success: boolean }
+        Returns: undefined
+      }
       create_organizer_tenant: {
         Args: { _display_name?: string; _name: string; _slug: string }
         Returns: string
       }
       current_tenant_id: { Args: never; Returns: string }
       expire_pending_enrollments: { Args: never; Returns: number }
+      expire_stale_sessions: {
+        Args: { _resume_window_minutes?: number }
+        Returns: number
+      }
       finance_apply_split_override: {
         Args: { _reason: string; _splits: Json; _transaction_id: string }
         Returns: string
@@ -6250,6 +6369,10 @@ export type Database = {
       }
       list_upcoming_classes: {
         Args: { _arena_id: string; _days?: number }
+        Returns: Json
+      }
+      mark_session_executing: {
+        Args: { _idempotency_key: string; _session_id: string }
         Returns: Json
       }
       orkym_action_approve: {
@@ -6406,6 +6529,29 @@ export type Database = {
       orkym_ingest_actions: { Args: { _payload: Json }; Returns: number }
       orkym_ingest_tasks: { Args: { _payload: Json }; Returns: number }
       orkym_purge_dedup: { Args: never; Returns: number }
+      prepare_session_confirmation: {
+        Args: { _hash: string; _session_id: string; _snapshot: Json }
+        Returns: undefined
+      }
+      release_session_lock: {
+        Args: { _request_id: string; _session_id: string }
+        Returns: undefined
+      }
+      resolve_or_create_session: {
+        Args: {
+          _allow_resume?: boolean
+          _arena_id: string
+          _correlation_id?: string
+          _intent: string
+          _profile_type: string
+          _resume_window_minutes?: number
+          _tenant_id: string
+          _ttl_minutes?: number
+          _user_id: string
+          _whatsapp_instance_id: string
+        }
+        Returns: Json
+      }
       resolve_tenant_by_host: { Args: { _host: string }; Returns: string }
       resolve_whatsapp_identity: {
         Args: { _instance_id?: string; _wa_phone: string }
@@ -6428,6 +6574,10 @@ export type Database = {
       search_global: { Args: { _term: string }; Returns: Json }
       set_current_tenant: { Args: { _tenant_id: string }; Returns: undefined }
       set_tenant_from_user: { Args: { _user_id: string }; Returns: string }
+      update_session_context: {
+        Args: { _session_id: string; _ttl_minutes?: number; _values: Json }
+        Returns: undefined
+      }
       wa_consume_qr_token: {
         Args: { _consumer_user_id: string; _token: string }
         Returns: Json
