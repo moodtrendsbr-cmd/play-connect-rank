@@ -189,3 +189,55 @@ export async function setProactiveOptIn(
 // Outbound WhatsApp delivery is handled by ORKYM directly.
 // MoodPlay no longer dispatches messages — see mem://integration/orkym-contract.
 
+// =============================================================
+// Phase 12.7 — Stateful conversation sessions (debug helper)
+// =============================================================
+// In production this endpoint is called server-to-server by ORKYM with
+// HMAC. This thin client is for admin/debug panels only.
+
+export interface SessionStepInput {
+  tenant_id: string;
+  arena_id?: string | null;
+  user_id: string;
+  profile_type: string;
+  whatsapp_instance_id: string;
+  intent?: string | null;
+  values?: Record<string, unknown>;
+  confirm?: boolean;
+  abort?: boolean;
+  resume?: boolean;
+  expected_snapshot_hash?: string | null;
+  correlation_id?: string | null;
+}
+
+export interface SessionStepResult {
+  ok: boolean;
+  session_id?: string;
+  state?: "collecting" | "confirming" | "executing" | "completed" | "abandoned" | "failed" | "superseded";
+  current_intent?: string;
+  context_data?: Record<string, unknown>;
+  missing_fields?: { name: string; type: string; prompt: string }[];
+  validation_errors?: { field: string; message: string }[];
+  next_prompt?: string | null;
+  confirmation_summary?: string;
+  snapshot_hash?: string | null;
+  execution_result?: unknown;
+  replay?: boolean;
+  error?: string;
+  retry_after_ms?: number;
+}
+
+export async function stepSession(
+  input: SessionStepInput,
+): Promise<SessionStepResult | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke("moodplay-session-step", {
+      body: input,
+    });
+    if (error) return { ok: false, error: error.message };
+    return data as SessionStepResult;
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+

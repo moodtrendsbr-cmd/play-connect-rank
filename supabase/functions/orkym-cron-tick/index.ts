@@ -117,10 +117,22 @@ Deno.serve(async (req) => {
   // Opportunistic dedup cleanup
   await admin.rpc("orkym_purge_dedup");
 
+  // Phase 12.7 — expire stale conversation sessions
+  let expiredSessions = 0;
+  try {
+    const { data: exp } = await admin.rpc("expire_stale_sessions", {
+      _resume_window_minutes: 30,
+    });
+    expiredSessions = (exp as number) ?? 0;
+  } catch (e) {
+    console.error("expire_stale_sessions failed", e);
+  }
+
   return new Response(JSON.stringify({
     ok: true,
     processed: processedIds.length,
     buckets: buckets.size,
     invoked_ok: invokedOk,
+    expired_sessions: expiredSessions,
   }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
