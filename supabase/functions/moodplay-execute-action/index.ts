@@ -143,6 +143,16 @@ Deno.serve(async (req) => {
       .eq("channel", "api")
       .maybeSingle();
     if (existing && existing.status !== "pending") {
+      try {
+        await admin.from("security_audit_log").insert({
+          user_id: user_id ?? null,
+          tenant_id: tenant_id ?? null,
+          action: "moodplay_execute.deduplicated",
+          resource_type: "conversational_command",
+          resource_id: existing.id,
+          metadata: { action_type, source, correlation_id },
+        });
+      } catch { /* best-effort */ }
       return safeJson({
         ok: true,
         deduplicated: true,
