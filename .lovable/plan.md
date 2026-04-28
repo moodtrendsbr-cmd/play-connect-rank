@@ -1,85 +1,193 @@
-# Camada de Integração ORKYM ↔ MoodPlay — Gap Analysis e Complementos
+# Phase 12.7 — Multi-Turn Conversational Flows (Stateful Sessions)
 
-## Diagnóstico: 80% já está implementado
+## Princípio (não esquecer)
 
-Quase todo o escopo desta spec foi entregue nas Fases **12.5 e 12.6** (ORKYM Execution Bridge + ORKYM-as-Gateway). Mapeamento item-por-item do que você pediu vs. o que existe hoje:
+ORKYM continua sendo o cérebro. MoodPlay ganha **estado mínimo de sessão** + **schema declarativo de fluxos** para:
+- guardar dados parciais entre mensagens
+- dizer à ORKYM o que ainda falta
+- forçar confirmação antes de executar
+- expirar sessões abandonadas
 
-| # | Item da spec | Estado atual | Ação necessária |
-|---|---|---|---|
-| 1 | WhatsApp Instance Routing | ✅ Tabelas `whatsapp_instances` + `whatsapp_bindings` (tenant/arena/organizer/company/global fallback) + RPC `resolve_whatsapp_instance` com hierarquia de prioridade | Nada — já completo |
-| 2 | Identity Resolution | ✅ Tabelas `wa_identities`, `wa_leads`, `wa_qr_tokens` + RPC `resolve_whatsapp_identity` retornando user/profile/tenant/arena/verified/is_lead/available_profiles | Nada — já completo |
-| 3 | Execution Bridge | ✅ Edge function `moodplay-execute-action` v12.6 (HMAC obrigatório + timestamp + idempotência), reusando 100% dos handlers em `_shared/orkym-handlers.ts`. Catálogo: 9 read-only + 5 operacionais + 9 proposal-based | Nada — já completo |
-| 4 | Event Feedback Layer | ✅ Resposta síncrona padronizada `{ok, command_id, execution_status, linked_entity, checkout_link?, qr_link?, response_summary, follow_up_actions[]}` + auditoria em `security_audit_log` | Nada — já completo |
-| 5 | Conversational Command History | ✅ Tabela `conversational_commands` com todos os campos (direction, instance, raw/normalized input, intent, action, status, result, linked_entity, correlation_id) + Realtime no `CommandHistoryCard` | Nada — já completo |
-| 6 | Proactive Messaging | ⚠️ **Mudou de modelo**: outbound (wa-send-message) foi removido — agora ORKYM é o gateway e dispara via canal próprio. MoodPlay apenas mantém `orkym_proactive_eligibility` (opt-in) e expõe contexto via read-only actions | Documentar a mudança de modelo |
-| 7 | Fallback / Herança de Instância | ✅ `resolve_whatsapp_instance` com chain: arena → organizer → company → tenant → profile → global fallback | Nada — já completo |
-| 8 | Security | ✅ HMAC SHA-256 obrigatório + timestamp skew 5min + idempotência + cross-tenant validation + `security_audit_log` em todas as fases (received/executed/failed/no_action/deduplicated) + 11 testes Deno passando | Nada — já completo |
-| 9 | Dashboard Reflection | ✅ `CommandHistoryCard` (Realtime) presente em ArenaCommands, OrganizerCommands, AthleteCommands, CompanyCommands, TenantCommands, AdminCommands | Nada — já completo |
-| 10 | Não-fazer | ✅ Zero IA local no MoodPlay; toda decisão fica na ORKYM | Reforçar na memória |
-| 11 | Entregáveis | ⚠️ Falta apenas **Entrega B (relatório estrutural)** e **Entrega C (riscos/pendências)** consolidados | Gerar relatório markdown |
-| 12 | Critério de sucesso | ✅ Todos atendidos | Nada |
+**Zero NLP, zero IA, zero parser.** A ORKYM continua extraindo valores do texto livre; a MoodPlay só **valida**, **acumula** e **decide o próximo passo**.
 
-## O que efetivamente vou fazer
+---
 
-Como o código está 100% pronto, esta fase é de **consolidação documental + 1 ajuste técnico pequeno**:
-
-### 1. Atualizar `mem://integration/orkym-contract.md`
-Remover seções obsoletas que ainda mencionam `wa-send-message`, `wa-delivery-webhook` e secrets de provider Twilio/Meta/Evolution (esses endpoints foram deletados quando migramos para ORKYM-as-gateway). Substituir por nota explícita: "Outbound e delivery webhooks são responsabilidade da ORKYM. MoodPlay só recebe chamadas em `/moodplay-execute-action`."
-
-### 2. Atualizar `mem://integration/orkym-execution-bridge.md`
-Marcar Phase 12.6 como concluída e remover pendências obsoletas (Twilio/Meta dispatch).
-
-### 3. Criar `mem://integration/orkym-gateway-architecture.md` (novo)
-Memória única consolidando os 12 pontos da spec → onde cada um vive no código (tabelas, RPCs, edge functions, componentes). Serve como ponto de entrada para qualquer nova sessão entender a arquitetura.
-
-### 4. Gerar relatório estrutural (`/mnt/documents/orkym-moodplay-integration-report.md`)
-Documento entregável com:
-- **Entrega B** — Como instância é resolvida, como identidade é resolvida, como ORKYM chama MoodPlay, formato de resposta, persistência de histórico, preparação para proatividade, reaproveitamento vs. criado
-- **Entrega C** — Riscos e pendências (do lado ORKYM, do lado provider, próxima fase)
-- Tabelas de mapeamento spec ↔ implementação
-- Diagrama ASCII do fluxo end-to-end
-
-### 5. Pequeno ajuste técnico — sanity check
-Rodar os 11 testes Deno (`moodplay-execute-action` integration + hmac) para confirmar que o contrato continua verde após as últimas remoções de outbound. Se algo quebrou, corrigir.
-
-## O que NÃO vou fazer (e por quê)
-
-- **Não vou recriar `wa-send-message`** — você aprovou explicitamente removê-lo na mensagem "pode remover" porque ORKYM é o gateway agora.
-- **Não vou criar novas tabelas** — todas as 7 tabelas necessárias (whatsapp_instances, whatsapp_bindings, whatsapp_messages, wa_identities, wa_leads, wa_qr_tokens, conversational_commands, orkym_proactive_eligibility) já existem.
-- **Não vou criar novas edge functions** — `moodplay-execute-action` + `wa-bridge` cobrem inbound/execução.
-- **Não vou tocar em handlers de negócio** — `_shared/orkym-handlers.ts` é a única camada de execução e está reusada por dois caminhos (orkym-execute-action interno + moodplay-execute-action externo).
-
-## Detalhes técnicos
+## Arquitetura
 
 ```text
-ORKYM (cérebro/WhatsApp gateway)
-   │
-   │ POST /functions/v1/moodplay-execute-action
-   │ Headers: X-MoodPlay-Signature (HMAC), X-Request-Timestamp, X-Idempotency-Key
-   │ Body:    { tenant_id, arena_id, user_id, profile_type, action_type, payload, source, correlation_id }
-   ▼
-moodplay-execute-action (edge fn)
-   ├─ verifyHmac()           ── ORKYM_HMAC_SECRET
-   ├─ checkTimestampSkew()   ── 5 min window
-   ├─ checkIdempotency()     ── X-Idempotency-Key
-   ├─ validateCrossTenant()  ── arena ∈ tenant
-   ├─ auditLog('received')
-   ├─ dispatchAction()       ── _shared/orkym-handlers.ts
-   │     ├─ READ_ACTIONS     ── 9 RPCs SECURITY DEFINER (get_arena_summary, ...)
-   │     ├─ RPC_OPERATIONAL  ── 5 RPCs (generate_billing_cycle, ...)
-   │     └─ PROPOSAL         ── 9 inserções em orkym_action_proposals (auto-aprovadas)
-   ├─ persistCommand()       ── conversational_commands (Realtime → dashboards)
-   ├─ auditLog('executed' | 'failed' | 'deduplicated')
-   ▼
-Response: { ok, command_id, execution_status, linked_entity, checkout_link?, qr_link?,
-            response_summary, follow_up_actions[] }
+ORKYM                          MoodPlay (novo: session bridge)
+─────                          ─────────────────────────────────
+recebe msg WhatsApp
+extrai (intent + valores)
+        │
+        │ POST /moodplay-session-step
+        │ { user_id, instance_id, intent?, values?, confirm? }
+        ▼
+                               1. resolve sessão ativa (user+instance)
+                                  ou cria nova com intent
+                               2. merge values em context_data
+                               3. valida via flow schema
+                               4. retorna:
+                                  { state, missing_fields[], next_prompt,
+                                    confirmation_summary?, ready_to_execute }
+        ◄──────────────────────
+formula próxima pergunta
+ou pede confirmação
+        │
+        │ usuário responde "sim"
+        │ POST /moodplay-session-step { confirm: true }
+        ▼
+                               5. chama moodplay-execute-action internamente
+                               6. marca session=completed, retorna resultado
+        ◄──────────────────────
+relay para usuário
 ```
+
+---
+
+## Entrega A — Implementação
+
+### 1. Migração SQL
+- **Tabela** `conversation_sessions`:
+  ```
+  id, tenant_id, arena_id, user_id, profile_type, whatsapp_instance_id,
+  current_intent text, state text CHECK IN ('collecting','confirming','executing','completed','abandoned','failed'),
+  context_data jsonb DEFAULT '{}', last_message_at timestamptz, expires_at timestamptz,
+  created_at, completed_at, command_id uuid (link → conversational_commands),
+  correlation_id text, metadata jsonb
+  ```
+- Índices: `(user_id, whatsapp_instance_id, state)` parcial onde `state IN ('collecting','confirming')`; `(expires_at)` para job de expiração; `(tenant_id, created_at DESC)`.
+- RLS: tenant admin vê suas; arena owner vê arena dela; admin vê tudo; service_role full.
+- **RPC** `expire_stale_sessions()` — marca `state='abandoned'` onde `expires_at < now() AND state IN ('collecting','confirming')`. Reutilizada pelo `orkym-cron-tick`.
+- **RPC** `resolve_active_session(_user, _instance, _ttl_minutes)` — retorna sessão ativa não expirada ou null.
+- **RPC** `start_session(...)`, `update_session_context(...)`, `mark_session_executing(...)`, `complete_session(...)` — todas SECURITY DEFINER.
+
+### 2. Flow schema declarativo (em código, não no DB)
+Arquivo `supabase/functions/_shared/conversation-flows.ts`:
+```ts
+export interface FlowField { name: string; type: 'string'|'uuid'|'date'|'time'|'integer'|'decimal'|'enum';
+  required: boolean; enum_values?: string[]; min?: number; max?: number;
+  prompt: string; // texto que ORKYM usa como hint para perguntar
+  validate?: (v: unknown, ctx: any) => string | null; // retorna mensagem de erro
+}
+export interface FlowDef { intent: string; action_type: string; // ação final em moodplay-execute-action
+  fields: FlowField[]; summarize: (ctx: any) => string; // monta texto de confirmação
+}
+```
+Fluxos iniciais (5):
+- `reserve_court` → `create_booking` (futuro `book_court` action)
+- `create_class` → `create_class`
+- `enroll_student` (em plano de arena) → `enroll_athlete_in_plan` (a wrapper)
+- `create_tournament` → `create_tournament`
+- `generate_billing_cycle` → `generate_billing_cycle`
+
+> Para esta fase, só precisamos garantir que a ação final **já existe** no catálogo do `moodplay-execute-action`. As 4 já cobertas (`create_class`, `create_tournament`, `generate_billing_cycle`, `validate_checkin`) são reutilizadas. `reserve_court` e `enroll_student` viram **flows funcionais cujo execute** falha graciosamente com `unknown_action_type` se ainda não existir o handler — documentamos como pendência (Entrega C). Não vamos criar novos handlers de execução nesta fase para respeitar o "não duplicar".
+
+### 3. Edge function nova: `moodplay-session-step`
+- Mesmo padrão de auth do `moodplay-execute-action` (HMAC + timestamp + idempotência).
+- Body:
+  ```json
+  {
+    "tenant_id": "...", "arena_id": "...", "user_id": "...",
+    "profile_type": "...", "whatsapp_instance_id": "...",
+    "intent": "reserve_court",      // opcional se já há sessão
+    "values": { "date": "2026-04-23", "time": "20:00" },
+    "confirm": false,                // true só na confirmação final
+    "abort": false,                  // true para cancelar sessão atual
+    "correlation_id": "..."
+  }
+  ```
+- Resposta:
+  ```json
+  {
+    "ok": true,
+    "session_id": "uuid",
+    "state": "collecting|confirming|executing|completed|abandoned",
+    "current_intent": "reserve_court",
+    "context_data": { ... },
+    "missing_fields": [
+      { "name": "court_id", "type": "uuid", "prompt": "Qual quadra?", "required": true }
+    ],
+    "next_prompt": "Qual quadra?",          // primeira da lista, conveniência
+    "confirmation_summary": "Reserva: ..."  // só quando state=confirming
+    "execution_result": null | { ... }      // só quando state=completed
+  }
+  ```
+- Lógica:
+  1. autentica + resolve sessão ativa (`user+instance`, TTL 15min default, configurável via `metadata.ttl_minutes` no flow)
+  2. se `abort` → marca `abandoned`, devolve novo estado vazio
+  3. se sem sessão → cria com `intent` (rejeita `unknown_intent` se não estiver no catálogo)
+  4. merge `values` em `context_data`, validando cada campo. Erros de validação retornam `state=collecting` com `validation_errors[]`.
+  5. recalcula `missing_fields`. Se vazio → `state=confirming` + `confirmation_summary`. Senão → `state=collecting`.
+  6. se `confirm=true && state=confirming` → marca `executing`, monta payload, invoca `moodplay-execute-action` server-to-server (HMAC interno), grava resultado, marca `completed` ou `failed`.
+  7. tudo audita em `security_audit_log` (`session.created|updated|confirmed|executed|aborted|expired`).
+
+### 4. Helper TypeScript no frontend (`src/lib/wa.ts`)
+- `stepSession(input): Promise<SessionStepResult>` — para uso futuro da ORKYM ou de painéis admin que queiram operar uma sessão.
+
+### 5. Catálogo no healthcheck
+- `GET /moodplay-session-step?ping=1` retorna `{ok, version: "12.7", supported_intents: [...]}`.
+- Atualizar `GET /moodplay-execute-action?ping=1` para incluir `session_endpoint: "/moodplay-session-step"` em `meta`.
+
+### 6. Cron de expiração
+- `orkym-cron-tick` já roda; adicionar chamada `await admin.rpc("expire_stale_sessions")` ao loop.
+
+### 7. Testes Deno (`supabase/functions/moodplay-session-step/`)
+- `hmac_test.ts` — HMAC + skew (espelha o do execute-action).
+- `flow_test.ts` (unitário) — `getFlow('reserve_court')`, validação por tipo, `summarize()`.
+- `integration_test.ts` — cenários:
+  1. ping
+  2. iniciar sessão → state=collecting com missing_fields
+  3. enviar valor parcial → continua collecting
+  4. valor inválido → validation_errors
+  5. completar todos os campos → state=confirming + summary
+  6. confirm=true → state=completed (ou failed graciosamente se action ainda não suportada — assertamos que session.state vira `failed` com `error_message` claro, não 500)
+  7. abort → state=abandoned
+  8. nova mensagem após abort → cria nova sessão
+  9. unknown_intent → 400
+
+### 8. Memória
+- Criar `mem://features/multi-turn-flows.md` (intents suportadas, schema do flow, fluxograma).
+- Atualizar `mem://integration/orkym-gateway-architecture.md` adicionando o novo endpoint na tabela.
+- Atualizar `mem://integration/orkym-contract.md` com seção "Stateful flows (Phase 12.7)".
+
+---
+
+## Entrega B — Relatório
+
+`/mnt/documents/orkym-phase-12-7-stateful-flows.md` cobrindo:
+- Intents suportadas + fields + action_type final
+- 2 exemplos de fluxo end-to-end (reserva de quadra com 4 turnos; criação de torneio com 6 turnos)
+- Diagrama do step engine
+- Tabela de mapping spec ↔ código (endpoint, tabela, RPCs, testes)
+
+---
+
+## Entrega C — Pendências futuras
+
+- **Memória longa cross-session** (preferências do usuário) — fica para 12.8.
+- **Personalização de prompts por tenant** (i18n + tom de voz) — depende de tabela `tenant_settings.conversation_voice`, fora de escopo.
+- **Branching condicional** dentro de um flow (ex: se modalidade=padel pedir parceiro) — schema atual é linear; adicionar `next_field: (ctx) => fieldName` opcional na Phase 12.8.
+- **Handlers operacionais novos** que faltam para flows completos: `book_court`, `enroll_athlete_in_plan` — exigem design de payload + RLS, fora de escopo desta fase (documentar como pré-requisito do go-live).
+- **Multi-binding por escopo** (12.7 original do roadmap) é separado; sessões hoje resolvem por `user_id + instance_id`.
+
+---
 
 ## Critério de aceite
 
-- Os 3 arquivos de memória atualizados/criados
-- Relatório markdown em `/mnt/documents/`
-- 11 testes Deno passando (verificação)
-- Confirmação explícita no chat de que **nenhuma camada de IA foi adicionada** ao MoodPlay nesta passagem
+- Migração aplicada (`conversation_sessions` + 5 RPCs) sem warnings do linter.
+- `moodplay-session-step` deployado, healthcheck OK.
+- 11+ testes Deno verdes (HMAC + flow + integração).
+- Cron expira sessões abandonadas.
+- Nenhuma linha de NLP/IA adicionada — flows são schemas declarativos.
+- Memória + relatório entregues.
 
-Aprovando, executo tudo em uma sequência (memórias → testes → relatório).
+---
+
+## Decisões a confirmar antes de eu codar
+
+1. **TTL padrão de sessão**: vou usar **15 min** (ponto médio do range 10-20). OK?
+2. **Política de "uma sessão por user+instance"**: se já existir sessão ativa e ORKYM mandar novo `intent` diferente, eu **abandono a antiga e crio nova** (mais limpo que erro). OK?
+3. **Flows com action_type ainda não implementado** (`reserve_court`, `enroll_student`): manter os flows definidos mas execução final retorna `failed` com `unknown_action_type` claro, e listo como pendência na Entrega C. Alternativa: deixar só os 3 flows que já têm action (`create_class`, `create_tournament`, `generate_billing_cycle`). Qual prefere?
+
+Se quiser, sigo direto com defaults (15 min, abandona-e-cria, manter os 5 flows com pendência documentada).
