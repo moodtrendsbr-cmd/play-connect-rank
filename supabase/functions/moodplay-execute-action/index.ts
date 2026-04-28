@@ -377,6 +377,7 @@ Deno.serve(async (req) => {
         response_text: `Falhou ao criar proposta: ${pErr.message}`,
         completed_at: new Date().toISOString(),
       }).eq("id", commandId);
+      await logOutcome("failed", { domain: "proposal", error: pErr.message });
       return safeJson({ ok: false, command_id: commandId, error: pErr.message }, 500);
     }
 
