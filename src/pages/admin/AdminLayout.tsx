@@ -75,6 +75,8 @@ const navGroups: NavGroup[] = [
     items: [
       { title: "Instâncias", url: "/admin/whatsapp-instances", icon: Phone },
       { title: "Mensagens", url: "/admin/whatsapp-messages", icon: Inbox },
+      { title: "Bindings", url: "/admin/whatsapp-bindings", icon: Phone },
+      { title: "Leads", url: "/admin/whatsapp-leads", icon: Inbox },
     ],
   },
 ];
