@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { dispatchWhatsApp } from "../_shared/wa-providers.ts";
 
 /**
  * wa-send-message — Phase 12.5
