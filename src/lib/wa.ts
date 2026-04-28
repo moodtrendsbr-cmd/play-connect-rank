@@ -186,26 +186,6 @@ export async function setProactiveOptIn(
   return !error;
 }
 
-export interface SendOutboundInput {
-  to_phone: string;
-  tenant_id?: string | null;
-  arena_id?: string | null;
-  user_id?: string | null;
-  message_type?: "text" | "template" | "interactive";
-  body?: string;
-  template_name?: string;
-  template_vars?: Record<string, unknown>;
-  category?: ProactiveCategory;
-  correlation_id?: string;
-  initiated_by?: "orkym" | "system" | "manual";
-}
-
-/** Admin/test helper — server-to-server call requires HMAC; client-side use is for mock/admin tooling. */
-export async function sendOutbound(input: SendOutboundInput) {
-  const { data, error } = await supabase.functions.invoke("wa-send-message", {
-    body: input,
-  });
-  if (error) return { ok: false, error: error.message };
-  return data;
-}
+// Outbound WhatsApp delivery is handled by ORKYM directly.
+// MoodPlay no longer dispatches messages — see mem://integration/orkym-contract.
 
