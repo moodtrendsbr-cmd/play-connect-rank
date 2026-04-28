@@ -83,8 +83,23 @@ const PROPOSAL_ACTIONS = new Set([
   "recovery_campaign_draft",
 ]);
 
+const SUPPORTED_ACTIONS = [
+  ...READ_ACTIONS, ...RPC_OPERATIONAL_ACTIONS, ...PROPOSAL_ACTIONS,
+];
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // Public healthcheck — no HMAC required, lets ORKYM discover capabilities
+  const url = new URL(req.url);
+  if (req.method === "GET" || url.searchParams.get("ping") === "1") {
+    return safeJson({
+      ok: true,
+      service: "moodplay-execute-action",
+      version: "12.6",
+      supported_actions: SUPPORTED_ACTIONS,
+    });
+  }
 
   const rawBody = await req.text();
   const sig = req.headers.get("x-moodplay-signature");
