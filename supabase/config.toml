@@ -35,9 +35,3 @@ verify_jwt = true
 
 [functions.moodplay-execute-action]
 verify_jwt = false
-
-[functions.wa-send-message]
-verify_jwt = false
-
-[functions.wa-delivery-webhook]
-verify_jwt = false
