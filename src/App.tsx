@@ -120,6 +120,9 @@ import AthleteCommands from "./pages/athlete/AthleteCommands";
 import AdminWhatsAppInstances from "./pages/admin/AdminWhatsAppInstances";
 import AdminWhatsAppMessages from "./pages/admin/AdminWhatsAppMessages";
 import TenantWhatsAppRouting from "./pages/tenant/TenantWhatsAppRouting";
+import ArenaMessages from "./pages/arena-dashboard/ArenaMessages";
+import TenantMessages from "./pages/tenant/TenantMessages";
+import OrganizerMessages from "./pages/organizer/OrganizerMessages";
 import { Navigate } from "react-router-dom";
 
 const queryClient = new QueryClient();
@@ -199,6 +202,7 @@ const App = () => (
               <Route path="autonomia" element={<ArenaAutonomy />} />
               <Route path="control-tower" element={<ArenaControlTower />} />
               <Route path="comandos" element={<ArenaCommands />} />
+              <Route path="mensagens-wa" element={<ArenaMessages />} />
             </Route>
             <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
             {/* Phase 11.4 — Organizer Event Engine (additive shell) */}
@@ -210,6 +214,7 @@ const App = () => (
               <Route path="performance" element={<OrganizerDashboard />} />
               <Route path="financeiro" element={<OrganizerFinance />} />
               <Route path="comandos" element={<OrganizerCommands />} />
+              <Route path="mensagens-wa" element={<OrganizerMessages />} />
             </Route>
             <Route path="/organizer" element={<OrganizerLayout />}>
               <Route index element={<Navigate to="/organizer/settings" replace />} />
@@ -271,6 +276,7 @@ const App = () => (
               <Route path="autonomia" element={<AdminAutonomy />} />
               <Route path="comandos" element={<TenantCommands />} />
               <Route path="whatsapp-routing" element={<TenantWhatsAppRouting />} />
+              <Route path="mensagens-wa" element={<TenantMessages />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />

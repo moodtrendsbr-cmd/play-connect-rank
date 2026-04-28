@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Check, X, RefreshCw, ArrowRight, Loader2 } from "lucide-react";
+import { Sparkles, Check, X, RefreshCw, ArrowRight, Loader2, MessageCircle } from "lucide-react";
 import {
   listActionProposals, approveAction, executeAction, rejectAction,
   type OrkymActionProposal,
 } from "@/lib/orkym";
+import { resolveInstance, type ResolvedInstance } from "@/lib/wa";
 import { toast } from "sonner";
 import { ActionProposalDetail } from "./ActionProposalDetail";
 import { PolicyDecisionBadge } from "@/components/autonomy/PolicyDecisionBadge";
@@ -40,6 +41,7 @@ export const OrkymActionsCard = ({
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [detail, setDetail] = useState<OrkymActionProposal | null>(null);
+  const [instance, setInstance] = useState<ResolvedInstance | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -51,6 +53,15 @@ export const OrkymActionsCard = ({
   };
 
   useEffect(() => { if (tenantId) load(); }, [tenantId, arenaId]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    resolveInstance({
+      tenant_id: tenantId,
+      arena_id: arenaId ?? null,
+      profile_type: arenaSlug ? "arena" : "tenant",
+    }).then((r) => r?.success && setInstance(r));
+  }, [tenantId, arenaId, arenaSlug]);
 
   const handleApprove = async (p: OrkymActionProposal) => {
     setBusyId(p.id);
@@ -161,18 +172,30 @@ export const OrkymActionsCard = ({
                   Detalhes
                 </Button>
               </div>
-              <WhatsAppCTA
-                variant="inline"
-                command={`Aprovar ação ${p.id} — ${p.title}`}
-                label="Continuar no WhatsApp"
-                payload={{
-                  profile_type: arenaSlug ? "arena" : "tenant",
-                  input_text: `Aprovar ação ${p.id} — ${p.title}`,
-                  parsed_intent: { intent: "approve_action", proposal_id: p.id },
-                  arena_id: arenaId,
-                  tenant_id: tenantId,
-                }}
-              />
+              <div className="flex items-center gap-2 flex-wrap">
+                <WhatsAppCTA
+                  variant="inline"
+                  command={`Aprovar ação ${p.id} — ${p.title}`}
+                  label="Continuar no WhatsApp"
+                  payload={{
+                    profile_type: arenaSlug ? "arena" : "tenant",
+                    input_text: `Aprovar ação ${p.id} — ${p.title}`,
+                    parsed_intent: { intent: "approve_action", proposal_id: p.id },
+                    arena_id: arenaId,
+                    tenant_id: tenantId,
+                  }}
+                />
+                {instance?.display_name && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] h-4 px-1.5 gap-1 text-muted-foreground border-border"
+                    title={`Instância: ${instance.display_name} (${instance.source})`}
+                  >
+                    <MessageCircle className="h-2.5 w-2.5" />
+                    WA: {instance.display_name}
+                  </Badge>
+                )}
+              </div>
             </div>
           ))}
           {showSeeAllLink && arenaSlug && (

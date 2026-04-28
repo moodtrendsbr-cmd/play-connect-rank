@@ -99,7 +99,7 @@ export interface ResolveInstanceInput {
 
 export interface ResolvedInstance {
   success: boolean;
-  source?: string;
+  source?: "arena" | "organizer" | "company" | "tenant" | "profile" | "global_fallback";
   instance_id?: string;
   provider?: string;
   phone_number?: string;

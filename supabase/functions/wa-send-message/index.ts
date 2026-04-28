@@ -12,7 +12,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-moodplay-signature, x-idempotency-key",
+    "authorization, x-client-info, apikey, content-type, x-moodplay-signature, x-request-timestamp, x-idempotency-key",
 };
 
 function safeJson(body: unknown, status = 200) {
@@ -45,9 +45,18 @@ Deno.serve(async (req) => {
 
   const rawBody = await req.text();
   const sig = req.headers.get("x-moodplay-signature");
+  const ts = req.headers.get("x-request-timestamp");
   const idemKey = req.headers.get("x-idempotency-key");
   const secret = Deno.env.get("ORKYM_SERVICE_TOKEN") || "";
   const isMockMode = !secret || req.url.includes("mode=mock");
+
+  // Replay protection (5min skew window)
+  if (ts) {
+    const skew = Math.abs(Date.now() - Number(ts));
+    if (!Number.isFinite(skew) || skew > 5 * 60 * 1000) {
+      return safeJson({ ok: false, error: "timestamp_skew" }, 401);
+    }
+  }
 
   if (!isMockMode) {
     const ok = await verifyHmac(rawBody, sig, secret);
