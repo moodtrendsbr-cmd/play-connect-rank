@@ -406,6 +406,7 @@ Deno.serve(async (req) => {
       completed_at: new Date().toISOString(),
     }).eq("id", commandId);
 
+    await logOutcome(dispatch.ok ? "executed" : "failed", { domain: "proposal", proposal_id: proposal.id, linked_entity_type: linkedType, linked_entity_id: linkedId, error: dispatch.error ?? null });
     return safeJson({
       ok: dispatch.ok,
       command_id: commandId,
@@ -423,6 +424,7 @@ Deno.serve(async (req) => {
     completed_at: new Date().toISOString(),
   }).eq("id", commandId);
 
+  await logOutcome("no_action", { reason: "unknown_action_type" });
   return safeJson({
     ok: false,
     command_id: commandId,
