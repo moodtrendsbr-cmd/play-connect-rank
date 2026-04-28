@@ -35,3 +35,6 @@ verify_jwt = true
 
 [functions.moodplay-execute-action]
 verify_jwt = false
+
+[functions.moodplay-session-step]
+verify_jwt = false

@@ -96,8 +96,9 @@ Deno.serve(async (req) => {
     return safeJson({
       ok: true,
       service: "moodplay-execute-action",
-      version: "12.6",
+      version: "12.7",
       supported_actions: SUPPORTED_ACTIONS,
+      meta: { session_endpoint: "/moodplay-session-step" },
     });
   }
 
