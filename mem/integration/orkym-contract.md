@@ -4,10 +4,12 @@ description: Public HTTP contract for the ORKYM brain to call moodplay-execute-a
 type: reference
 ---
 
-# ORKYM Execution Contract (Phase 12.6)
+# ORKYM Execution Contract (Phase 12.6 — ORKYM-as-Gateway)
 
 **Endpoint**: `POST {SUPABASE_URL}/functions/v1/moodplay-execute-action`
 **Healthcheck**: `GET {SUPABASE_URL}/functions/v1/moodplay-execute-action?ping=1` → returns `{ok, version, supported_actions[]}`. No HMAC required.
+
+> **Architectural rule**: ORKYM owns the WhatsApp channel (inbound parsing AND outbound dispatch). MoodPlay only exposes this single endpoint to receive execution calls. There is no `wa-send-message` or `wa-delivery-webhook` in MoodPlay anymore.
 
 ## Required headers
 - `Content-Type: application/json`
@@ -52,51 +54,49 @@ type: reference
 ### Proposal-based (auto-approved, dispatched via shared handlers)
 `create_followup`, `create_reminder`, `create_occurrence`, `propose_manual_charge`, `flag_enrollment_attention`, `propose_promotion`, `schedule_operational_review`, `open_communication_thread`, `recovery_campaign_draft`.
 
+## Response shape
+```json
+{
+  "ok": true,
+  "command_id": "uuid",
+  "execution_status": "executed|failed|deduplicated|no_action",
+  "linked_entity": { "type": "...", "id": "uuid" } | null,
+  "checkout_link": "https://..." | null,
+  "qr_link": "https://..." | null,
+  "response_summary": "Texto curto para WhatsApp",
+  "follow_up_actions": []
+}
+```
+
 ## Error codes
 | Code | Meaning |
 |---|---|
 | `invalid_signature` | HMAC mismatch |
+| `timestamp_required` | header missing |
 | `timestamp_skew` | clock drift > 5 min |
+| `invalid_json` | body parse failed |
+| `action_type_required` | missing action_type |
 | `cross_tenant_violation` | arena_id does not belong to tenant_id |
 | `unknown_action_type` | action not in catalog |
 | `command_insert_failed:*` | DB insert error |
 
-## Outbound (proactive WhatsApp)
-**Endpoint**: `POST {SUPABASE_URL}/functions/v1/wa-send-message`
-Same HMAC headers. Body:
-```json
-{
-  "to_phone": "5511...",
-  "tenant_id": "uuid", "arena_id": "uuid|null", "user_id": "uuid|null",
-  "message_type": "text|template",
-  "body": "...",
-  "template_name": "...", "template_vars": {...},
-  "category": "billing|operations|retention|marketing",
-  "correlation_id": "uuid",
-  "initiated_by": "orkym"
-}
-```
-Categories `marketing` and `retention` require `orkym_proactive_eligibility.opted_in = true` for the user.
+## Identity & instance lookup (helper RPCs)
+- `resolve_whatsapp_instance(tenant, arena, profile, organizer, company)` — chain: arena → organizer → company → tenant → profile_type → global fallback.
+- `resolve_whatsapp_instance_by_phone(phone)` — used by ORKYM to know which instance received the message.
+- `resolve_whatsapp_identity(wa_phone, instance_id?)` — returns `{user_id, profile_type, tenant_id, arena_id, verified, is_lead, available_profiles[]}`.
 
-## Delivery webhooks (provider → MoodPlay)
-- Twilio: `POST /functions/v1/wa-delivery-webhook/twilio`
-- Meta:   `POST /functions/v1/wa-delivery-webhook/meta` (also serves GET handshake `hub.verify_token = WA_META_VERIFY_TOKEN`)
-- Evolution: `POST /functions/v1/wa-delivery-webhook/evolution` (header `apikey`)
+## Proactive eligibility
+Table `orkym_proactive_eligibility` stores per-user opt-in flags. ORKYM checks this before sending `marketing` / `retention` outbound. `billing` / `operations` are transactional and bypass opt-in.
 
-Status updates are idempotent and never downgrade (`read` → `delivered` ignored).
-
-## Required secrets per provider
-- Twilio: `WA_TWILIO_ACCOUNT_SID`, `WA_TWILIO_AUTH_TOKEN`, `WA_TWILIO_FROM`
-- Meta: `WA_META_TOKEN`, `WA_META_PHONE_NUMBER_ID`, `WA_META_APP_SECRET`, `WA_META_VERIFY_TOKEN`
-- Evolution: `WA_EVOLUTION_BASE_URL`, `WA_EVOLUTION_API_KEY`
-
-Per-instance overrides live in `whatsapp_instances.outbound_credentials` (jsonb).
+## Audit trail
+Every phase writes to `security_audit_log`:
+`received`, `executed`, `failed`, `no_action`, `deduplicated`. Each row has `action_type`, `source`, `correlation_id`, `linked_entity_type/id`.
 
 ## Example curl
 ```bash
 BODY='{"tenant_id":"...","arena_id":"...","action_type":"get_arena_summary","correlation_id":"..."}'
 TS=$(date +%s%3N)
-SIG=$(printf "%s" "$BODY" | openssl dgst -sha256 -hmac "$ORKYM_SERVICE_TOKEN" -hex | awk '{print $2}')
+SIG=$(printf "%s" "$BODY" | openssl dgst -sha256 -hmac "$ORKYM_HMAC_SECRET" -hex | awk '{print $2}')
 curl -X POST "$SUPABASE_URL/functions/v1/moodplay-execute-action" \
   -H "Content-Type: application/json" \
   -H "X-MoodPlay-Signature: $SIG" \

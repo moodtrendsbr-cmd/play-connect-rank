@@ -35,12 +35,12 @@ MoodPlay exposes a **server-to-server execution surface** so ORKYM can operate t
 - **Operational wrappers**: `create_tournament`, `create_class`, `generate_billing_cycle`, `mark_cycle_paid`, `validate_checkin`.
 - **Read-only RPCs**: `get_arena_summary`, `list_today_classes`, `list_pending_enrollments`, `get_revenue_today`.
 
-## Outbound — `wa-send-message`
-- Same auth (HMAC + service token).
-- Resolves instance via `resolve_whatsapp_instance`.
-- Checks `orkym_proactive_eligibility.opted_in` for `marketing`/`retention`. `billing`/`operations` are transactional and don't require opt-in.
-- Inserts `whatsapp_messages` (`direction='outbound'`, `delivery_status='queued'`).
-- Provider dispatch: `mock` → log + sent; `twilio`/`meta` → real API call (TODO when secrets configured); missing creds → marks `failed` (system continues).
+## Outbound — owned by ORKYM
+ORKYM is the WhatsApp gateway. MoodPlay does NOT dispatch outbound messages
+and does NOT receive delivery callbacks. The legacy `wa-send-message` and
+`wa-delivery-webhook` Edge Functions were removed. MoodPlay still maintains
+`orkym_proactive_eligibility` (opt-in flags) which ORKYM consults before
+sending marketing/retention messages.
 
 ## Command history
 `conversational_commands` now carries `direction`, `whatsapp_instance_id`, `linked_entity_type`, `linked_entity_id`, `normalized_input`, `initiated_by`. Realtime subscription in `CommandHistoryCard` reflects both inbound and ORKYM-initiated executions.
@@ -53,11 +53,8 @@ MoodPlay exposes a **server-to-server execution surface** so ORKYM can operate t
 ORKYM owns all of those. MoodPlay only provides routing, identity, execution, and audit trails.
 
 ## Pending (future phases)
-- Real Twilio/Meta dispatch in `wa-send-message` (12.6 — needs provider secrets).
-- `wa-delivery-webhook` to ingest delivery callbacks (12.6).
 - Multi-binding per scope (12.7).
-- Expanded read-only catalog: rankings, today's matches, performance (12.8).
-- Dedicated `wa_leads` table for guests (12.9).
+- Webhook reverso ORKYM → MoodPlay para eventos assíncronos longos (futuro).
 
 ## Phase 12.6 additions
 
@@ -70,7 +67,10 @@ ORKYM owns all of those. MoodPlay only provides routing, identity, execution, an
   `received`, `executed`, `failed`, `no_action`, `deduplicated`. Each record
   includes `action_type`, `source`, `correlation_id` and (when relevant)
   `linked_entity_type/id`.
-- `wa-send-message` writes `wa_send.<delivery_status>` audit entries with
-  `provider`, `instance_id`, `category`, `failure_reason`.
-- Deno tests (`hmac_test.ts`) validate HMAC determinism and timestamp skew
-  guard for the bridge.
+- Deno tests cover the full contract: 4 unit (HMAC determinism, body change,
+  skew rejection, valid window) + 7 integration (ping, missing timestamp,
+  skew, invalid signature, malformed JSON, missing action_type, success path).
+  All 11 green as of Phase 12.6 close.
+- Expanded read-only catalog (Phase 12.8) shipped: `get_athlete_ranking`,
+  `list_today_matches`, `get_athlete_performance`, `get_tournament_standings`,
+  `list_upcoming_classes`.
