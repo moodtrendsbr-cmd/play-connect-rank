@@ -143,6 +143,16 @@ Deno.serve(async (req) => {
       .eq("channel", "api")
       .maybeSingle();
     if (existing && existing.status !== "pending") {
+      try {
+        await admin.from("security_audit_log").insert({
+          user_id: user_id ?? null,
+          tenant_id: tenant_id ?? null,
+          action: "moodplay_execute.deduplicated",
+          resource_type: "conversational_command",
+          resource_id: existing.id,
+          metadata: { action_type, source, correlation_id },
+        });
+      } catch { /* best-effort */ }
       return safeJson({
         ok: true,
         deduplicated: true,
@@ -190,17 +200,31 @@ Deno.serve(async (req) => {
   }
   const commandId = cmd.id;
 
-  // ----- Audit log
+  // ----- Audit log (request received)
+  const auditBase = {
+    user_id: user_id ?? null,
+    tenant_id: tenant_id ?? null,
+    resource_type: "conversational_command",
+    resource_id: commandId,
+  };
   try {
     await admin.from("security_audit_log").insert({
-      user_id: user_id ?? null,
-      tenant_id: tenant_id ?? null,
-      action: "moodplay_execute",
-      resource_type: "conversational_command",
-      resource_id: commandId,
-      metadata: { action_type, source, correlation_id },
+      ...auditBase,
+      action: "moodplay_execute.received",
+      metadata: { action_type, source, correlation_id, instance_id: instanceId },
     });
   } catch { /* best-effort */ }
+
+  // Helper to log outcome on each return path
+  const logOutcome = async (outcome: "executed" | "failed" | "no_action" | "deduplicated", extra: Record<string, unknown> = {}) => {
+    try {
+      await admin.from("security_audit_log").insert({
+        ...auditBase,
+        action: `moodplay_execute.${outcome}`,
+        metadata: { action_type, source, correlation_id, ...extra },
+      });
+    } catch { /* best-effort */ }
+  };
 
   // ===========================================================
   // 1) READ-ONLY actions → execute via RPC, no proposal
@@ -226,6 +250,7 @@ Deno.serve(async (req) => {
       completed_at: new Date().toISOString(),
     }).eq("id", commandId);
 
+    await logOutcome(ok ? "executed" : "failed", { domain: "read" });
     return safeJson({
       ok,
       command_id: commandId,
@@ -320,6 +345,7 @@ Deno.serve(async (req) => {
       completed_at: new Date().toISOString(),
     }).eq("id", commandId);
 
+    await logOutcome(err ? "failed" : "executed", { domain: "operational", linked_entity_type: linkedType, linked_entity_id: linkedId, error: err });
     return safeJson({
       ok: !err,
       command_id: commandId,
@@ -361,6 +387,7 @@ Deno.serve(async (req) => {
         response_text: `Falhou ao criar proposta: ${pErr.message}`,
         completed_at: new Date().toISOString(),
       }).eq("id", commandId);
+      await logOutcome("failed", { domain: "proposal", error: pErr.message });
       return safeJson({ ok: false, command_id: commandId, error: pErr.message }, 500);
     }
 
@@ -389,6 +416,7 @@ Deno.serve(async (req) => {
       completed_at: new Date().toISOString(),
     }).eq("id", commandId);
 
+    await logOutcome(dispatch.ok ? "executed" : "failed", { domain: "proposal", proposal_id: proposal.id, linked_entity_type: linkedType, linked_entity_id: linkedId, error: dispatch.error ?? null });
     return safeJson({
       ok: dispatch.ok,
       command_id: commandId,
@@ -406,6 +434,7 @@ Deno.serve(async (req) => {
     completed_at: new Date().toISOString(),
   }).eq("id", commandId);
 
+  await logOutcome("no_action", { reason: "unknown_action_type" });
   return safeJson({
     ok: false,
     command_id: commandId,
