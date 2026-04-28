@@ -152,6 +152,49 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (!ident) {
+    // Phase 12.9 — upsert as wa_lead for guest tracking
+    try {
+      const { data: existingLead } = await supa
+        .from("wa_leads")
+        .select("id, message_count, status")
+        .eq("wa_phone", phone)
+        .maybeSingle();
+
+      if (existingLead) {
+        await supa.from("wa_leads").update({
+          last_seen_at: new Date().toISOString(),
+          last_inbound_text: text?.slice(0, 500) ?? null,
+          message_count: (existingLead.message_count ?? 0) + 1,
+          status: existingLead.status === "new" ? "engaged" : existingLead.status,
+          source_instance_id: instanceId,
+        }).eq("id", existingLead.id);
+      } else {
+        // Try to derive tenant/arena hint from the receiving instance bindings
+        let tenantHint: string | null = null;
+        let arenaHint: string | null = null;
+        if (instanceId) {
+          const { data: binding } = await supa
+            .from("whatsapp_bindings")
+            .select("tenant_id, arena_id")
+            .eq("instance_id", instanceId)
+            .order("priority", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          tenantHint = binding?.tenant_id ?? null;
+          arenaHint = binding?.arena_id ?? null;
+        }
+        await supa.from("wa_leads").insert({
+          wa_phone: phone,
+          last_inbound_text: text?.slice(0, 500) ?? null,
+          message_count: 1,
+          source_instance_id: instanceId,
+          tenant_hint: tenantHint,
+          arena_hint: arenaHint,
+          status: "new",
+        });
+      }
+    } catch { /* best-effort */ }
+
     // Log unidentified message (no user_id) and respond with onboarding
     await supa.from("conversational_commands").insert({
       channel: "whatsapp",
