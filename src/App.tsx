@@ -119,6 +119,8 @@ import CompanyCommands from "./pages/company/CompanyCommands";
 import AthleteCommands from "./pages/athlete/AthleteCommands";
 import AdminWhatsAppInstances from "./pages/admin/AdminWhatsAppInstances";
 import AdminWhatsAppMessages from "./pages/admin/AdminWhatsAppMessages";
+import AdminWhatsAppBindings from "./pages/admin/AdminWhatsAppBindings";
+import AdminWhatsAppLeads from "./pages/admin/AdminWhatsAppLeads";
 import TenantWhatsAppRouting from "./pages/tenant/TenantWhatsAppRouting";
 import ArenaMessages from "./pages/arena-dashboard/ArenaMessages";
 import TenantMessages from "./pages/tenant/TenantMessages";
