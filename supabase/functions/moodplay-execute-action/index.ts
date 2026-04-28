@@ -236,15 +236,20 @@ Deno.serve(async (req) => {
   // 1) READ-ONLY actions → execute via RPC, no proposal
   // ===========================================================
   if (READ_ACTIONS.has(action_type)) {
-    const rpcMap: Record<string, string> = {
-      get_arena_summary: "get_arena_summary",
-      list_today_classes: "list_today_classes",
-      list_pending_enrollments: "list_pending_enrollments",
-      get_revenue_today: "get_revenue_today",
+    // Per-action argument mapping (RPC name + args)
+    const readSpecs: Record<string, { rpc: string; args: Record<string, unknown> }> = {
+      get_arena_summary:        { rpc: "get_arena_summary",        args: { _arena_id: arena_id } },
+      list_today_classes:       { rpc: "list_today_classes",       args: { _arena_id: arena_id } },
+      list_pending_enrollments: { rpc: "list_pending_enrollments", args: { _arena_id: arena_id } },
+      get_revenue_today:        { rpc: "get_revenue_today",        args: { _arena_id: arena_id } },
+      get_athlete_ranking:      { rpc: "get_athlete_ranking",      args: { _athlete_id: payload.athlete_id ?? user_id, _modality: payload.modality ?? null } },
+      list_today_matches:       { rpc: "list_today_matches",       args: { _arena_id: arena_id ?? null, _tenant_id: tenant_id ?? null } },
+      get_athlete_performance:  { rpc: "get_athlete_performance",  args: { _athlete_id: payload.athlete_id ?? user_id, _period_days: payload.period_days ?? 30 } },
+      get_tournament_standings: { rpc: "get_tournament_standings", args: { _tournament_id: payload.tournament_id } },
+      list_upcoming_classes:    { rpc: "list_upcoming_classes",    args: { _arena_id: arena_id, _days: payload.days ?? 7 } },
     };
-    const { data, error } = await admin.rpc(rpcMap[action_type], {
-      _arena_id: arena_id,
-    });
+    const spec = readSpecs[action_type];
+    const { data, error } = await admin.rpc(spec.rpc, spec.args as never);
     const ok = !error && (data as any)?.success !== false;
     const summary = ok ? "Consulta concluída." : `Erro: ${error?.message ?? (data as any)?.error}`;
 
