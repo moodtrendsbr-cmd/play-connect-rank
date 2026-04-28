@@ -240,6 +240,7 @@ Deno.serve(async (req) => {
       completed_at: new Date().toISOString(),
     }).eq("id", commandId);
 
+    await logOutcome(ok ? "executed" : "failed", { domain: "read" });
     return safeJson({
       ok,
       command_id: commandId,
