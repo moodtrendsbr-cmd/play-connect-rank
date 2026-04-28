@@ -121,6 +121,45 @@ export async function resolveInstance(
   return data as unknown as ResolvedInstance;
 }
 
+export interface AvailableProfile {
+  profile_type: string;
+  entity_id: string | null;
+  entity_name: string | null;
+  is_default: boolean;
+}
+
+export interface ResolvedIdentity {
+  success: boolean;
+  is_lead?: boolean;
+  verified?: boolean;
+  identity_id?: string;
+  user_id?: string;
+  profile_type?: string;
+  tenant_id?: string | null;
+  arena_id?: string | null;
+  wa_phone?: string;
+  instance_id?: string | null;
+  available_profiles?: AvailableProfile[];
+  error?: string;
+}
+
+/**
+ * Resolves a WhatsApp identity from a phone number, returning all
+ * available profiles (arena owner, organizer, company, athlete) so the
+ * ORKYM brain can offer profile-switching aliases inside the chat.
+ */
+export async function resolveIdentity(
+  phone: string,
+  instanceId?: string | null,
+): Promise<ResolvedIdentity | null> {
+  const { data, error } = await supabase.rpc("resolve_whatsapp_identity", {
+    _wa_phone: phone,
+    _instance_id: instanceId ?? null,
+  });
+  if (error) return null;
+  return data as unknown as ResolvedIdentity;
+}
+
 export type ProactiveCategory = "billing" | "retention" | "marketing" | "operations";
 
 export async function setProactiveOptIn(
