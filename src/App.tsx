@@ -307,6 +307,8 @@ const App = () => (
               <Route path="commands" element={<AdminCommands />} />
               <Route path="whatsapp-instances" element={<AdminWhatsAppInstances />} />
               <Route path="whatsapp-messages" element={<AdminWhatsAppMessages />} />
+              <Route path="whatsapp-bindings" element={<AdminWhatsAppBindings />} />
+              <Route path="whatsapp-leads" element={<AdminWhatsAppLeads />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
