@@ -11,9 +11,11 @@ type: reference
 
 ## Required headers
 - `Content-Type: application/json`
-- `X-MoodPlay-Signature` — HMAC-SHA256 hex of raw body using shared secret `ORKYM_SERVICE_TOKEN`
-- `X-Request-Timestamp` — ms epoch; rejected if skew > 5 min
+- `X-MoodPlay-Signature` — HMAC-SHA256 hex of raw body using shared secret `ORKYM_HMAC_SECRET` (legacy alias `ORKYM_SERVICE_TOKEN` still accepted)
+- `X-Request-Timestamp` — ms epoch; **mandatory**, rejected if skew > 5 min
 - `X-Idempotency-Key` — uuid (recommended)
+
+> All non-ping requests MUST include valid HMAC + timestamp. There is no mock mode.
 
 ## Body
 ```json
