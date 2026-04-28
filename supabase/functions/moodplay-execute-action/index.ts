@@ -55,6 +55,12 @@ const READ_ACTIONS = new Set([
   "list_today_classes",
   "list_pending_enrollments",
   "get_revenue_today",
+  // Phase 12.8 — expanded read-only catalog
+  "get_athlete_ranking",
+  "list_today_matches",
+  "get_athlete_performance",
+  "get_tournament_standings",
+  "list_upcoming_classes",
 ]);
 
 const RPC_OPERATIONAL_ACTIONS = new Set([
