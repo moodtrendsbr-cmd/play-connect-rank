@@ -335,6 +335,7 @@ Deno.serve(async (req) => {
       completed_at: new Date().toISOString(),
     }).eq("id", commandId);
 
+    await logOutcome(err ? "failed" : "executed", { domain: "operational", linked_entity_type: linkedType, linked_entity_id: linkedId, error: err });
     return safeJson({
       ok: !err,
       command_id: commandId,
