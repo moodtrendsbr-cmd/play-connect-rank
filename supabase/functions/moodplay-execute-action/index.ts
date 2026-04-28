@@ -106,22 +106,27 @@ Deno.serve(async (req) => {
   const ts = req.headers.get("x-request-timestamp");
   const idemKey = req.headers.get("x-idempotency-key");
 
-  const secret = Deno.env.get("ORKYM_SERVICE_TOKEN") || "";
-  const isMockMode = !secret || req.url.includes("mode=mock");
+  // ORKYM is the only client. HMAC is mandatory.
+  // Backwards compat: accept legacy ORKYM_SERVICE_TOKEN if ORKYM_HMAC_SECRET unset.
+  const secret =
+    Deno.env.get("ORKYM_HMAC_SECRET") ||
+    Deno.env.get("ORKYM_SERVICE_TOKEN") ||
+    "";
 
-  // Replay protection
-  if (ts) {
-    const skew = Math.abs(Date.now() - Number(ts));
-    if (!Number.isFinite(skew) || skew > 5 * 60 * 1000) {
-      return safeJson({ ok: false, error: "timestamp_skew" }, 401);
-    }
+  if (!secret) {
+    return safeJson({ ok: false, error: "server_secret_not_configured" }, 503);
   }
 
-  // HMAC validation (skipped in mock for local dev)
-  if (!isMockMode) {
-    const ok = await verifyHmac(rawBody, sig, secret);
-    if (!ok) return safeJson({ ok: false, error: "invalid_signature" }, 401);
+  // Replay protection (timestamp required)
+  if (!ts) return safeJson({ ok: false, error: "timestamp_required" }, 401);
+  const skew = Math.abs(Date.now() - Number(ts));
+  if (!Number.isFinite(skew) || skew > 5 * 60 * 1000) {
+    return safeJson({ ok: false, error: "timestamp_skew" }, 401);
   }
+
+  // HMAC validation — always enforced
+  const ok = await verifyHmac(rawBody, sig, secret);
+  if (!ok) return safeJson({ ok: false, error: "invalid_signature" }, 401);
 
   let body: any;
   try { body = JSON.parse(rawBody); } catch {
