@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Resolve instance
+  // Resolve instance (returns full row needed for credentials)
   const { data: inst } = await admin.rpc("resolve_whatsapp_instance", {
     _tenant_id: tenant_id ?? null,
     _arena_id: arena_id ?? null,
@@ -139,6 +139,17 @@ Deno.serve(async (req) => {
   });
   const instanceId = (inst as any)?.instance_id ?? null;
   const provider = (inst as any)?.provider ?? null;
+
+  // Load full instance for credentials (resolver returns slim view)
+  let instanceRow: any = null;
+  if (instanceId) {
+    const { data } = await admin
+      .from("whatsapp_instances")
+      .select("external_instance_id, phone_number, outbound_endpoint, outbound_credentials")
+      .eq("id", instanceId)
+      .maybeSingle();
+    instanceRow = data;
+  }
 
   // Insert queued message
   const { data: msg, error: insErr } = await admin
@@ -157,21 +168,31 @@ Deno.serve(async (req) => {
   if (insErr) return safeJson({ ok: false, error: insErr.message }, 500);
   const messageId = msg.id;
 
-  // Dispatch to provider
+  // Dispatch via provider abstraction
   let deliveryStatus: "sent" | "failed" = "failed";
   let failureReason: string | null = null;
   let externalId: string | null = null;
 
   if (!provider) {
     failureReason = "no_instance_resolved";
-  } else if (provider === "mock") {
-    deliveryStatus = "sent";
-    externalId = `mock_${messageId.slice(0, 8)}`;
-    console.log(`[wa-send-message MOCK] to=${cleanPhone} body="${msgBody}"`);
+  } else if (message_type === "template" && !template_name) {
+    failureReason = "template_name_required";
   } else {
-    // Real providers (twilio/meta/evolution): credentials are loaded
-    // server-side. If missing, mark failed gracefully — UX degrades.
-    failureReason = "no_provider_configured";
+    const outcome = await dispatchWhatsApp({
+      provider,
+      to_phone: cleanPhone,
+      message_type,
+      body: msgBody,
+      template_name,
+      template_vars,
+      instance: instanceRow ?? {},
+    });
+    if (outcome.ok) {
+      deliveryStatus = "sent";
+      externalId = outcome.external_message_id ?? null;
+    } else {
+      failureReason = outcome.failure_reason ?? "provider_failed";
+    }
   }
 
   await admin.from("whatsapp_messages").update({
