@@ -180,6 +180,22 @@ Deno.serve(async (req) => {
     sent_at: deliveryStatus === "sent" ? new Date().toISOString() : null,
   }).eq("id", messageId);
 
+  // Audit log (best-effort)
+  try {
+    await admin.from("security_audit_log").insert({
+      user_id: user_id ?? null,
+      tenant_id: tenant_id ?? null,
+      action: `wa_send.${deliveryStatus}`,
+      resource_type: "whatsapp_message",
+      resource_id: messageId,
+      metadata: {
+        category, initiated_by, correlation_id,
+        instance_id: instanceId, provider,
+        failure_reason: failureReason,
+      },
+    });
+  } catch { /* best-effort */ }
+
   return safeJson({
     ok: deliveryStatus === "sent",
     message_id: messageId,
