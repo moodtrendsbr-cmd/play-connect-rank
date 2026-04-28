@@ -5110,6 +5110,89 @@ export type Database = {
           },
         ]
       }
+      wa_leads: {
+        Row: {
+          arena_hint: string | null
+          converted_at: string | null
+          converted_user_id: string | null
+          created_at: string
+          first_seen_at: string
+          id: string
+          last_inbound_text: string | null
+          last_seen_at: string
+          message_count: number
+          metadata: Json
+          source_instance_id: string | null
+          status: string
+          tenant_hint: string | null
+          updated_at: string
+          wa_phone: string
+        }
+        Insert: {
+          arena_hint?: string | null
+          converted_at?: string | null
+          converted_user_id?: string | null
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_inbound_text?: string | null
+          last_seen_at?: string
+          message_count?: number
+          metadata?: Json
+          source_instance_id?: string | null
+          status?: string
+          tenant_hint?: string | null
+          updated_at?: string
+          wa_phone: string
+        }
+        Update: {
+          arena_hint?: string | null
+          converted_at?: string | null
+          converted_user_id?: string | null
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_inbound_text?: string | null
+          last_seen_at?: string
+          message_count?: number
+          metadata?: Json
+          source_instance_id?: string | null
+          status?: string
+          tenant_hint?: string | null
+          updated_at?: string
+          wa_phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_leads_arena_hint_fkey"
+            columns: ["arena_hint"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_leads_arena_hint_fkey"
+            columns: ["arena_hint"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_leads_source_instance_id_fkey"
+            columns: ["source_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_leads_tenant_hint_fkey"
+            columns: ["tenant_hint"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wa_qr_tokens: {
         Row: {
           arena_id: string | null
@@ -5362,6 +5445,7 @@ export type Database = {
           initiated_by: string
           instance_id: string | null
           message_type: string
+          read_at: string | null
           sent_at: string | null
           template_name: string | null
           template_vars: Json | null
@@ -5386,6 +5470,7 @@ export type Database = {
           initiated_by?: string
           instance_id?: string | null
           message_type?: string
+          read_at?: string | null
           sent_at?: string | null
           template_name?: string | null
           template_vars?: Json | null
@@ -5410,6 +5495,7 @@ export type Database = {
           initiated_by?: string
           instance_id?: string | null
           message_type?: string
+          read_at?: string | null
           sent_at?: string | null
           template_name?: string | null
           template_vars?: Json | null
@@ -6099,7 +6185,19 @@ export type Database = {
         Returns: string
       }
       get_arena_summary: { Args: { _arena_id: string }; Returns: Json }
+      get_athlete_performance: {
+        Args: { _athlete_id: string; _period_days?: number }
+        Returns: Json
+      }
+      get_athlete_ranking: {
+        Args: { _athlete_id: string; _modality?: string }
+        Returns: Json
+      }
       get_revenue_today: { Args: { _arena_id: string }; Returns: Json }
+      get_tournament_standings: {
+        Args: { _tournament_id: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -6146,6 +6244,14 @@ export type Database = {
       }
       list_pending_enrollments: { Args: { _arena_id: string }; Returns: Json }
       list_today_classes: { Args: { _arena_id: string }; Returns: Json }
+      list_today_matches: {
+        Args: { _arena_id?: string; _tenant_id?: string }
+        Returns: Json
+      }
+      list_upcoming_classes: {
+        Args: { _arena_id: string; _days?: number }
+        Returns: Json
+      }
       orkym_action_approve: {
         Args: { _proposal_id: string }
         Returns: {
