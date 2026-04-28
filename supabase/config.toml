@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.wa-send-message]
 verify_jwt = false
+
+[functions.wa-delivery-webhook]
+verify_jwt = false
