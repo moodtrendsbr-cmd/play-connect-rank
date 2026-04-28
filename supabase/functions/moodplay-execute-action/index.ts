@@ -190,17 +190,31 @@ Deno.serve(async (req) => {
   }
   const commandId = cmd.id;
 
-  // ----- Audit log
+  // ----- Audit log (request received)
+  const auditBase = {
+    user_id: user_id ?? null,
+    tenant_id: tenant_id ?? null,
+    resource_type: "conversational_command",
+    resource_id: commandId,
+  };
   try {
     await admin.from("security_audit_log").insert({
-      user_id: user_id ?? null,
-      tenant_id: tenant_id ?? null,
-      action: "moodplay_execute",
-      resource_type: "conversational_command",
-      resource_id: commandId,
-      metadata: { action_type, source, correlation_id },
+      ...auditBase,
+      action: "moodplay_execute.received",
+      metadata: { action_type, source, correlation_id, instance_id: instanceId },
     });
   } catch { /* best-effort */ }
+
+  // Helper to log outcome on each return path
+  const logOutcome = async (outcome: "executed" | "failed" | "no_action" | "deduplicated", extra: Record<string, unknown> = {}) => {
+    try {
+      await admin.from("security_audit_log").insert({
+        ...auditBase,
+        action: `moodplay_execute.${outcome}`,
+        metadata: { action_type, source, correlation_id, ...extra },
+      });
+    } catch { /* best-effort */ }
+  };
 
   // ===========================================================
   // 1) READ-ONLY actions → execute via RPC, no proposal
