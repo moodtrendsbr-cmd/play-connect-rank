@@ -58,3 +58,19 @@ ORKYM owns all of those. MoodPlay only provides routing, identity, execution, an
 - Multi-binding per scope (12.7).
 - Expanded read-only catalog: rankings, today's matches, performance (12.8).
 - Dedicated `wa_leads` table for guests (12.9).
+
+## Phase 12.6 additions
+
+- `resolve_whatsapp_identity` now returns `available_profiles[]` aggregating
+  user_roles + arenas/tenants/companies owned by the user, with `is_default`
+  flag. Lets ORKYM offer in-chat profile switching aliases.
+- Use `resolveIdentity(phone, instanceId?)` from `src/lib/wa.ts` (returns
+  `ResolvedIdentity` with `available_profiles`).
+- `moodplay-execute-action` writes to `security_audit_log` for every phase:
+  `received`, `executed`, `failed`, `no_action`, `deduplicated`. Each record
+  includes `action_type`, `source`, `correlation_id` and (when relevant)
+  `linked_entity_type/id`.
+- `wa-send-message` writes `wa_send.<delivery_status>` audit entries with
+  `provider`, `instance_id`, `category`, `failure_reason`.
+- Deno tests (`hmac_test.ts`) validate HMAC determinism and timestamp skew
+  guard for the bridge.
