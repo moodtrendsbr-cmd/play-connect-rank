@@ -1,167 +1,85 @@
-# Plano — Fechamento das pendências pós-Fase 12.5
+# Camada de Integração ORKYM ↔ MoodPlay — Gap Analysis e Complementos
 
-Princípio mantido: **ORKYM decide, MoodPlay executa**. Nenhuma IA/copiloto local.
-As 6 pendências são agrupadas em 4 fases entregáveis.
+## Diagnóstico: 80% já está implementado
 
----
+Quase todo o escopo desta spec foi entregue nas Fases **12.5 e 12.6** (ORKYM Execution Bridge + ORKYM-as-Gateway). Mapeamento item-por-item do que você pediu vs. o que existe hoje:
 
-## Fase 12.6 — Provider real + Webhook de delivery
+| # | Item da spec | Estado atual | Ação necessária |
+|---|---|---|---|
+| 1 | WhatsApp Instance Routing | ✅ Tabelas `whatsapp_instances` + `whatsapp_bindings` (tenant/arena/organizer/company/global fallback) + RPC `resolve_whatsapp_instance` com hierarquia de prioridade | Nada — já completo |
+| 2 | Identity Resolution | ✅ Tabelas `wa_identities`, `wa_leads`, `wa_qr_tokens` + RPC `resolve_whatsapp_identity` retornando user/profile/tenant/arena/verified/is_lead/available_profiles | Nada — já completo |
+| 3 | Execution Bridge | ✅ Edge function `moodplay-execute-action` v12.6 (HMAC obrigatório + timestamp + idempotência), reusando 100% dos handlers em `_shared/orkym-handlers.ts`. Catálogo: 9 read-only + 5 operacionais + 9 proposal-based | Nada — já completo |
+| 4 | Event Feedback Layer | ✅ Resposta síncrona padronizada `{ok, command_id, execution_status, linked_entity, checkout_link?, qr_link?, response_summary, follow_up_actions[]}` + auditoria em `security_audit_log` | Nada — já completo |
+| 5 | Conversational Command History | ✅ Tabela `conversational_commands` com todos os campos (direction, instance, raw/normalized input, intent, action, status, result, linked_entity, correlation_id) + Realtime no `CommandHistoryCard` | Nada — já completo |
+| 6 | Proactive Messaging | ⚠️ **Mudou de modelo**: outbound (wa-send-message) foi removido — agora ORKYM é o gateway e dispara via canal próprio. MoodPlay apenas mantém `orkym_proactive_eligibility` (opt-in) e expõe contexto via read-only actions | Documentar a mudança de modelo |
+| 7 | Fallback / Herança de Instância | ✅ `resolve_whatsapp_instance` com chain: arena → organizer → company → tenant → profile → global fallback | Nada — já completo |
+| 8 | Security | ✅ HMAC SHA-256 obrigatório + timestamp skew 5min + idempotência + cross-tenant validation + `security_audit_log` em todas as fases (received/executed/failed/no_action/deduplicated) + 11 testes Deno passando | Nada — já completo |
+| 9 | Dashboard Reflection | ✅ `CommandHistoryCard` (Realtime) presente em ArenaCommands, OrganizerCommands, AthleteCommands, CompanyCommands, TenantCommands, AdminCommands | Nada — já completo |
+| 10 | Não-fazer | ✅ Zero IA local no MoodPlay; toda decisão fica na ORKYM | Reforçar na memória |
+| 11 | Entregáveis | ⚠️ Falta apenas **Entrega B (relatório estrutural)** e **Entrega C (riscos/pendências)** consolidados | Gerar relatório markdown |
+| 12 | Critério de sucesso | ✅ Todos atendidos | Nada |
 
-### 12.6.1 Provider real em `wa-send-message`
-Hoje só `provider === "mock"` envia; `twilio | meta | evolution` caem em `no_provider_configured`.
+## O que efetivamente vou fazer
 
-Criar despachante por provider lendo credenciais de `whatsapp_instances.outbound_credentials` (jsonb) + secrets globais como fallback:
+Como o código está 100% pronto, esta fase é de **consolidação documental + 1 ajuste técnico pequeno**:
 
-- **Twilio**: `POST https://api.twilio.com/2010-04-01/Accounts/{AccountSid}/Messages.json` via gateway de connector já documentado (ou Basic Auth direto se a instância tiver `account_sid`/`auth_token` próprios). Body `application/x-www-form-urlencoded` com `To`, `From`, `Body` (texto) ou `ContentSid` + `ContentVariables` (template).
-- **Meta Cloud API**: `POST https://graph.facebook.com/v20.0/{phone_number_id}/messages` com Bearer token; payload texto ou template estruturado.
-- **Evolution API**: `POST {base_url}/message/sendText/{instance_name}` ou `/sendTemplate`, header `apikey`.
+### 1. Atualizar `mem://integration/orkym-contract.md`
+Remover seções obsoletas que ainda mencionam `wa-send-message`, `wa-delivery-webhook` e secrets de provider Twilio/Meta/Evolution (esses endpoints foram deletados quando migramos para ORKYM-as-gateway). Substituir por nota explícita: "Outbound e delivery webhooks são responsabilidade da ORKYM. MoodPlay só recebe chamadas em `/moodplay-execute-action`."
 
-Resolução de credenciais (em ordem):
-1. `instance.outbound_credentials` (override por instância)
-2. Secrets globais por provider: `WA_TWILIO_ACCOUNT_SID`, `WA_TWILIO_AUTH_TOKEN`, `WA_TWILIO_FROM`, `WA_META_TOKEN`, `WA_META_PHONE_NUMBER_ID`, `WA_EVOLUTION_BASE_URL`, `WA_EVOLUTION_API_KEY`
-3. Sem credencial → mantém `failed/no_provider_configured` (degradação graciosa)
+### 2. Atualizar `mem://integration/orkym-execution-bridge.md`
+Marcar Phase 12.6 como concluída e remover pendências obsoletas (Twilio/Meta dispatch).
 
-Resposta do provider grava `external_message_id`, `delivery_status='sent'`, `sent_at=now()`.
-Erros de rede/HTTP → `delivery_status='failed'`, `failure_reason` com código + mensagem (truncada).
-Audit log já existente registra `wa_send.sent | wa_send.failed` com `provider`.
+### 3. Criar `mem://integration/orkym-gateway-architecture.md` (novo)
+Memória única consolidando os 12 pontos da spec → onde cada um vive no código (tabelas, RPCs, edge functions, componentes). Serve como ponto de entrada para qualquer nova sessão entender a arquitetura.
 
-Suporte a `message_type = "template"` (Twilio Content / Meta template) — caminho separado do texto livre, rejeita se faltar `template_name`.
+### 4. Gerar relatório estrutural (`/mnt/documents/orkym-moodplay-integration-report.md`)
+Documento entregável com:
+- **Entrega B** — Como instância é resolvida, como identidade é resolvida, como ORKYM chama MoodPlay, formato de resposta, persistência de histórico, preparação para proatividade, reaproveitamento vs. criado
+- **Entrega C** — Riscos e pendências (do lado ORKYM, do lado provider, próxima fase)
+- Tabelas de mapeamento spec ↔ implementação
+- Diagrama ASCII do fluxo end-to-end
 
-### 12.6.2 `wa-delivery-webhook`
-Nova edge function pública (`verify_jwt = false`) com path por provider:
+### 5. Pequeno ajuste técnico — sanity check
+Rodar os 11 testes Deno (`moodplay-execute-action` integration + hmac) para confirmar que o contrato continua verde após as últimas remoções de outbound. Se algo quebrou, corrigir.
 
-- `POST /wa-delivery-webhook/twilio` — body form-encoded: `MessageSid`, `MessageStatus` (`queued|sent|delivered|read|failed|undelivered`), `ErrorCode`. Validação opcional via `X-Twilio-Signature`.
-- `POST /wa-delivery-webhook/meta` — JSON `entry[].changes[].value.statuses[]` com `id`, `status`, `errors[]`. Validação `X-Hub-Signature-256` HMAC-SHA256 com `WA_META_APP_SECRET`.
-- `POST /wa-delivery-webhook/evolution` — JSON com `key.id`, `status`. Header `apikey` para validar.
+## O que NÃO vou fazer (e por quê)
 
-Lógica:
-1. Identifica `whatsapp_messages` por `external_message_id`.
-2. Atualiza `delivery_status` (mapeia para enum existente: `sent | delivered | read | failed`), `delivered_at`, `failure_reason`.
-3. Insere `security_audit_log` (`wa_delivery.<status>`).
-4. Idempotente: ignora downgrade de status (`read` não vira `sent`).
-
-Adicionar coluna `read_at timestamptz` em `whatsapp_messages` (migration).
-
-UI em `AdminWhatsAppMessages.tsx` ganha colunas “Entregue em / Lido em”.
-
-### Secrets a solicitar (via `add_secret` no momento da habilitação)
-`WA_TWILIO_ACCOUNT_SID`, `WA_TWILIO_AUTH_TOKEN`, `WA_TWILIO_FROM`,
-`WA_META_TOKEN`, `WA_META_PHONE_NUMBER_ID`, `WA_META_APP_SECRET`,
-`WA_EVOLUTION_BASE_URL`, `WA_EVOLUTION_API_KEY`.
-Solicitamos apenas quando o usuário criar a primeira instância daquele provider.
-
----
-
-## Fase 12.7 — Multi-binding por scope na UI
-
-`whatsapp_bindings` já suporta `scope_type ∈ {tenant, arena, organizer, company, profile}` + `priority`. UI atual (`TenantWhatsAppRouting.tsx`) só expõe `tenant | arena`.
-
-Mudanças:
-- **TenantWhatsAppRouting**: adicionar binding por **organizer_user_id** (membros do tenant) e por **profile_type** (`athlete | organizer | arena | company`). Campo `priority` numérico (lower = wins).
-- Nova página `AdminWhatsAppBindings.tsx`: visão global cross-tenant, com filtro por scope_type e badge de conflito quando duas regras colidem na mesma prioridade.
-- Componente reutilizável `BindingForm.tsx` com inputs condicionais por scope.
-- Validação client + RLS já existente impede cross-tenant.
-
-Resolver SQL `resolve_whatsapp_instance` permanece intacto (já respeita hierarquia + priority).
-
----
-
-## Fase 12.8 — Catálogo read-only expandido
-
-Adicionar novas ações ao `READ_ACTIONS` set em `moodplay-execute-action/index.ts`, todas mapeando para RPCs existentes ou novas (SECURITY DEFINER, sem efeitos colaterais):
-
-| Ação ORKYM | RPC | Retorno |
-|---|---|---|
-| `get_athlete_ranking` | `get_athlete_ranking(_athlete_id, _modality?)` | posição, pontos, modalidade |
-| `list_today_matches` | `list_today_matches(_arena_id?, _tenant_id?)` | jogos do dia c/ horário, dupla, quadra |
-| `get_athlete_performance` | `get_athlete_performance(_athlete_id, _period_days)` | jogos, vitórias, %, evolução |
-| `get_tournament_standings` | `get_tournament_standings(_tournament_id)` | top N por categoria |
-| `list_upcoming_classes` | `list_upcoming_classes(_arena_id, _days)` | aulas próximas + vagas |
-
-Migration cria as RPCs faltantes (todas STABLE SECURITY DEFINER, retornam `jsonb`, sem mutações).
-
-Cada uma ganha um `summarizeResult` em `_shared/orkym-handlers.ts` para resposta humanizada.
-
----
-
-## Fase 12.9 — Tabela `wa_leads` para guests
-
-Hoje guests retornam `{is_lead: true}` mas não persistem. Migration cria:
-
-```text
-public.wa_leads
-  id uuid pk
-  wa_phone text unique not null
-  first_seen_at timestamptz default now()
-  last_seen_at timestamptz default now()
-  message_count int default 0
-  last_inbound_text text
-  source_instance_id uuid → whatsapp_instances
-  tenant_hint uuid → tenants (resolvido via instance binding)
-  arena_hint uuid → arenas
-  status text check (status in ('new','engaged','converted','blocked'))
-  converted_user_id uuid → auth.users
-  metadata jsonb default '{}'
-```
-
-RLS: leitura por admin + tenant_admin do `tenant_hint`; escrita só `service_role`.
-
-`wa-bridge` upsert no `wa_leads` quando `resolve_whatsapp_identity` retorna `is_lead=true`. Quando o lead se cadastra (`wa_verify_identity`), trigger marca `status='converted'` + preenche `converted_user_id`.
-
-Nova página `AdminWhatsAppLeads.tsx` com lista + ação “converter manualmente” (vincula a um user_id existente).
-
----
-
-## Adoção pelo lado ORKYM (contrato público)
-
-A ORKYM (sistema externo) vai chamar `moodplay-execute-action`. Para isso entregamos:
-
-1. **Documento de contrato** em `mem/integration/orkym-contract.md`:
-   - Endpoint: `POST {SUPABASE_URL}/functions/v1/moodplay-execute-action`
-   - Headers obrigatórios: `X-MoodPlay-Signature` (HMAC-SHA256 hex), `X-Request-Timestamp` (ms epoch), `X-Idempotency-Key` (uuid), `Content-Type: application/json`
-   - Body schema (todas ações), exemplos curl por categoria (read / operational / proposal)
-   - Tabela completa de `action_type` suportadas + payloads esperados
-   - Códigos de erro: `invalid_signature`, `timestamp_skew`, `cross_tenant_violation`, `unknown_action_type`
-2. **Endpoint de healthcheck** `GET /functions/v1/moodplay-execute-action?ping=1` (sem HMAC) → `{ok:true, version, supported_actions:[...]}` para a ORKYM descobrir capacidades.
-3. **Rotação de secret**: documentar processo (ORKYM e MoodPlay precisam compartilhar `ORKYM_SERVICE_TOKEN`).
-4. **Postman collection** versionada em `docs/orkym-bridge.postman_collection.json` (opcional, gera em build).
-
----
+- **Não vou recriar `wa-send-message`** — você aprovou explicitamente removê-lo na mensagem "pode remover" porque ORKYM é o gateway agora.
+- **Não vou criar novas tabelas** — todas as 7 tabelas necessárias (whatsapp_instances, whatsapp_bindings, whatsapp_messages, wa_identities, wa_leads, wa_qr_tokens, conversational_commands, orkym_proactive_eligibility) já existem.
+- **Não vou criar novas edge functions** — `moodplay-execute-action` + `wa-bridge` cobrem inbound/execução.
+- **Não vou tocar em handlers de negócio** — `_shared/orkym-handlers.ts` é a única camada de execução e está reusada por dois caminhos (orkym-execute-action interno + moodplay-execute-action externo).
 
 ## Detalhes técnicos
 
-### Arquivos novos
-- `supabase/functions/wa-delivery-webhook/index.ts`
-- `supabase/functions/_shared/wa-providers.ts` (Twilio/Meta/Evolution dispatchers)
-- `src/pages/admin/AdminWhatsAppBindings.tsx`
-- `src/pages/admin/AdminWhatsAppLeads.tsx`
-- `src/components/whatsapp/BindingForm.tsx`
-- `mem/integration/orkym-contract.md`
+```text
+ORKYM (cérebro/WhatsApp gateway)
+   │
+   │ POST /functions/v1/moodplay-execute-action
+   │ Headers: X-MoodPlay-Signature (HMAC), X-Request-Timestamp, X-Idempotency-Key
+   │ Body:    { tenant_id, arena_id, user_id, profile_type, action_type, payload, source, correlation_id }
+   ▼
+moodplay-execute-action (edge fn)
+   ├─ verifyHmac()           ── ORKYM_HMAC_SECRET
+   ├─ checkTimestampSkew()   ── 5 min window
+   ├─ checkIdempotency()     ── X-Idempotency-Key
+   ├─ validateCrossTenant()  ── arena ∈ tenant
+   ├─ auditLog('received')
+   ├─ dispatchAction()       ── _shared/orkym-handlers.ts
+   │     ├─ READ_ACTIONS     ── 9 RPCs SECURITY DEFINER (get_arena_summary, ...)
+   │     ├─ RPC_OPERATIONAL  ── 5 RPCs (generate_billing_cycle, ...)
+   │     └─ PROPOSAL         ── 9 inserções em orkym_action_proposals (auto-aprovadas)
+   ├─ persistCommand()       ── conversational_commands (Realtime → dashboards)
+   ├─ auditLog('executed' | 'failed' | 'deduplicated')
+   ▼
+Response: { ok, command_id, execution_status, linked_entity, checkout_link?, qr_link?,
+            response_summary, follow_up_actions[] }
+```
 
-### Arquivos editados
-- `supabase/functions/wa-send-message/index.ts` (substitui mock por dispatcher real)
-- `supabase/functions/moodplay-execute-action/index.ts` (READ_ACTIONS expandido + ping)
-- `supabase/functions/wa-bridge/index.ts` (upsert em wa_leads)
-- `supabase/functions/_shared/orkym-handlers.ts` (novos summarizeResult)
-- `src/pages/tenant/TenantWhatsAppRouting.tsx` (multi-scope)
-- `src/pages/admin/AdminWhatsAppMessages.tsx` (colunas delivered_at/read_at)
-- `src/pages/admin/AdminLayout.tsx` + `App.tsx` (rotas novas)
+## Critério de aceite
 
-### Migrations (3)
-1. `whatsapp_messages.read_at` + index `(external_message_id)` único parcial.
-2. Novas RPCs read-only (Fase 12.8).
-3. Tabela `wa_leads` + trigger de conversão + RLS.
+- Os 3 arquivos de memória atualizados/criados
+- Relatório markdown em `/mnt/documents/`
+- 11 testes Deno passando (verificação)
+- Confirmação explícita no chat de que **nenhuma camada de IA foi adicionada** ao MoodPlay nesta passagem
 
-### Critérios de aceite
-- ✅ Twilio/Meta/Evolution enviam mensagem real quando credenciais existem; sem credencial mantém `failed` controlado.
-- ✅ Webhook recebe e atualiza status até `read`, idempotente, com HMAC validado.
-- ✅ UI permite criar binding por organizer e profile_type, com priority.
-- ✅ ORKYM recebe `list_today_matches`, `get_athlete_ranking`, etc. via bridge.
-- ✅ `wa_leads` populada automaticamente; convertida quando user verifica identidade.
-- ✅ `mem/integration/orkym-contract.md` publicado com curl + tabela de ações.
-- ✅ Testes Deno cobrem dispatcher por provider (mockando fetch) e webhook idempotency.
-
-### Fora de escopo
-- Rotação automática de secrets WA_*.
-- Conversational analytics dashboard (fica para fase futura).
-- Pagamento dentro do WhatsApp.
+Aprovando, executo tudo em uma sequência (memórias → testes → relatório).
