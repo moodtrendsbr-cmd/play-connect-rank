@@ -196,6 +196,20 @@ Deno.serve(async (req) => {
       }
     } catch { /* best-effort */ }
 
+    // Best-effort: ensure social identity is created from first WhatsApp contact
+    try {
+      await supa.rpc("social_identity_upsert", {
+        _phone: phone,
+        _name: null,
+        _source: "whatsapp",
+        _tenant_id: null,
+        _arena_id: null,
+        _user_id: null,
+        _wa_identity_id: null,
+        _avatar_url: null,
+      });
+    } catch { /* best-effort */ }
+
     // Log unidentified message (no user_id) and respond with onboarding
     await supa.from("conversational_commands").insert({
       channel: "whatsapp",
@@ -216,6 +230,20 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
+
+  // Best-effort: link verified WhatsApp identity to social profile
+  try {
+    await supa.rpc("social_identity_upsert", {
+      _phone: phone,
+      _name: null,
+      _source: "whatsapp",
+      _tenant_id: ident.tenant_id ?? null,
+      _arena_id: ident.default_arena_id ?? null,
+      _user_id: ident.user_id ?? null,
+      _wa_identity_id: ident.id ?? null,
+      _avatar_url: null,
+    });
+  } catch { /* best-effort */ }
 
   // 2. Resolve QR token (if # in text or explicit qr_token)
   let qrIntent: string | null = null;

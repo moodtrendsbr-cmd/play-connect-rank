@@ -1,233 +1,190 @@
+# Camada de Identidade + Perfil Social + Feed Global (Fase Social-1)
 
-# AUDITORIA — FLUXO DE TORNEIOS (PRÉ GO-LIVE)
+## Princípios
 
-Diagnóstico brutalmente honesto. Nada será implementado nesta fase.
+- **Não duplicar** o que já existe. O sistema tem `athlete_activities`, `wa_identities`, `profiles`, `profiles_public`, `athletes_public`, `athlete_activities_public` e um `social_feed_public` (UNION). Vamos **estender**, não recriar.
+- **Sem IA local**. Descrições por templates determinísticos. Qualquer notificação push é decidida por ORKYM (`/orkym-invoke`).
+- **Multi-tenant preservado**. Nenhum evento sensível vaza entre tenants no feed global.
+- **Telefone como chave** de identidade quando não há `auth.user`.
 
----
-
-## 0. VEREDITO RESUMIDO
-
-**Status: 🟠 BETA READY COM RESSALVAS — NÃO GO LIVE READY.**
-
-Um torneio real **pode acontecer amanhã** se for operado **pelo dashboard web por um humano** (organizer). A camada conversacional WhatsApp/ORKYM **não fecha o ciclo de torneios** — ela cria torneio mas não cobre inscrição/grupos/check-in/placar/resultado via WhatsApp.
-
-- **Funciona web:** criação, inscrição, pagamento, gerenciamento, edição, modalidades, brackets, partidas, placar, ranking, perfil público, feed.
-- **Funciona parcial via WhatsApp:** apenas `create_tournament`, `list_pending_enrollments`, `get_tournament_standings`, `validate_checkin` (este via QR, não conversacional puro).
-- **Não existe (P0/P1):** sorteio de grupos, lembrete automático de jogo, baixa-inscrição proativa para torneio, QR de inscrição, QR de torneio compartilhável, link público com SEO/preview, notificação WhatsApp de placar, atribuição de receita real (banco está com 0 transações).
-
----
-
-## 1. EVIDÊNCIAS DE BANCO (estado atual)
-
-```
-tournaments:                 8
-enrollments:                23
-modality_matches:           69
-modality_groups:            36
-modality_entries:           78
-arenas:                      0   ← seed pendente / piloto não criado
-whatsapp_instances:          0   ← gate vai bloquear shells (exceto super admin)
-financial_transactions:      0   ← receita NUNCA fluiu pelo split
-orkym_triggers_queue:        0   ← proativa nunca rodou
-orkym_revenue_attribution:   0   ← atribuição existe em schema, sem dado
-```
-
-Triggers em `tournaments / enrollments / modality_matches / financial_transactions`: **NENHUM trigger SQL ativo nessas tabelas** (consulta `information_schema.triggers` retornou vazio). RPCs existem (`trg_activity_from_enrollment`, `trg_enrollment_record_payment`, etc.) mas **não estão attach-adas como TRIGGER no DDL atual**. → **P0 invisível**: feed social e atribuição de receita dependem disso.
-
----
-
-## 2. MAPA POR PERFIL
-
-### Super Admin
-- Vê tudo: `/admin/tournaments`, `/admin/enrollments`, `/admin/finances`, `/admin/control-tower`.
-- Bypass de gate WhatsApp. **OK.**
-- Gap: dashboard de torneios sem KPI de "torneios ativos por arena/tenant"; só lista.
-
-### Tenant Admin
-- Acessa `/tenant/dashboard`. Bloqueado pelo gate WhatsApp (0 instances).
-- Não tem tela própria de "torneios da rede" — `tenant/dashboard` aponta para `OrganizerSettings`/`OrganizerArenas` em vários itens (rota duplicada).
-- Comandos WA: `TenantCommands` existe, mas nenhum intent de "resumo dos torneios da rede" implementado.
-- **P1**: nenhuma view tenant-scoped agregando torneios.
-
-### Arena
-- `/arena/dashboard/torneios` → `ArenaTournaments.tsx` lista por `arena.eq.{name} OR tenant_id`. **Heurística frágil** (match por nome string). **P2**.
-- Sem QR de torneio gerável daqui. **P1**.
-- Sem botão "criar torneio" no shell da arena. **P2** (organizer faz).
-- Comandos WA da Arena: nenhum intent específico de torneio (tudo focado em aulas/reservas).
-
-### Organizer
-- `/organizer/dashboard` é uma única página com seções `eventos`, `inscricoes`, `jogos`, `performance` (anchors `#eventos` etc.). **Todas as sub-rotas (`/eventos`, `/inscricoes`, `/jogos`) renderizam o MESMO `OrganizerDashboard`** — apenas scrollam para anchor. **P2 UX**.
-- Cria torneio em `/tournaments/create` (520 linhas, fluxo robusto, ViaCEP, builder por gênero, slot config). **OK.**
-- Gerencia em `/tournaments/:id/manage` com tabs Inscrições / Categorias / Check-in. Brackets em `/tournaments/:id/brackets` separado.
-- "Enviar lembrete" no manage é **fake** (`toast` sem chamada real). **P1**.
-- Sem botão "sortear grupos" via UI — a auditoria de `Brackets.tsx` mostra `GenerateBracketDialog` mas sem fluxo de sorteio guiado.
-
-### Athlete
-- Vê `/tournaments` (público) e `/tournaments/:id`. Inscreve-se via `handleEnroll` → `/payment/:id`. **OK**.
-- "Procurar parceiros" → `/tournaments/:id/match` existe.
-- **Não recebe nada por WhatsApp** sobre torneios (sem trigger, sem proativa, sem confirmação). **P0 da camada conversacional**.
-- Activities geradas só se trigger SQL existir — **não existe** → perfil público de atleta não atualiza após inscrição/jogo. **P0**.
-
-### Company / Patrocinador
-- `CompanySponsorBridge` + `SponsorTournaments`: vê torneios e pode patrocinar. **OK.**
-- `TournamentDetail` mostra parceiros via `tournament_partners`. **OK.**
-- Sem fluxo de "ofertar produto patrocinado dentro do torneio". **P3.**
-
----
-
-## 3. FLUXO PONTA A PONTA (cenário "torneio amanhã")
+## Modelo conceitual
 
 ```text
-[1] CRIAR TORNEIO
-    web: ✅ /tournaments/create (organizer)
-    WA:  ⚠️ flow create_tournament existe, mas falta: arena_id, modality, gender,
-         slot_config, payment_deadline. Cria registro mínimo sem categoria.
-[2] CATEGORIAS / MODALIDADES
-    web: ✅ slot_config no create + TabCategorias edita team_size/phase/rules_json
-    WA:  ❌ não existe intent
-[3] LINK PÚBLICO + SEO
-    /tournaments/:id existe e renderiza sem login.
-    ❌ Sem og:tags, sem share preview, sem QR shareable do torneio.   P1
-[4] DIVULGAÇÃO
-    ❌ Não há trigger "novo torneio relevante" → atletas não são notificados.
-    ❌ Sem post automático no feed social.   P1
-[5] INSCRIÇÃO
-    web: ✅ via /tournaments/:id (com termos + parceiros)
-    WA:  ❌ não existe intent enroll_athlete
-    QR:  ❌ não existe QR de inscrição
-[6] PAGAMENTO
-    /payment/:id usa create-payment + Mercado Pago.   ✅
-    Webhook mercadopago-webhook existe.   ✅
-    ❌ financial_transactions = 0 no banco — NUNCA executou em produção. RISCO ALTO de bug latente. P0 validar com 1 pagamento real.
-    ❌ orkym_revenue_attribution depende de trigger no financial_transactions paid → trigger não está instalado. P0.
-[7] CHECK-IN
-    web: ✅ TabCheckin (toggle manual)
-    QR:  ✅ wa-bridge consome qrIntent="checkin" → arena_checkin_validate
-         (mas validate é de arena_attendance, não de enrollment de torneio).   P1 mismatch.
-    WA conversacional: ❌
-[8] SORTEIO / GRUPOS
-    Tabela modality_groups existe (36 rows seed). UI: TabGroups.
-    ❌ Não há RPC "sortear grupos" automático — operador cria manual.   P1
-    WA: ❌
-[9] PARTIDAS / CHAVEAMENTO
-    web: ✅ Brackets.tsx + TabBracketView + ScoreEntryDialog
-    Agendamento de horário/quadra: ⚠️ depende de manual; sem integração com arena_courts.   P2
-    WA: ❌ "meu jogo é que horas?" não responde
-[10] RESULTADOS / RANKING
-    web: ✅ ScoreEntryDialog grava modality_matches; get_tournament_standings RPC.
-    Feed social/perfil público: ❌ trigger trg_activity_from_match não instalado.   P0
-    WA: ❌
-[11] NOTIFICAÇÕES
-    ❌ Praticamente inexistentes em runtime. Toast no front é tudo.
-[12] ORKYM PROATIVA
-    Trigger types referenciados: low_enrollment, relevant_tournament — porém
-    nenhuma RPC povoa orkym_triggers_queue para torneios. orkym_generate_periodic_triggers existe mas comportamento não auditado para torneios.   P1
-[13] RECEITA ATRIBUÍDA
-    Tabela orkym_revenue_attribution existe; KPIs RPC existem (orkym_revenue_kpis_*).
-    ❌ Sem dado, sem trigger, sem fluxo testado.   P0
+[wa_identities]    +    [profiles (auth users)]
+        \                   /
+         \                 /
+        [social_identities]   ← chave: phone_e164 (única); aponta para user_id se logou
+                |
+                v
+        [social_profiles]     ← username, display_name, bio, avatar, visibility, level, sport, city
+                |
+                v
+        [social_events]       ← log unificado tenant-aware (deriva de athlete_activities + bookings + payments)
+                |
+                v
+        [social_feed_public]  ← VIEW pública filtrada por visibility + sensibilidade
 ```
 
----
+## 1. Tabelas novas
 
-## 4. WHATSAPP CONVERSACIONAL — COBERTURA REAL
+### `social_identities`
+- `id uuid pk`, `phone_e164 text unique not null`, `display_name text`, `avatar_url text`,
+- `source text check in ('whatsapp','qr','booking','enrollment','signup','seed')`,
+- `first_tenant_id uuid`, `first_arena_id uuid`,
+- `user_id uuid` (FK lógica para `auth.users`, **nullable**, único quando preenchido),
+- `wa_identity_id uuid` (FK lógica para `wa_identities.id`, nullable),
+- `created_at`, `updated_at`.
+- RLS: `select` para admin + dono (via `user_id = auth.uid()`); `insert/update` apenas via funções `SECURITY DEFINER`.
+- Função pública: `social_identity_upsert(_phone, _name, _source, _tenant, _arena)` → retorna `identity_id`. Idempotente (ON CONFLICT phone).
 
-| Comando esperado | Existe? | Onde |
-|---|---|---|
-| "criar torneio" | ⚠️ parcial | `flows.create_tournament` + handler em `moodplay-execute-action` |
-| "quantos inscritos?" | ❌ | sem intent |
-| "quem não fez check-in?" | ❌ | sem intent |
-| "quais jogos faltam?" | ⚠️ | `list_today_matches` RPC existe, sem intent WA |
-| "gerar QR" | ❌ | sem intent (QR é gerado só pelo dashboard de arena/aula) |
-| "abrir inscrições" | ❌ | sem intent |
-| "sortear grupos" | ❌ | sem RPC nem intent |
-| "registrar placar" | ❌ | sem intent |
-| "me inscrever" | ❌ | sem intent enroll_in_tournament |
-| "meu jogo é que horas?" | ❌ | sem intent |
-| "fazer check-in" (QR) | ✅ | wa-bridge qrIntent=checkin |
-| "ver resultado" | ⚠️ | `get_tournament_standings` existe; sem intent NLU |
-| "resumo torneios da rede" (tenant) | ❌ | sem intent |
+### `social_profiles`
+- `id uuid pk`, `identity_id uuid unique not null fk → social_identities`,
+- `username citext unique` (gerado: slug do display_name + sufixo se colidir),
+- `display_name`, `bio`, `avatar_url`,
+- `visibility text default 'public' check in ('public','private')`,
+- `level text check in ('iniciante','intermediario','avancado')`,
+- `main_sport text`, `city text`, `state text`,
+- `notif_opt_in boolean default true`,
+- `created_at`, `updated_at`.
+- Trigger: ao criar `social_identity`, cria `social_profile` automaticamente.
+- RLS: `select` público apenas para `visibility='public'`; dono lê/edita o seu (via `identity.user_id = auth.uid()` ou via wa_identity verificada).
+- View `social_profiles_public` (security_invoker=on) só com perfis públicos e colunas seguras.
 
-**Cobertura conversacional de torneios: ~10%.**
+### `social_events`
+- `id uuid pk`, `tenant_id uuid not null`, `arena_id uuid`,
+- `profile_id uuid not null fk → social_profiles`,
+- `event_type text check in ('checkin','tournament_join','match_win','match_loss','booking','class_attendance','ranking_update','tournament_created','payment_completed')`,
+- `entity_type text`, `entity_id uuid`,
+- `payload jsonb default '{}'`,
+- `visibility text default 'public' check in ('public','tenant','private')`,
+- `created_at`.
+- Índices: `(profile_id, created_at desc)`, `(tenant_id, created_at desc)`, `(event_type, created_at desc)`, `unique (profile_id, event_type, entity_id) where entity_id is not null` (dedup).
+- RLS: `select` público para `visibility='public'`; admin/dono veem `tenant`/`private`.
 
----
+## 2. Geração automática de eventos
 
-## 5. SEGURANÇA / RLS
+Reutilizar a infraestrutura existente. **Não criamos novos triggers de origem** — em vez disso, criamos **um trigger único em `athlete_activities`** que projeta para `social_events`, mais dois triggers novos para fontes que `athlete_activities` ainda não cobre:
 
-- Pages públicas (`/tournaments`, `/tournaments/:id`, `/athletes/:id`, `/arenas/:slug`) não exigem login. ✅
-- `TournamentDetail` faz `select * from tournaments`. RLS deve cobrir — não auditado nesta sessão (escopo). **P2**: confirmar que RLS de `tournaments` permite anon SELECT.
-- `enrollments` usa contagem com `count: 'exact', head: true` — vaza `count` para anon? **P2**.
-- Pagamento usa MP Brick — verificar que `mp_collector_id` não vaza para outros perfis.
-- `organizer_id === user.id` controla "Gerenciar" no front, mas RLS deve barrar update no servidor — **não validado**.
+- `trg_social_from_activity` (AFTER INSERT em `athlete_activities`):
+  - mapeia `activity_type` → `event_type`:
+    - `tournament.enrolled` → `tournament_join`
+    - `tournament.checked_in` → `checkin`
+    - `tournament.match_won` → `match_win`
+    - `tournament.match_lost` → `match_loss`
+    - `class.attended` → `class_attendance`
+    - `social.posted`/`clip_posted` → ignorar (já existem como posts/clips no feed atual)
+  - resolve `profile_id` via `social_identity_for_user(athlete_id)` (cria identidade automaticamente para usuários auth via `auth.users.phone`/`profiles.phone` quando disponível).
+- `trg_social_from_booking` (AFTER INSERT/UPDATE em `arena_bookings` quando status=`confirmed`/`paid`) → `booking`.
+- `trg_social_from_financial_transaction` (AFTER UPDATE em `financial_transactions` quando status passa para `paid`) → `payment_completed` com `visibility='private'` por padrão (não vai pro feed público; serve de timeline pessoal).
+- `trg_social_from_tournament` (AFTER INSERT em `tournaments` com status `published`) → `tournament_created` (autor: organizador).
 
----
+Backfill único no fim da migração para popular o histórico.
 
-## 6. UX / MOBILE
+## 3. Identidade a partir do WhatsApp
 
-- `TournamentDetail` mobile-first ✅
-- `ManageTournament` é desktop-pesado; tabs OK em mobile mas tabelas estouram. **P2.**
-- `Brackets` ScoreEntryDialog em mobile precisa teste real. **P2.**
-- Empty states existem em TabCategorias/TabCheckin ✅
-- Sem skeleton em TournamentDetail. **P3.**
+- `wa-bridge` e `orkym-whatsapp-connection` já recebem `wa_phone`. Adicionar chamada a `social_identity_upsert(phone, name, 'whatsapp', tenant, arena)` no fluxo de primeira mensagem/verificação.
+- Quando `wa_identities.verified_at` é setado, **vincular** `social_identities.user_id = wa_identities.user_id` (e copiar avatar do profile se vazio).
+- QR check-in (`enrollment_checkin_validate`, `arena_attendance`): se houver telefone na entrada, garantir identidade antes do registro do evento.
 
----
+## 4. Feed global
 
-## 7. CLASSIFICAÇÃO P0/P1/P2/P3
+Substituir/expandir a view atual `social_feed_public` para um UNION enxuto:
 
-### P0 — bloqueia go live
-1. **Triggers SQL ausentes** em `enrollments`, `modality_matches`, `financial_transactions` → feed, perfil, ranking, atribuição de receita não funcionam end-to-end.
-2. **Pagamento nunca executou** em produção (0 financial_transactions). Risco real de webhook MP falhar silenciosamente.
-3. **Atribuição de receita ORKYM não está cadeada** ao financial_transactions paid → KPIs sempre zerados.
-4. **0 arenas e 0 whatsapp_instances** → gates Tenant/Arena/Organizer/Company bloqueiam acesso (exceto super admin). Já existe botão "Criar piloto", precisa rodar antes do beta.
-5. **Athlete não é notificado de nada** (inscrição, pagamento, jogo, resultado).
+```sql
+create or replace view social_feed_public with (security_invoker=on) as
+select
+  e.id              as event_id,
+  e.event_type,
+  e.created_at      as occurred_at,
+  e.tenant_id, e.arena_id,
+  sp.id             as profile_id,
+  sp.username, sp.display_name, sp.avatar_url,
+  a.name            as arena_name,
+  t.name            as tenant_name,
+  social_event_description(e.event_type, e.payload, sp.display_name, a.name) as description,
+  e.payload
+from social_events e
+join social_profiles sp on sp.id = e.profile_id
+left join arenas a on a.id = e.arena_id
+left join tenants t on t.id = e.tenant_id
+where e.visibility = 'public' and sp.visibility = 'public';
+```
 
-### P1 — corrigir antes de vender
-1. Sem QR shareable do torneio (entrada física e divulgação).
-2. Sem RPC/UI de sorteio automático de grupos.
-3. "Enviar lembrete" no ManageTournament é fake (toast).
-4. QR check-in atual valida `arena_attendance` (aulas), não `enrollments` de torneio — mismatch semântico.
-5. Sem og:meta tags / share preview no /tournaments/:id.
-6. Cobertura WhatsApp de torneios <10% — ORKYM "não sabe falar de torneio".
-7. Tenant não tem view própria de torneios da rede.
-8. Triggers proativos (`low_enrollment`, `relevant_tournament`) não têm gerador instalado.
+Posts/clips continuam sendo lidos pelo feed atual (posts UI). Esta view alimenta uma **timeline de atividades** (separada ou intercalada conforme o front decidir).
 
-### P2 — pode corrigir no beta
-1. `OrganizerDashboard` rotas duplicadas (eventos/inscricoes/jogos/performance renderizam mesma página com anchor).
-2. `ArenaTournaments` faz match por nome string.
-3. RLS anon de `tournaments`/`enrollments` não revalidada nesta auditoria.
-4. Sem agendamento integrado de quadras para partidas.
-5. Mobile do ScoreEntryDialog/ManageTournament.
-6. Profile/Brackets sem skeleton consistente.
+## 5. Geração de descrição (sem IA)
 
-### P3 — futuro
-1. Patrocínio dentro do torneio com call-to-action de produto.
-2. Histórico encerrado vira card "memória" no perfil.
-3. SEO avançado (JSON-LD SportsEvent).
+`social_event_description(event_type, payload, name, arena_name)` SQL puro com `case`:
+- `checkin` → `"{name} fez check-in em {arena_name}"`
+- `tournament_join` → `"{name} entrou em {payload->>'tournament_name'}"`
+- `match_win` → `"{name} venceu sua partida"` (+ score se houver)
+- `match_loss` → `"{name} disputou sua partida"`
+- `booking` → `"{name} reservou {payload->>'court_name'}"`
+- `class_attendance` → `"{name} treinou em {arena_name}"`
+- `tournament_created` → `"Novo torneio: {payload->>'tournament_name'}"`
+- demais → fallback genérico.
 
----
+## 6. Anti-spam e qualidade
 
-## 8. RESPOSTAS DIRETAS
+- Dedup por `(profile_id, event_type, entity_id)` (índice único).
+- Throttle por trigger: ignorar se já existe evento mesmo `event_type` do mesmo profile há < 30s.
+- `class_attendance` agrupado por dia (apenas 1 evento público por dia/arena).
+- Eventos com payload sensível (valor de pagamento, dados de cartão) **nunca** entram com `visibility='public'`.
 
-**Pode acontecer um torneio real amanhã com MoodPlay + ORKYM?**
-- **Operado por organizer no web: sim**, com 2 ressalvas: (a) testar 1 pagamento real ANTES (financial_transactions = 0); (b) aceitar que feed/ranking/perfil público não atualizam até instalar triggers SQL.
-- **Operado via WhatsApp/ORKYM: não**. Cobertura conversacional é mínima.
-- **Atleta tendo experiência fluida: não**. Sem notificações, sem updates de perfil, sem confirmações automáticas.
+## 7. Privacidade
 
-**Pode ir para produção?** **Não.** Há 5 P0.
-**Pode vender beta controlado?** **Sim, com piloto manual** (1 organizer treinado + 1 arena + suporte ao vivo).
-**Precisa corrigir antes?** Sim — pelo menos os 5 P0 listados.
+- `social_profiles.visibility='private'` esconde tudo do feed público (filtro na view).
+- Por evento: `visibility='private'` (timeline pessoal só dele) ou `'tenant'` (só admins/staff do tenant).
+- RPC `social_profile_set_visibility(_visibility)` para o usuário trocar.
+- RPC `social_event_hide(_event_id)` (dono pode esconder evento específico).
 
----
+## 8. Perfil do atleta — UI
 
-## 9. PRÓXIMO PASSO RECOMENDADO (NÃO IMPLEMENTAR AGORA)
+Atualizar `UserProfile.tsx` e `Profile.tsx` para exibir um bloco **Atividade Recente** alimentado por `social_feed_public` filtrado por `profile_id`. Reutiliza `<AthleteActivities />` como base (já existe), trocando a fonte para a nova view (mantém compatibilidade visual).
 
-Quando você aprovar implementação, sugiro pacote enxuto **"Torneio Beta Real"**:
+## 9. Integração ORKYM (loop de crescimento)
 
-1. Reinstalar triggers em `enrollments`, `modality_matches`, `financial_transactions` (SQL DDL).
-2. Smoke-test pagamento real (R$ 1) → verificar webhook + revenue attribution.
-3. Implementar 4 intents WA mínimos: `enroll_in_tournament`, `my_next_match`, `tournament_status`, `register_score`.
-4. RPC `sortear_grupos(_modality_id)` + botão na UI.
-5. Gerar QR shareable do torneio + og:tags em `/tournaments/:id`.
-6. Trocar "enviar lembrete" fake por chamada `wa-send-message`.
-7. Rodar `seed-pilot-arena` + criar 1 instância WhatsApp real.
+- Após inserir um `social_event` público relevante (`match_win`, `tournament_join`, `checkin`), enfileirar um `orkym_triggers_queue` opcional `kind='social_engage'` com link `/u/{username}`.
+- ORKYM decide se envia (eligibility + cooldown). Sem decisão local.
+- Mensagem template no ORKYM: `"Você jogou hoje. Veja sua atividade {link}"`.
 
-Diagnóstico encerrado. Aguardando sua decisão sobre qual P0 atacar primeiro.
+## 10. Rotas e páginas
+
+- `/u/:username` — perfil social público (lê `social_profiles_public` + `social_feed_public`).
+- `/feed/global` — timeline cronológica do `social_feed_public` (paginação, filtros por `event_type` e arena).
+- Card no Feed atual injetando os 5 eventos mais recentes do tenant ativo.
+
+## 11. Fora de escopo (esta fase)
+
+Comentários, likes, chat social, gamificação avançada, ranking global, IA de conteúdo. Permanecem futuros.
+
+## Detalhes técnicos / arquivos
+
+**Nova migração** (uma só, idempotente):
+- cria `social_identities`, `social_profiles`, `social_events` + RLS + índices;
+- cria funções: `social_identity_upsert`, `social_identity_for_user`, `social_event_description`, `social_profile_set_visibility`, `social_event_hide`, `_social_username_generate`;
+- cria triggers: `trg_social_from_activity` em `athlete_activities`, `trg_social_from_booking` em `arena_bookings`, `trg_social_from_financial_transaction` em `financial_transactions`, `trg_social_from_tournament` em `tournaments`, `trg_social_profile_autocreate` em `social_identities`;
+- substitui `social_feed_public`; cria `social_profiles_public`;
+- backfill: para cada `auth.users` com telefone → identity+profile; para cada `wa_identities.verified` → identity+profile; projeta `athlete_activities` históricas em `social_events`.
+
+**Edge functions tocadas**:
+- `wa-bridge/index.ts`: chamar `social_identity_upsert` no primeiro contato.
+- `orkym-whatsapp-connection/index.ts`: vincular `user_id` à identidade quando verifica.
+- `moodplay-execute-action/index.ts`: ao executar `enrollment.create`/`booking.create` com phone, garantir identidade antes.
+
+**Frontend**:
+- `src/pages/UserProfile.tsx`: bloco "Atividade Recente" lendo `social_feed_public`.
+- `src/pages/Feed.tsx`: seção/aba "Atividade da rede" lendo `social_feed_public` (top 20).
+- `src/pages/SocialProfile.tsx` (nova) + rota `/u/:username` em `App.tsx`.
+- `src/components/social/SocialEventCard.tsx` (novo) — render por `event_type`.
+
+**Tipos**: `src/integrations/supabase/types.ts` é regenerado automaticamente após migração.
+
+## Critérios de aceitação
+
+- Inserir uma `enrollments` cria `athlete_activities` (já existe) **e** `social_events.tournament_join` automaticamente, com `social_profile` criado se necessário.
+- `select * from social_feed_public order by occurred_at desc limit 20` retorna eventos com descrição legível.
+- Marcar `social_profiles.visibility='private'` remove imediatamente todos os eventos do feed público.
+- Mesma `entity_id` não gera evento duplicado.
+- Telefone que escreve para ORKYM pela primeira vez aparece em `social_identities` com `source='whatsapp'`.
+- Pagamentos não vazam valores no feed público.

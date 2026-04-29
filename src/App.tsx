@@ -25,6 +25,7 @@ import Messages from "./pages/Messages";
 import ChatView from "./pages/ChatView";
 import NotFound from "./pages/NotFound";
 import UserProfile from "./pages/UserProfile";
+import SocialProfile from "./pages/SocialProfile";
 import TournamentMatch from "./pages/TournamentMatch";
 import MatchRequests from "./pages/MatchRequests";
 import MatchPair from "./pages/MatchPair";
@@ -188,6 +189,7 @@ const App = () => (
               <Route path="/arenas" element={<ArenasList />} />
               <Route path="/arenas/:arenaSlug" element={<ArenaPublic />} />
               <Route path="/arenas/:arenaSlug/reservar" element={<ArenaBooking />} />
+              <Route path="/u/:username" element={<SocialProfile />} />
             </Route>
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />

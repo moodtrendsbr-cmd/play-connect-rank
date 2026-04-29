@@ -8,6 +8,7 @@ import ClipsBar from "@/components/feed/ClipsBar";
 import FriendSuggestions from "@/components/feed/FriendSuggestions";
 import SponsoredPostCard from "@/components/feed/SponsoredPostCard";
 import AdSlot from "@/components/ads/AdSlot";
+import { SocialActivityFeed } from "@/components/social/SocialActivityFeed";
 
 const PAGE_SIZE = 20;
 
@@ -273,6 +274,7 @@ const Feed = () => {
       <main ref={mainRef} className="pt-16 pb-20 px-4 max-w-xl mx-auto space-y-4">
         <ClipsBar />
         <AdSlot code="feed.inline" />
+        <SocialActivityFeed limit={6} title="Atividade da rede" />
         {loading ? (
           <><PostSkeleton /><PostSkeleton /><PostSkeleton /></>
         ) : posts.length === 0 ? (

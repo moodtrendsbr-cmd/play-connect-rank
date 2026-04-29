@@ -17,6 +17,7 @@ import { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
 import PostGrid from "@/components/profile/PostGrid";
 import TournamentMemories from "@/components/profile/TournamentMemories";
+import { SocialPrivacyToggle } from "@/components/social/SocialPrivacyToggle";
 import { WaIdentityPanel } from "@/components/conversational/WaIdentityPanel";
 
 const Profile = () => {
@@ -333,6 +334,9 @@ const Profile = () => {
           <TournamentMemories athleteId={user.id} />
         </div>
       )}
+
+      {/* Social privacy */}
+      {user && <SocialPrivacyToggle userId={user.id} />}
 
       {/* Tabs */}
       <div className="flex border-b" style={{ borderColor: "rgba(43,255,136,0.1)" }}>
