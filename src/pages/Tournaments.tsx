@@ -33,12 +33,31 @@ const Tournaments = () => {
 
   useEffect(() => {
     const fetch = async () => {
-      const { data } = await supabase
+      const { data: tdata } = await supabase
         .from("tournaments")
-        .select("*, enrollments(count)")
+        .select("*")
         .eq("is_public", true)
         .order("start_date", { ascending: false });
-      setTournaments(data || []);
+
+      const list = tdata || [];
+
+      // Public aggregated counts (works for anon, post-P2 view)
+      if (list.length > 0) {
+        const ids = list.map((t: any) => t.id);
+        const { data: counts } = await supabase
+          .from("tournament_enrollment_counts")
+          .select("tournament_id, paid_count, total_count")
+          .in("tournament_id", ids);
+        const map: Record<string, any> = {};
+        (counts || []).forEach((c: any) => { map[c.tournament_id] = c; });
+        list.forEach((t: any) => {
+          const c = map[t.id];
+          t.enrollments = [{ count: c?.total_count || 0 }];
+          t.paid_count = c?.paid_count || 0;
+        });
+      }
+
+      setTournaments(list);
       setLoading(false);
     };
     fetch();

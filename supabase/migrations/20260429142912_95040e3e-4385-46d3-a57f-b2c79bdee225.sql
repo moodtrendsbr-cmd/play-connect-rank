@@ -1,0 +1,1 @@
+ALTER VIEW public.tournament_enrollment_counts SET (security_invoker = on);

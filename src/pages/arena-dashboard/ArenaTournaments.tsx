@@ -14,11 +14,15 @@ const ArenaTournaments = () => {
   useEffect(() => {
     if (!arena) return;
     const load = async () => {
-      // Tournaments where arena name matches OR organizer is in same tenant
+      // Prefer arena_id (post P2 backfill); fallback to legacy name match for unbound rows
+      const orParts = [`arena_id.eq.${arena.id}`];
+      if (arena.name) orParts.push(`arena.eq.${arena.name}`);
+      if (arena.tenant_id) orParts.push(`tenant_id.eq.${arena.tenant_id}`);
+
       const { data: t } = await supabase
         .from("tournaments")
         .select("*")
-        .or(`arena.eq.${arena.name},tenant_id.eq.${arena.tenant_id}`)
+        .or(orParts.join(","))
         .order("start_date", { ascending: false })
         .limit(50);
 
