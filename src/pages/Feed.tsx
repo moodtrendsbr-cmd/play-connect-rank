@@ -8,6 +8,7 @@ import ClipsBar from "@/components/feed/ClipsBar";
 import FriendSuggestions from "@/components/feed/FriendSuggestions";
 import SponsoredPostCard from "@/components/feed/SponsoredPostCard";
 import AdSlot from "@/components/ads/AdSlot";
+import { SocialActivityFeed } from "@/components/social/SocialActivityFeed";
 
 const PAGE_SIZE = 20;
 
