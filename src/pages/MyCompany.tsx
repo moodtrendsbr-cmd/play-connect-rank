@@ -298,9 +298,29 @@ const MyCompany = () => {
               }}>
                 {p.status === "approved" ? "Aprovado" : p.status === "rejected" ? "Rejeitado" : "Pendente"}
               </span>
+              {p.status === "approved" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => setPromoteProduct(p)}
+                >
+                  <Sparkles className="h-3 w-3 mr-1" /> Promover
+                </Button>
+              )}
             </div>
           ))}
         </div>
+      )}
+
+      {promoteProduct && (
+        <PromoteFeaturedDialog
+          open={!!promoteProduct}
+          onOpenChange={(o) => !o && setPromoteProduct(null)}
+          entityType="product"
+          entityId={promoteProduct.id}
+          entityLabel={promoteProduct.name}
+        />
       )}
 
       {/* Orders */}
