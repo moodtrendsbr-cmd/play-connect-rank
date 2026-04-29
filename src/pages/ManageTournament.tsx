@@ -65,8 +65,13 @@ const ManageTournament = () => {
   const pending = enrollments.filter((e) => e.status === "pending");
   const expired = enrollments.filter((e) => e.status === "expired");
   const getName = (enrollment: any) => profileMap[enrollment.user_id]?.full_name || enrollment.athlete_name || "Atleta";
-  const sendReminder = (enrollment: any) => {
-    toast({ title: "Lembrete enviado", description: `Lembrete enviado para ${getName(enrollment)}.` });
+  const sendReminder = async (enrollment: any) => {
+    const { error } = await supabase.rpc("enqueue_enrollment_reminder", { _enrollment_id: enrollment.id });
+    if (error) {
+      toast({ title: "Falha ao enfileirar lembrete", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Lembrete enfileirado", description: `ORKYM enviará no WhatsApp para ${getName(enrollment)}.` });
   };
 
   if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
