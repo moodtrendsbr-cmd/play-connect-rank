@@ -294,6 +294,33 @@ Deno.serve(async (req) => {
       .eq("id", commandId);
   }
 
+  // 4b. Phase 12.9 — proactive feedback loop:
+  // If a recent outbound trigger-message exists for this user/phone, register a "responded" feedback.
+  try {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    let recentQuery = supa
+      .from("conversational_commands")
+      .select("id, linked_entity_id, created_at")
+      .eq("direction", "outbound")
+      .eq("initiated_by", "orkym")
+      .eq("linked_entity_type", "trigger")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (ident.user_id) recentQuery = recentQuery.eq("user_id", ident.user_id);
+    const { data: recent } = await recentQuery;
+    const triggerId = (recent as any)?.[0]?.linked_entity_id;
+    if (triggerId) {
+      await supa.from("orkym_trigger_feedback").insert({
+        trigger_id: triggerId,
+        event: "responded",
+        metadata: { inbound_command_id: commandId },
+      });
+    }
+  } catch (e) {
+    console.warn("proactive_feedback_responded_failed", e);
+  }
+
   // 5. Special-case: QR check-in goes straight to RPC (no ORKYM needed)
   if (qrIntent === "checkin" && qrPayload?.checkin_token) {
     // Call arena_checkin_validate with user's auth context
