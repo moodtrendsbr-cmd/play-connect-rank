@@ -21,6 +21,7 @@ const TournamentDetail = () => {
   const [alreadyEnrolled, setAlreadyEnrolled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [partners, setPartners] = useState<any[]>([]);
+  const [sponsors, setSponsors] = useState<any[]>([]);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
@@ -52,6 +53,14 @@ const TournamentDetail = () => {
         .eq("tournament_id", id!)
         .order("position_order");
       setPartners(partnerData || []);
+
+      // Active paid sponsorships (P3 — produto/CTA in-tournament)
+      const { data: sponsorData } = await supabase
+        .from("tournament_sponsorships")
+        .select("id, logo_url, link, message, company_id, companies:company_id(id, name, logo_url)")
+        .eq("tournament_id", id!)
+        .eq("status", "active");
+      setSponsors(sponsorData || []);
     };
     if (id) fetch();
   }, [id, user]);
@@ -80,6 +89,56 @@ const TournamentDetail = () => {
     setMeta('meta[property="og:url"]', "content", `${window.location.origin}/tournaments/${tournament.id}`);
     setMeta('meta[name="twitter:title"]', "content", title);
     setMeta('meta[name="twitter:description"]', "content", desc);
+
+    // JSON-LD SportsEvent (P3 SEO)
+    const ldId = "tournament-jsonld";
+    let script = document.getElementById(ldId) as HTMLScriptElement | null;
+    if (!script) {
+      script = document.createElement("script");
+      script.type = "application/ld+json";
+      script.id = ldId;
+      document.head.appendChild(script);
+    }
+    const ld: any = {
+      "@context": "https://schema.org",
+      "@type": "SportsEvent",
+      name: tournament.name,
+      startDate: tournament.start_date,
+      endDate: tournament.end_date,
+      eventStatus: new Date(tournament.end_date) < new Date()
+        ? "https://schema.org/EventCompleted"
+        : "https://schema.org/EventScheduled",
+      eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+      url: `${window.location.origin}/tournaments/${tournament.id}`,
+      description: desc,
+      location: {
+        "@type": "Place",
+        name: tournament.arena || `${tournament.city || ""}/${tournament.state || ""}`,
+        address: {
+          "@type": "PostalAddress",
+          addressLocality: tournament.city || undefined,
+          addressRegion: tournament.state || undefined,
+          addressCountry: "BR",
+        },
+      },
+      offers: tournament.entry_fee != null ? {
+        "@type": "Offer",
+        price: Number(tournament.entry_fee).toFixed(2),
+        priceCurrency: "BRL",
+        availability: "https://schema.org/InStock",
+        url: `${window.location.origin}/tournaments/${tournament.id}`,
+      } : undefined,
+      organizer: tournament.organizer_id ? {
+        "@type": "Organization",
+        name: "MoodPlay",
+      } : undefined,
+    };
+    script.text = JSON.stringify(ld);
+
+    return () => {
+      const el = document.getElementById(ldId);
+      if (el) el.remove();
+    };
   }, [tournament]);
 
   const handleEnroll = () => {
@@ -199,6 +258,59 @@ const TournamentDetail = () => {
             </Button>
           )}
         </div>
+
+        {sponsors.length > 0 && (
+          <div className="mt-8">
+            <h3 className="font-display text-lg text-foreground mb-3">⭐ APRESENTADO POR</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {sponsors.map((s) => {
+                const logo = s.logo_url || s.companies?.logo_url;
+                const name = s.companies?.name || "Patrocinador";
+                const handleClick = async () => {
+                  try {
+                    await supabase
+                      .from("tournament_sponsorships")
+                      .update({ clicks_count: (s.clicks_count || 0) + 1 } as any)
+                      .eq("id", s.id);
+                  } catch {}
+                };
+                const inner = (
+                  <div className="flex items-center gap-3 rounded-xl p-4 border border-primary/30 bg-gradient-to-br from-primary/5 to-transparent transition-all hover:border-primary/60 hover:shadow-[0_0_18px_hsl(110_100%_55%/0.18)]">
+                    {logo ? (
+                      <img src={logo} alt={name} className="h-12 w-12 rounded-lg object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                        <Store className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{name}</p>
+                      {s.message && (
+                        <p className="text-xs text-muted-foreground line-clamp-2">{s.message}</p>
+                      )}
+                    </div>
+                    <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">Patrocinador</Badge>
+                  </div>
+                );
+                if (s.link) {
+                  return (
+                    <a key={s.id} href={s.link} target="_blank" rel="noopener noreferrer sponsored" onClick={handleClick}>
+                      {inner}
+                    </a>
+                  );
+                }
+                if (s.companies?.id) {
+                  return (
+                    <Link key={s.id} to={`/marketplace/company/${s.companies.id}`} onClick={handleClick}>
+                      {inner}
+                    </Link>
+                  );
+                }
+                return <div key={s.id}>{inner}</div>;
+              })}
+            </div>
+          </div>
+        )}
 
         {partners.length > 0 && (
           <div className="mt-8">
