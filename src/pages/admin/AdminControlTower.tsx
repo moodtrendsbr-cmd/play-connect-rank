@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Gauge, Zap, TrendingUp, Clock, RefreshCw, AlertTriangle } from "lucide-react";
+import { Gauge, Zap, TrendingUp, Clock, RefreshCw, AlertTriangle, Sparkles } from "lucide-react";
 import { fetchAllTenantsUsage, TIER_LABELS, formatTimeSaved, type UsageSummary, type AutonomyTier } from "@/lib/autonomyTier";
 import { supabase } from "@/integrations/supabase/client";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
+import { toast } from "sonner";
 
 const tierColor: Record<AutonomyTier, string> = {
   free: "bg-muted text-muted-foreground border-border",
@@ -20,6 +21,18 @@ const AdminControlTower = () => {
   const [usage, setUsage] = useState<UsageSummary[]>([]);
   const [planPrices, setPlanPrices] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
+
+  const seedPilot = async () => {
+    setSeeding(true);
+    const { data, error } = await supabase.functions.invoke("seed-pilot-arena", { body: {} });
+    setSeeding(false);
+    if (error || (data as any)?.ok === false) {
+      toast.error((error?.message ?? (data as any)?.error) || "Falha ao criar piloto");
+      return;
+    }
+    toast.success((data as any)?.message ?? "Piloto criado");
+  };
 
   const load = async () => {
     setLoading(true);
@@ -61,9 +74,15 @@ const AdminControlTower = () => {
         <h1 className="text-4xl font-display text-foreground flex items-center gap-3">
           <Gauge className="h-8 w-8 text-primary" /> CONTROL TOWER
         </h1>
-        <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={seedPilot} disabled={seeding}>
+            <Sparkles className={`h-4 w-4 mr-2 ${seeding ? "animate-spin" : ""}`} />
+            {seeding ? "Criando piloto…" : "Criar piloto"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
       </div>
 
       {/* Métricas top */}

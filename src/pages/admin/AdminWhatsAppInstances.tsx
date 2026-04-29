@@ -24,14 +24,15 @@ interface Instance {
 }
 
 const PROVIDERS = [
-  { value: "mock", label: "Mock (dev)" },
+  { value: "cloud", label: "WhatsApp Cloud (Meta)" },
   { value: "twilio", label: "Twilio" },
-  { value: "meta", label: "Meta WhatsApp Business" },
   { value: "evolution", label: "Evolution API" },
+  { value: "whapi", label: "Whapi" },
 ];
 
 const STATUSES = [
   { value: "active", label: "Ativa" },
+  { value: "pending_config", label: "Pendente de configuração" },
   { value: "paused", label: "Pausada" },
   { value: "revoked", label: "Revogada" },
 ];
@@ -42,12 +43,12 @@ const AdminWhatsAppInstances = () => {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
-    provider: "mock",
+    provider: "cloud",
     display_name: "",
     phone_number: "",
     external_instance_id: "",
     is_global_fallback: false,
-    status: "active",
+    status: "pending_config",
   });
 
   const load = async () => {
@@ -84,7 +85,7 @@ const AdminWhatsAppInstances = () => {
     }
     toast.success("Instância criada");
     setOpen(false);
-    setForm({ provider: "mock", display_name: "", phone_number: "", external_instance_id: "", is_global_fallback: false, status: "active" });
+    setForm({ provider: "cloud", display_name: "", phone_number: "", external_instance_id: "", is_global_fallback: false, status: "pending_config" });
     load();
   };
 
@@ -177,7 +178,13 @@ const AdminWhatsAppInstances = () => {
                   <TableRow key={i.id}>
                     <TableCell className="font-medium">{i.display_name || "—"}</TableCell>
                     <TableCell className="font-mono text-xs">+{i.phone_number}</TableCell>
-                    <TableCell><Badge variant="outline">{i.provider}</Badge></TableCell>
+                    <TableCell>
+                      {i.provider === "mock" ? (
+                        <Badge variant="outline" className="bg-muted text-muted-foreground border-border">Sandbox</Badge>
+                      ) : (
+                        <Badge variant="outline">{i.provider}</Badge>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Select value={i.status} onValueChange={(v) => toggleStatus(i, v)}>
                         <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>

@@ -194,7 +194,7 @@ const App = () => (
               <Route path="sponsorships/:id" element={<SponsorshipDetail />} />
             </Route>
             <Route path="/arena/checkin" element={<ArenaCheckin />} />
-            <Route path="/arena/dashboard" element={<ArenaLayout />}>
+            <Route path="/arena/dashboard" element={<ArenaShell />}>
               <Route index element={<ArenaDashboard />} />
               <Route path="torneios" element={<ArenaTournaments />} />
               <Route path="financeiro" element={<ArenaFinance />} />
