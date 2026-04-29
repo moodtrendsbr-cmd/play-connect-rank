@@ -51,3 +51,6 @@ verify_jwt = false
 [functions.orkym-proactive-process]
 verify_jwt = false
 
+[functions.seed-pilot-arena]
+verify_jwt = true
+
