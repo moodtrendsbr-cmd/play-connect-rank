@@ -23,12 +23,13 @@ const ConnectWhatsApp = () => {
     (async () => {
       // priority: tenant_admin → arena → company → organizer
       const { data: ta } = await supabase
-        .from("tenant_admins")
+        .from("tenant_memberships")
         .select("tenant_id")
         .eq("user_id", user.id)
+        .in("role", ["admin", "owner"])
         .limit(1)
         .maybeSingle();
-      if (ta?.tenant_id) { setTarget("/tenant/connect-whatsapp"); setResolving(false); return; }
+      if ((ta as any)?.tenant_id) { setTarget("/tenant/connect-whatsapp"); setResolving(false); return; }
 
       const { data: arena } = await supabase
         .from("arenas")
