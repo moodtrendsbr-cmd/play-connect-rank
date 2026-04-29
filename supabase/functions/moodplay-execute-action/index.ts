@@ -202,6 +202,16 @@ Deno.serve(async (req) => {
   });
   const instanceId = (inst as any)?.instance_id ?? null;
 
+  // Phase 12.8 — best-effort memory context for ORKYM
+  const memory_context = await getMemoryContext(admin, {
+    tenant_id: tenant_id ?? null,
+    arena_id: arena_id ?? null,
+    user_id: user_id ?? null,
+    profile_type: (profile_type ?? "athlete") as never,
+    context: "general",
+    max_items: 10,
+  });
+
   // Persist command (channel=api, initiated_by=orkym)
   const { data: cmd, error: cmdErr } = await admin
     .from("conversational_commands")
