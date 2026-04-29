@@ -335,6 +335,9 @@ const Profile = () => {
         </div>
       )}
 
+      {/* Social privacy */}
+      {user && <SocialPrivacyToggle userId={user.id} />}
+
       {/* Tabs */}
       <div className="flex border-b" style={{ borderColor: "rgba(43,255,136,0.1)" }}>
         <button
