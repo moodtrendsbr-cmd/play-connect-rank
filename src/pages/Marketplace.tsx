@@ -28,6 +28,7 @@ const Marketplace = () => {
   const [userCity, setUserCity] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasCompany, setHasCompany] = useState(false);
+  const { featuredSet: featuredProducts } = useFeaturedSet("product");
 
   useEffect(() => {
     if (user) {
