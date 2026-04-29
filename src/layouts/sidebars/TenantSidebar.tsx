@@ -14,7 +14,7 @@ import {
 import { WhatsAppCTA } from "@/components/conversational/WhatsAppCTA";
 import {
   Gauge, Building2, Users, Store, DollarSign, CreditCard,
-  Activity, Sparkles, Palette, Globe, MessageCircle, Network,
+  Activity, Sparkles, Palette, Globe, MessageCircle, Network, Trophy,
 } from "lucide-react";
 
 const groups = [
@@ -30,6 +30,7 @@ const groups = [
     label: "Rede",
     items: [
       { title: "Arenas", url: "/tenant/arenas", icon: Building2 },
+      { title: "Torneios", url: "/tenant/tournaments", icon: Trophy },
       { title: "Organizadores", url: "/tenant/membros", icon: Users },
     ],
   },
