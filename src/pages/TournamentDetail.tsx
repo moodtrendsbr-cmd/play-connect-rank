@@ -259,6 +259,59 @@ const TournamentDetail = () => {
           )}
         </div>
 
+        {sponsors.length > 0 && (
+          <div className="mt-8">
+            <h3 className="font-display text-lg text-foreground mb-3">⭐ APRESENTADO POR</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {sponsors.map((s) => {
+                const logo = s.logo_url || s.companies?.logo_url;
+                const name = s.companies?.name || "Patrocinador";
+                const handleClick = async () => {
+                  try {
+                    await supabase
+                      .from("tournament_sponsorships")
+                      .update({ clicks_count: (s.clicks_count || 0) + 1 } as any)
+                      .eq("id", s.id);
+                  } catch {}
+                };
+                const inner = (
+                  <div className="flex items-center gap-3 rounded-xl p-4 border border-primary/30 bg-gradient-to-br from-primary/5 to-transparent transition-all hover:border-primary/60 hover:shadow-[0_0_18px_hsl(110_100%_55%/0.18)]">
+                    {logo ? (
+                      <img src={logo} alt={name} className="h-12 w-12 rounded-lg object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                        <Store className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{name}</p>
+                      {s.message && (
+                        <p className="text-xs text-muted-foreground line-clamp-2">{s.message}</p>
+                      )}
+                    </div>
+                    <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">Patrocinador</Badge>
+                  </div>
+                );
+                if (s.link) {
+                  return (
+                    <a key={s.id} href={s.link} target="_blank" rel="noopener noreferrer sponsored" onClick={handleClick}>
+                      {inner}
+                    </a>
+                  );
+                }
+                if (s.companies?.id) {
+                  return (
+                    <Link key={s.id} to={`/marketplace/company/${s.companies.id}`} onClick={handleClick}>
+                      {inner}
+                    </Link>
+                  );
+                }
+                return <div key={s.id}>{inner}</div>;
+              })}
+            </div>
+          </div>
+        )}
+
         {partners.length > 0 && (
           <div className="mt-8">
             <h3 className="font-display text-lg text-foreground mb-3">🤝 PARCEIROS OFICIAIS</h3>
