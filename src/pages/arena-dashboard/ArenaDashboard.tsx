@@ -17,6 +17,7 @@ import { CommandExamplesCard } from "@/components/conversational/CommandExamples
 import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { QrEntryCard } from "@/components/conversational/QrEntryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
+import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 import { cn } from "@/lib/utils";
 
 // ---------- Local UI helpers (not exported) ----------
@@ -300,6 +301,12 @@ const ArenaDashboard = () => {
           <ShortcutLink to="/marketplace"                 label="Marketplace" />
           <ShortcutLink to="/arena/dashboard/acoes-ia"    label="Sugestões da ORKYM" />
         </div>
+      </section>
+
+      {/* BLOCO 6 — RECEITA CONVERSACIONAL (Fase 13) */}
+      <section className="space-y-3">
+        <SectionHeader icon={DollarSign} title="Receita via ORKYM" subtitle="Atribuição WhatsApp · 30 dias" accent="text-[#2BFF88]" />
+        <RevenueDashboardPanel scope={{ type: "arena", id: arena.id }} />
       </section>
     </div>
   );

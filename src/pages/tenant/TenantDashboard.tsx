@@ -20,6 +20,8 @@ import { OperationModeBanner } from "@/components/conversational/OperationModeBa
 import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
 import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
+import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
+import { DollarSign as RevDollar } from "lucide-react";
 
 // ─────────────── helpers locais (não exportados) ───────────────
 const SectionHeader = ({
@@ -549,6 +551,16 @@ const TenantDashboard = () => {
             <ShortcutLink to="/tenant/dominios" icon={<Globe className="h-4 w-4" />} label="Domínios" />
           </div>
         </div>
+      </section>
+
+      {/* FASE 13 — Receita conversacional */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <RevDollar className="h-4 w-4 text-[#2BFF88]" />
+          <h2 className="font-display text-xl tracking-wide">Receita via ORKYM</h2>
+        </div>
+        <p className="text-xs text-muted-foreground">Atribuição de receita gerada pelo WhatsApp · 30 dias</p>
+        {tenant?.id && <RevenueDashboardPanel scope={{ type: "tenant", id: tenant.id }} />}
       </section>
     </div>
   );

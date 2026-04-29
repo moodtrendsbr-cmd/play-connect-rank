@@ -14,6 +14,7 @@ import { OperationModeBanner } from "@/components/conversational/OperationModeBa
 import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
 import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
+import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 
 // ---------- Local helpers (not exported) ----------
 const SectionHeader = ({ id, icon: Icon, title, subtitle, action }: any) => (
@@ -430,6 +431,14 @@ const CompanyDashboard = () => {
           <ShortcutLink to="/feed" icon={Rss} label="Ver no Feed" />
         </div>
       </section>
+
+      {/* FASE 13 — Receita conversacional */}
+      {company?.id && (
+        <section className="space-y-3">
+          <SectionHeader id="revenue" icon={TrendingUp} title="Vendas via WhatsApp" subtitle="Receita atribuída à ORKYM · 30 dias" />
+          <RevenueDashboardPanel scope={{ type: "company", id: company.id }} />
+        </section>
+      )}
     </div>
   );
 };

@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Gauge, Zap, TrendingUp, Clock, RefreshCw, AlertTriangle } from "lucide-react";
 import { fetchAllTenantsUsage, TIER_LABELS, formatTimeSaved, type UsageSummary, type AutonomyTier } from "@/lib/autonomyTier";
 import { supabase } from "@/integrations/supabase/client";
+import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 
 const tierColor: Record<AutonomyTier, string> = {
   free: "bg-muted text-muted-foreground border-border",
@@ -197,6 +198,16 @@ const AdminControlTower = () => {
               )}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* FASE 13 — Receita global ORKYM */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-[#2BFF88]" /> Receita conversacional global</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RevenueDashboardPanel scope={{ type: "admin" }} />
         </CardContent>
       </Card>
     </div>

@@ -1,157 +1,135 @@
-## Phase 12.9 — Proactive ORKYM Operations
 
-The MoodPlay stops being purely reactive. Operational events (enrollments, subscriptions, bookings, attendance, marketplace, campaigns, finance) feed a triggers queue. The cron processes the queue, checks eligibility + rate limits + cooldowns, asks ORKYM whether/what to send, then dispatches outbound WhatsApp via the ORKYM gateway. All decisions stay in ORKYM; MoodPlay only orchestrates.
+## Phase 13 — Conversational Revenue Engine
 
-### Architecture (data flow)
+Track, attribute and analyze every revenue event that originated from (or was assisted by) an ORKYM/WhatsApp interaction. No new sales logic, no local AI: we sit on top of `financial_transactions`, `bookings`, `enrollments`, `marketplace_orders`, and the existing ORKYM tables (12.5/12.7/12.8/12.9).
+
+### Data flow
 
 ```text
-operational tables (enrollments, bookings, subscriptions, ...)
-        │  AFTER INSERT/UPDATE triggers
+financial_transactions (paid)
+        │  AFTER UPDATE/INSERT trigger
         ▼
-public.orkym_triggers_queue  (pending)
-        │  orkym-cron-tick  (priority high → medium → low)
-        ▼
-eligibility + rate-limit + cooldown + dedup
-        │  pass
-        ▼
-POST orkym-invoke  domain=proactive action=decide
-        │  { trigger, memory_context, profile_type, scope }
-        ▼
-ORKYM responds: { should_send, message, action?, priority }
-        │  should_send = true
-        ▼
-resolve_whatsapp_instance → wa-send-message (NEW)
+attribution resolver  (window lookup vs ORKYM activity)
+   ├── proactive  → outbound trigger msg in last 24h to same user/entity
+   ├── assisted   → multi-turn session touched the entity in last 24h
+   ├── reactive   → user-initiated command in last 24h
+   └── none       → no attribution row (organic)
         │
         ▼
-whatsapp_messages + conversational_commands (direction=outbound, initiated_by=orkym)
+public.orkym_revenue_attribution
         │
         ▼
-feedback events on delivery / reply / conversion
+KPI views + RPCs  →  dashboards (Arena / Tenant / Company / Admin)
+                  →  optimization signals back into orkym_triggers_queue
 ```
 
 ### 1. Database (one migration)
 
-**`public.orkym_triggers_queue`**
-- `id uuid pk`, `tenant_id uuid not null`, `arena_id uuid null`, `user_id uuid null`, `profile_type text` (`athlete|arena|organizer|company|tenant`)
-- `trigger_type text not null` (e.g. `subscription_due`, `attendance_drop`, `idle_slot`, `low_enrollment`, `low_campaign_performance`, `revenue_drop`)
-- `entity_type text`, `entity_id uuid`, `payload jsonb default '{}'`
-- `priority text check in (high, medium, low) default 'medium'`
-- `status text check in (pending, claimed, processed, skipped, failed) default 'pending'`
-- `dedup_key text` (e.g. `subscription_due|<sub_id>|<period>`) — unique partial index `WHERE status IN ('pending','claimed','processed')`
-- `attempts int default 0`, `last_error text`, `scheduled_for timestamptz default now()`
-- `created_at`, `claimed_at`, `processed_at`
-- Indexes: `(status, priority, scheduled_for)`, `(tenant_id, created_at desc)`, `(user_id, trigger_type, created_at desc)`
-- RLS: tenant admin / arena owner / super admin read-only; service role writes.
+**`public.orkym_revenue_attribution`**
+- `id uuid pk`
+- `tenant_id uuid not null`, `arena_id uuid null`, `user_id uuid null`, `profile_type text`
+- `trigger_id uuid null` → `orkym_triggers_queue(id)`
+- `command_id uuid null` → `conversational_commands(id)`
+- `message_id uuid null` → `whatsapp_messages(id)`
+- `session_id uuid null` → `conversation_sessions(id)` (12.7)
+- `entity_type text` ∈ `booking | enrollment | marketplace_order | arena_billing_cycle | sponsorship`
+- `entity_id uuid`
+- `financial_transaction_id uuid null` → `financial_transactions(id)`
+- `revenue_amount numeric(10,2) not null`, `currency text default 'BRL'`
+- `attribution_type text` ∈ `proactive | assisted | reactive`
+- `attribution_confidence numeric(3,2)` (1.0 proactive, 0.75 assisted, 0.5 reactive)
+- `conversion_window_seconds int`
+- `metadata jsonb`, `created_at timestamptz default now()`
+- Unique `(entity_type, entity_id)` — one attribution per revenue event.
+- Indexes: `(tenant_id, created_at desc)`, `(arena_id, created_at desc)`, `(trigger_id)`, `(attribution_type, created_at desc)`.
+- RLS: admin / tenant_admin / arena_owner read; service role writes.
 
-**`public.orkym_trigger_feedback`** (lightweight)
-- `id`, `trigger_id fk`, `event text` (`message_sent|delivered|read|responded|ignored|converted`), `correlation_id`, `metadata jsonb`, `created_at`.
+**RPC `orkym_attribute_revenue(_source_type, _source_id)`** (security definer)
+1. Loads `financial_transactions` row → `(tenant, arena, user, amount, currency, paid_at)`. Skip if not `paid`.
+2. Resolves `entity_type/entity_id` from `source_type/source_id` (1:1 mapping; marketplace_order has buyer_user_id; bookings have user_id; enrollments have payer/user).
+3. Window = 24h before `paid_at`.
+4. Look up in priority order:
+   - **proactive**: most recent `orkym_triggers_queue` row for `(user_id, entity_type)` with `status='processed'` + a feedback `message_sent` event in window. Capture trigger_id, command_id, message_id.
+   - **assisted**: open `conversation_sessions` (12.7) for that user that referenced the entity (via `linked_entity_id` on conversational_commands within the session, or session payload).
+   - **reactive**: most recent `conversational_commands` with `direction='inbound'`, `user_id=...`, status `completed`, in window, mentioning the entity (linked_entity_id) or the same domain shortcode.
+5. Insert with conflict-do-nothing on `(entity_type, entity_id)`. Logs only when at least one of trigger/command/session matches.
+6. If matched proactive trigger, also append `orkym_trigger_feedback (event='converted', metadata={amount,currency})`.
 
-**`public.orkym_proactive_cooldowns`**
-- `(scope_type, scope_id, trigger_type)` PK with `last_sent_at`, `count_24h`. Used for cooldown lookups.
+**Triggers**
+- `financial_transactions` AFTER INSERT OR UPDATE OF `status` WHEN `NEW.status='paid'`: call `orkym_attribute_revenue(NEW.source_type, NEW.source_id)`.
+- Backfill statement at end of migration to attribute the last 30 days of paid transactions.
 
-**RPCs**
-- `orkym_trigger_enqueue(p_tenant, p_arena, p_user, p_profile_type, p_trigger_type, p_entity_type, p_entity_id, p_payload, p_priority, p_dedup_key, p_scheduled_for)` — security definer, conflict-do-nothing on `dedup_key`.
-- `orkym_trigger_claim_batch(_limit int)` — picks N pending rows ordered `priority,scheduled_for`, marks `claimed`.
-- `orkym_trigger_complete(_id, _status, _error)`.
-- `orkym_proactive_check_eligibility(_user_id, _tenant_id, _category, _trigger_type)` returns `{ eligible boolean, reason text }` — checks `orkym_proactive_eligibility.opted_in`, daily user cap (configurable, default 3/day), tenant cap (default 200/day from `whatsapp_messages` count where `initiated_by='orkym'`), per-trigger cooldown (default 24h).
-- `orkym_proactive_record_send(...)` — updates `orkym_proactive_cooldowns`.
+**KPI helpers (SQL functions, all security definer + scope-checked)**
+- `orkym_revenue_kpis_arena(_arena_id, _from, _to)` → `{ revenue_total, revenue_orkym, bookings_total, bookings_via_wa, conversion_rate }`.
+- `orkym_revenue_kpis_tenant(_tenant_id, _from, _to)` + per-arena breakdown.
+- `orkym_revenue_kpis_company(_company_user_id, _from, _to)` for marketplace orders.
+- `orkym_revenue_kpis_admin(_from, _to)` global ROI.
+- `orkym_message_performance(_scope_type, _scope_id, _from, _to)` aggregating `whatsapp_messages` (sent / replied) joined with attribution (converted / revenue / conv_rate).
 
-**Triggers (deterministic enqueue)**
-- `arena_student_subscriptions`: AFTER UPDATE/INSERT — when `next_due_at` within 5 days and `status='active'` enqueue `subscription_due` (priority=high if overdue).
-- `arena_attendance`: AFTER INSERT `status='absent'` — count last 4 weeks; if ≥ 3 absences enqueue `attendance_drop` (priority=medium).
-- `bookings`: AFTER INSERT — recompute idle slot pattern via existing memory; nightly cron job alternative (we'll keep it cron-only to avoid noise).
-- `enrollments`: AFTER INSERT — count tournament fill rate; if < 30 % and start_date < 7 days → enqueue `low_enrollment` for organizer.
-- `marketplace_orders`: AFTER UPDATE `status='paid'` — enqueue `top_product` for company (priority=low).
-- `ad_campaigns`: nightly cron only (no row-level signal yet).
-- `financial_transactions`: AFTER INSERT for tenant revenue drop — done in cron, not trigger, to compare deltas.
+**Optimization signals (no new schema)**
+- New SQL function `orkym_generate_optimization_triggers()` invoked by `orkym-cron-tick`:
+  - Finds `(tenant_id, trigger_type)` with ≥30 sends and conversion_rate < 5% in last 14d → enqueue `low_message_performance` trigger (priority=low, dedup=`opt|<scope>|<trigger_type>|<week>`).
+  - Finds best 3-hour window per tenant where conversion_rate is highest → store as `payload.preferred_send_window` on the same enqueue. ORKYM consumes it via `memory_context`.
+  - All it does is enqueue ORKYM-decidable triggers; no auto-actions.
 
-The cron-only triggers (`idle_slot`, `low_campaign_performance`, `revenue_drop`, `relevant_tournament`) are produced by a new SQL function `orkym_generate_periodic_triggers()` invoked from `orkym-cron-tick`.
+**Adaptive rate-limit**
+- Update `orkym_proactive_check_eligibility` to read a `roi_multiplier` from the new helper:
+  - `effective_user_cap = base_cap * clamp(roi_multiplier, 0.5, 2.0)`.
+  - `roi_multiplier = case when conversion_rate(tenant,trigger_type, 14d) >= 0.15 then 2.0 when <0.03 then 0.5 else 1.0`.
+- Only multiplies caps; never bypasses opt-in or per-trigger cooldowns.
 
 ### 2. Edge functions
 
-**NEW `supabase/functions/wa-send-message/index.ts`**
-- `verify_jwt = false`, service-token internal use only (asserted via `x-internal-token` matching `ORKYM_INTERNAL_TOKEN`).
-- Input: `{ instance_id?, wa_phone, body, template_name?, template_vars?, tenant_id, arena_id?, user_id?, category, correlation_id, idempotency_key, command_id? }`.
-- Resolves instance via `resolve_whatsapp_instance` if missing.
-- Posts to ORKYM `/whatsapp/send` (existing ORKYM endpoint pattern, HMAC-signed using `ORKYM_HMAC_SECRET` like `orkym-whatsapp-connection`).
-- Inserts `whatsapp_messages` (`direction='outbound', initiated_by='orkym'`) and updates with `external_message_id` + `delivery_status`.
-- On success returns `{ ok, message_id, external_message_id }`.
+No new functions. Edits only:
 
-**NEW `supabase/functions/orkym-proactive-process/index.ts`**
-- Internal (service-token guarded). Params: `{ limit?: 100 }`.
-- Calls `orkym_trigger_claim_batch`.
-- For each trigger:
-  1. Resolve scope (`tenant_id`, `arena_id`, `user_id`).
-  2. Fetch `memory_context` via `getMemoryContext` shared helper.
-  3. Call `orkym_proactive_check_eligibility`. If not eligible → `complete(skipped, reason)` + feedback `ignored`.
-  4. POST to `orkym-invoke` with `domain='proactive'`, `action='decide'`, payload `{ trigger, memory_context, profile_type, tenant_id, arena_id, user_id }`.
-  5. If `should_send`:
-     - Insert outbound `conversational_commands` (`direction='outbound', initiated_by='orkym', status='dispatched'`, `linked_entity_type=trigger`).
-     - Call `wa-send-message` with `command_id`, `category` (mapped from trigger), `idempotency_key = dedup_key`.
-     - Record `orkym_proactive_record_send` and feedback `message_sent`.
-     - `complete(processed)`.
-  6. Else `complete(skipped, 'orkym_no_send')`.
-- Robust try/catch per trigger; failures → `complete(failed, err)` and `attempts++`.
+- **`orkym-cron-tick`**: after the existing 12.9 block, run `orkym_generate_optimization_triggers()` (try/catch).
+- **`wa-send-message`**: include the inserted `message_id` on the response and ensure it is logged in `whatsapp_messages.metadata.trigger_id` (already done) for attribution lookups.
+- **`wa-bridge`**: when a conversion-related inbound is processed and a recent matching outbound trigger exists, run `orkym_attribute_revenue` opportunistically if the inbound led to an immediate paid event (defensive — main path is the financial_transactions trigger).
 
-**EDIT `supabase/functions/orkym-cron-tick/index.ts`**
-- After existing memory work add:
-  - `await admin.rpc('orkym_generate_periodic_triggers')` (inside try/catch).
-  - `fetch(orkym-proactive-process, { limit: 100 })`.
-
-**EDIT `supabase/functions/wa-bridge/index.ts`** (feedback loop on inbound)
-- When inbound message arrives and there's a recent outbound `conversational_commands` to the same phone within 24 h with `linked_entity_type='trigger'`, insert `orkym_trigger_feedback (event='responded')`. Already-existing multi-turn (12.7) and memory (12.8) wiring continues.
-- Also when message-status webhooks (already handled) update `delivery_status`, mirror into feedback (`delivered`, `read`).
-
-**EDIT `supabase/config.toml`** to register `wa-send-message` and `orkym-proactive-process` with `verify_jwt = false`.
+(All existing functions keep current `verify_jwt` settings — no `config.toml` changes needed.)
 
 ### 3. Frontend
 
-Light, observability-only (no new flows for end-users beyond opt-in already shipped):
+New shared components in `src/components/revenue/`:
+- `RevenueCard.tsx` — total revenue / ORKYM revenue / share %, sparkline placeholder.
+- `ConversionRateCard.tsx` — messages sent vs converted, % rate, delta vs previous period.
+- `MessagePerformanceCard.tsx` — table per `trigger_type`: sent, delivered, responded, converted, revenue, conv rate.
 
-- **NEW** `src/components/orkym/ProactiveTriggersPanel.tsx` — table of recent triggers (status, priority, trigger_type, entity, sent?). Visible in Tenant + Arena dashboards.
-- **NEW** `src/hooks/useOrkymTriggers.ts` — fetches `orkym_triggers_queue` + feedback for current scope.
-- **EDIT** existing tenant/arena dashboards to mount the panel under the existing ORKYM section.
-- No new auth flows; opt-in already lives in `orkym_proactive_eligibility` and the existing settings UI.
+New hook `src/hooks/useRevenueKpis.ts` calling the scope-appropriate RPC.
+
+Mounted in:
+- `src/pages/arena-dashboard/...` main dashboard (under existing ORKYM section).
+- `src/pages/tenant/TenantDashboard.tsx` (network view, with per-arena breakdown table).
+- `src/pages/company/CompanyDashboard.tsx` (marketplace conversion only).
+- `src/pages/admin/AdminControlTower.tsx` (global ROI).
+
+Reuse existing card/typography styling. Sentence case, Bebas headings, `#2BFF88` for highlight numbers per project style.
 
 ### 4. Memory & rules
 
-- Update `mem/index.md` Core: add line "Proactive ops: triggers queued in `orkym_triggers_queue`; ORKYM decides content; MoodPlay enforces eligibility/cooldown; outbound only via `wa-send-message`."
-- Add `mem/features/proactive-ops.md` describing trigger types, priorities, default caps (3 msg/user/day, 24 h cooldown/trigger_type, 200/tenant/day), feedback events, and the strict "no AI in MoodPlay" boundary.
+- Update `mem/index.md` Core: add line "Phase 13 revenue: `orkym_revenue_attribution` (proactive|assisted|reactive). Triggered by `financial_transactions` paid. Adaptive caps via ROI; never bypass opt-in."
+- New `mem/features/conversational-revenue.md` documenting attribution rules, window, KPIs, optimization-trigger names, and the strict no-AI / no-finance-mutation boundary.
 
-### 5. Rate-limit defaults
+### 5. Strict boundaries (do NOT)
 
-- Per user/day: 3 (configurable in `orkym_proactive_eligibility.metadata.daily_cap`).
-- Per tenant/day: 200.
-- Per `(scope, trigger_type)` cooldown: 24 h default; `subscription_due` overdue=4 h, `idle_slot`=72 h, `low_enrollment`=48 h.
-- All defaults centralized in a SQL function `orkym_trigger_default_cooldown(_trigger_type)`.
-
-### 6. Feedback loop fields
-
-`orkym_trigger_feedback.event` ∈ `message_sent | delivered | read | responded | ignored | converted`.
-- `delivered`/`read` mirrored from `whatsapp_messages` status updates.
-- `responded` set by wa-bridge when a related inbound arrives.
-- `converted` set by domain hooks (e.g. `enrollments` insert with metadata `source='orkym_proactive'`, marketplace order with `metadata.orkym_trigger_id`). We populate when present; other domains can be wired later.
-
-### 7. Strict boundaries (do NOT)
-
-- No local AI/LLM in MoodPlay. Decision text always from ORKYM.
-- No outbound WhatsApp without ORKYM `should_send=true`.
-- No bypassing eligibility/cooldown.
-- No new schema in `auth/storage/realtime/supabase_functions/vault`.
+- No mutation of `financial_transactions`, `bookings`, `enrollments`, `marketplace_orders` (read-only).
+- No local AI/LLM. Optimization signals are pure SQL aggregates.
+- No new sales/checkout flow. Attribution observes existing payment paths.
+- No edits to `auth/storage/realtime/supabase_functions/vault`.
 - No raw SQL execution from edge functions.
+
+### 6. Acceptance
+
+- A booking paid 2h after a `subscription_due` outbound trigger to the same user creates an `orkym_revenue_attribution` row with `attribution_type='proactive'` + a `converted` feedback event with the amount.
+- A marketplace order paid after the buyer sent a WhatsApp command (no proactive trigger) creates `attribution_type='reactive'`.
+- A tenant dashboard shows `revenue_orkym / revenue_total` and per-arena ranking.
+- Conversion rate < 5% on `low_enrollment` triggers for 14d → a `low_message_performance` trigger appears in the queue for ORKYM to react to.
+- Caps adjust: a tenant with 18% conversion on `subscription_due` sends up to 2× the base daily user cap; a tenant with 1% conversion sends 0.5×.
+- Opt-out users still receive zero proactive messages regardless of ROI.
 
 ### Deliverables checklist
 
-- [ ] Migration: `orkym_triggers_queue`, `orkym_trigger_feedback`, `orkym_proactive_cooldowns`, RPCs, table triggers, `orkym_generate_periodic_triggers`, `orkym_proactive_check_eligibility`.
-- [ ] Edge: `wa-send-message`, `orkym-proactive-process`.
-- [ ] Edits: `orkym-cron-tick`, `wa-bridge`, `supabase/config.toml`.
-- [ ] Frontend: `useOrkymTriggers`, `ProactiveTriggersPanel`, dashboard mounts.
-- [ ] Memory: `mem/index.md` core line + `mem/features/proactive-ops.md`.
-
-### Acceptance
-
-- A subscription with `next_due_at` in 3 days enqueues `subscription_due` exactly once per period (dedup_key holds).
-- Cron picks it up, checks eligibility, calls ORKYM, sends WhatsApp if approved, logs `whatsapp_messages` + `conversational_commands` (outbound, initiated_by=orkym), records cooldown.
-- A second event within 24 h is skipped with `reason='cooldown'`.
-- Replying on WhatsApp continues into existing 12.7 multi-turn flow and updates 12.8 memory.
-- Opt-out (`orkym_proactive_eligibility.opted_in=false`) blocks all sends to that user.
+- [ ] Migration: `orkym_revenue_attribution`, `orkym_attribute_revenue`, financial_transactions trigger, KPI functions, `orkym_generate_optimization_triggers`, eligibility update, 30d backfill.
+- [ ] Edits: `orkym-cron-tick`, `wa-bridge` (defensive call), `wa-send-message` (metadata pass-through).
+- [ ] Frontend: `RevenueCard`, `ConversionRateCard`, `MessagePerformanceCard`, `useRevenueKpis`, dashboard mounts (Arena/Tenant/Company/Admin).
+- [ ] Memory: `mem/index.md` core line + `mem/features/conversational-revenue.md`.
