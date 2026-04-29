@@ -562,6 +562,7 @@ const TenantDashboard = () => {
         </div>
         <p className="text-xs text-muted-foreground">Atribuição de receita gerada pelo WhatsApp · 30 dias</p>
         {tenant?.id && <RevenueDashboardPanel scope={{ type: "tenant", id: tenant.id }} />}
+        {tenant?.id && <GrowthDashboardPanel scope={{ type: "tenant", id: tenant.id }} />}
       </section>
     </div>
   );
