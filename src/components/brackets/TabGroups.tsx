@@ -33,42 +33,61 @@ const TabGroups = ({ modalityId, canManage = false }: TabGroupsProps) => {
   const [numGroupsInput, setNumGroupsInput] = useState("2");
 
   const fetchData = useCallback(async () => {
-    const fetch = async () => {
-      setLoading(true);
-      const { data: groupsData } = await supabase
-        .from("modality_groups")
-        .select("*")
-        .eq("modality_id", modalityId)
-        .order("group_name");
+    setLoading(true);
+    const { data: groupsData } = await supabase
+      .from("modality_groups")
+      .select("*")
+      .eq("modality_id", modalityId)
+      .order("group_name");
 
-      const gList = groupsData || [];
+    const gList = groupsData || [];
 
-      if (gList.length > 0) {
-        const groupIds = gList.map((g) => g.id);
-        const [{ data: members }, { data: matchData }] = await Promise.all([
-          supabase
-            .from("modality_group_members")
-            .select("*, modality_entries(*)")
-            .in("group_id", groupIds),
-          supabase
-            .from("modality_matches")
-            .select("*")
-            .in("group_id", groupIds),
-        ]);
+    if (gList.length > 0) {
+      const groupIds = gList.map((g) => g.id);
+      const [{ data: members }, { data: matchData }] = await Promise.all([
+        supabase
+          .from("modality_group_members")
+          .select("*, modality_entries(*)")
+          .in("group_id", groupIds),
+        supabase
+          .from("modality_matches")
+          .select("*")
+          .in("group_id", groupIds),
+      ]);
 
-        const enriched = gList.map((g) => ({
-          ...g,
-          members: (members || []).filter((m) => m.group_id === g.id),
-        }));
-        setGroups(enriched);
-        setMatches(matchData || []);
-      } else {
-        setGroups([]);
-      }
-      setLoading(false);
-    };
-    fetch();
+      const enriched = gList.map((g) => ({
+        ...g,
+        members: (members || []).filter((m) => m.group_id === g.id),
+      }));
+      setGroups(enriched);
+      setMatches(matchData || []);
+    } else {
+      setGroups([]);
+    }
+    setLoading(false);
   }, [modalityId]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleSortear = async () => {
+    const n = parseInt(numGroupsInput, 10);
+    if (!n || n < 1 || n > 32) {
+      toast.error("Informe um número de grupos entre 1 e 32");
+      return;
+    }
+    setDrawing(true);
+    const { data, error } = await supabase.rpc("sortear_grupos", {
+      _modality_id: modalityId,
+      _num_groups: n,
+    });
+    setDrawing(false);
+    if (error) {
+      toast.error("Falha ao sortear", { description: error.message });
+      return;
+    }
+    toast.success(`Sorteio concluído: ${(data as any)?.distributed ?? 0} entradas em ${n} grupos`);
+    fetchData();
+  };
 
   const allEntryIds = useMemo(() => {
     const ids: string[] = [];
