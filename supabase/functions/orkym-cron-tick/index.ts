@@ -184,5 +184,6 @@ Deno.serve(async (req) => {
     proactive_generated: proactiveGen,
     proactive_processed: proactiveProcess,
     optimization_generated: optimizationGen,
+    growth_generated: growthGen,
   }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
