@@ -1,6 +1,7 @@
 // wa-bridge: WhatsApp → ORKYM bridge (Phase 12)
 // verify_jwt = false (public webhook validated via HMAC OR mock mode)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getMemoryContext } from "../_shared/memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -326,6 +327,16 @@ Deno.serve(async (req) => {
   // 6. Forward to ORKYM (interpret_natural_command)
   const domain = PROFILE_TO_DOMAIN[ident.default_profile_type] || "arena_operations";
 
+  // Phase 12.8 — best-effort memory_context for ORKYM
+  const memory_context = await getMemoryContext(supa, {
+    tenant_id: ident.tenant_id ?? null,
+    arena_id: (qrArenaId || ident.default_arena_id) ?? null,
+    user_id: ident.user_id,
+    profile_type: (ident.default_profile_type ?? "athlete") as never,
+    context: "general",
+    max_items: 10,
+  });
+
   try {
     const invokeRes = await fetch(`${SUPA_URL}/functions/v1/orkym-invoke`, {
       method: "POST",
@@ -347,6 +358,7 @@ Deno.serve(async (req) => {
             qr_intent: qrIntent,
             qr_payload: qrPayload,
             channel: qrTokenUuid ? "qr" : "whatsapp",
+            memory_context,
           },
         },
       }),

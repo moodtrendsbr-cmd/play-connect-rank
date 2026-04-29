@@ -6,6 +6,7 @@ import {
   listSupportedIntents,
   sha256Hex,
 } from "../_shared/conversation-flows.ts";
+import { getMemoryContext, type MemoryContext } from "../_shared/memory.ts";
 
 /**
  * MoodPlay Session Step — Phase 12.7 (Hardened)
@@ -26,8 +27,15 @@ const DEFAULT_SESSION_TTL_MIN = 15;
 const RESUME_WINDOW_MIN = 30;
 const LOCK_TTL_SECONDS = 30;
 
+// Phase 12.8 — request-scoped memory context (best-effort)
+let currentMemory: MemoryContext | null = null;
+
 function safeJson(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+  let payload = body;
+  if (currentMemory && body && typeof body === "object" && (body as Record<string, unknown>).ok === true) {
+    payload = { ...(body as Record<string, unknown>), memory_context: currentMemory };
+  }
+  return new Response(JSON.stringify(payload), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
@@ -169,6 +177,13 @@ Deno.serve(async (req) => {
       return safeJson({ ok: false, error: "cross_tenant_violation" }, 403);
     }
   }
+
+  // Phase 12.8 — best-effort memory_context for this request
+  currentMemory = await getMemoryContext(admin, {
+    tenant_id, arena_id: arena_id ?? null, user_id,
+    profile_type: profile_type as never,
+    context: "general", max_items: 10,
+  });
 
   // 1. Resolve or create session
   const { data: resolveRes, error: resolveErr } = await admin.rpc(

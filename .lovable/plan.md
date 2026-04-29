@@ -1,148 +1,233 @@
 
-# Phase 13 — WhatsApp Connection Layer via ORKYM
+# Phase 12.8 — Memory + Personalization Layer
 
-**Princípio:** ORKYM possui o WhatsApp Business OS (QR, pairing, sessão, envio, recebimento, IA). MoodPlay apenas **espelha**, **vincula** ao tenant/arena/organizer/company e **bloqueia** acesso até conectar. Zero provider WhatsApp local. Zero IA local.
+**Princípio:** ORKYM é o cérebro. MoodPlay apenas **armazena, extrai deterministicamente e expõe** memória operacional estruturada. Zero IA local. Zero embeddings. Zero scoring complexo.
 
-## O que JÁ existe (reutilizar, não duplicar)
-- Tabelas `whatsapp_instances`, `whatsapp_bindings` (Fase 12.5) com todos os campos necessários (`external_instance_id`, `provider`, `status`, `display_name`, `phone_number`, `metadata`).
-- Edge function `orkym-invoke` (HMAC + retry + audit) — modelo a copiar.
-- Secrets já configurados: `ORKYM_API_BASE_URL`, `ORKYM_SERVICE_TOKEN`, `ORKYM_HMAC_SECRET`, `ORKYM_TIMEOUT_MS`.
-- Shells por perfil: `TenantShell`, `ArenaShell`, `OrganizerShell`, `CompanyShell`, `AthleteShell`, `AdminShell` — pontos perfeitos para o gate.
-- `AdminWhatsAppInstances` / `AdminWhatsAppBindings` — administração técnica continua disponível para Super Admin.
+## Arquitetura
 
-## Entregáveis
+Tabela única genérica `conversational_memory` (não fragmentar por perfil — perfil vira coluna). Extração determinística via SQL (triggers + função periódica). API única para ORKYM consumir. Injeção opcional nos edge functions existentes.
 
-### 1. Edge Function `orkym-whatsapp-connection` (server-side único)
-Path: `supabase/functions/orkym-whatsapp-connection/index.ts` (`verify_jwt = true`).
+---
 
-Body:
-```json
-{ "action": "start_connection|get_status|disconnect|reconnect|sync_instance",
-  "scope_type": "tenant|arena|organizer|company",
-  "tenant_id": "uuid", "arena_id": "uuid?",
-  "company_id": "uuid?", "organizer_user_id": "uuid?" }
-```
+## 1. Schema (1 migração)
 
-Fluxo:
-1. Valida JWT → resolve `auth.uid()`.
-2. **Validação de escopo** via RPCs existentes (`is_tenant_admin`, `is_arena_owner`, `is_company_owner`, `auth.uid() = organizer_user_id`). Bloqueia conexão de escopo sem permissão (`scope_forbidden`).
-3. Chama ORKYM em `${ORKYM_API_BASE_URL}/whatsapp/instances/{action}` com:
-   - `Authorization: Bearer ${ORKYM_SERVICE_TOKEN}`
-   - `X-HMAC-Signature: hmac_sha256(ORKYM_HMAC_SECRET, request_id+body)`
-   - timeout 8s, retry 5xx (2x backoff 200/800ms).
-4. **Adapter interno** mapeia nomes reais da ORKYM se diferentes — frontend nunca sabe.
-5. Sync no DB:
-   - `start_connection` / `sync_instance` → upsert em `whatsapp_instances` por `external_instance_id`; cria/atualiza `whatsapp_bindings` para o escopo (`is_default=true`, `priority=10`).
-   - `disconnect` → `status='paused'`.
-   - `get_status` → re-fetch e atualiza `status`, `metadata.last_synced_at`.
-6. **Failsafe**: sempre retorna HTTP 200 com `{ok, degraded?, qr_code?, pairing_code?, status, instance, error?}`. Nunca quebra app.
-7. Audit em `security_audit_log` (`action_type='wa_connection_*'`).
-
-### 2. Componente `WhatsAppConnectionPanel`
-Path: `src/components/conversational/WhatsAppConnectionPanel.tsx`.
-
-Props: `scope_type`, `tenant_id`, `arena_id?`, `organizer_user_id?`, `company_id?`, `title`, `description`, `onConnected?`.
-
-Comportamento:
-- Mount → chama `get_status`. Se já conectado, mostra estado de sucesso.
-- Botão **"Conectar WhatsApp"** → chama `start_connection`. Renderiza:
-  - QR Code (campo `qr_code` base64/url da resposta), centralizado, animação suave.
-  - Pairing code abaixo, fonte mono grande, com botão copiar.
-  - Polling `get_status` a cada 3s (até 90s ou conectado).
-- Quando `status='connected'`: card verde com número, display_name, instância, CTA **"Ir para o dashboard"**.
-- Botões secundários: **Reconectar**, **Atualizar status**, **Desconectar** (com confirmação).
-- Estado degradado: banner amarelo + botão "Tentar novamente". Nunca trava UI.
-- Blocos de valor abaixo da conexão (texto fixo por `scope_type`).
-
-### 3. Páginas dedicadas premium
-Layout: full-screen escuro, hero centralizado, Bebas Neue título, highlight `#2BFF88` em palavras-chave.
-
-- `src/pages/connect/ConnectWhatsApp.tsx` — rota genérica `/connect-whatsapp`. Lê perfil ativo via `AuthContext` + `TenantContext` e despacha para o painel correto.
-- `src/pages/tenant/TenantConnectWhatsApp.tsx` — `/tenant/connect-whatsapp`
-- `src/pages/arena-dashboard/ArenaConnectWhatsApp.tsx` — `/arena/connect-whatsapp`
-- `src/pages/organizer/OrganizerConnectWhatsApp.tsx` — `/organizer/connect-whatsapp`
-- `src/pages/company/CompanyConnectWhatsApp.tsx` — `/company/connect-whatsapp`
-
-Conteúdo (copy por perfil definida no spec). Sem layout/sidebar para não confundir o gate.
-
-### 4. Gate obrigatório (`useWhatsAppConnectionGuard`)
-Hook `src/hooks/useWhatsAppConnectionGuard.ts`:
-- Recebe `scope_type` + ids do escopo.
-- Consulta `whatsapp_bindings` join `whatsapp_instances` filtrado por escopo + `status='active'`.
-- Retorna `{ loading, connected }`.
-
-Aplicação em cada Shell (`TenantShell`, `ArenaShell`, `OrganizerShell`, `CompanyShell`):
-- Se `!loading && !connected` → `<Navigate to="/{role}/connect-whatsapp" replace />`.
-- **Exceções (whitelist):** rotas de conexão, `/profile`, rotas públicas (não passam pelo Shell), Super Admin (bypass total).
-- `AthleteShell` e `AdminShell` **não** aplicam gate.
-
-### 5. Indicador global de status
-Componente `src/components/conversational/WhatsAppStatusBadge.tsx`:
-- Mini-pill no header de cada Shell (TenantShell/ArenaShell/OrganizerShell/CompanyShell) ao lado do `ProfileSwitcher`.
-- 3 estados: `Conectado` (verde), `Pendente` (amarelo, CTA "Conectar"), `Desconectado` (vermelho, CTA "Reconectar").
-- Click → navega para `/{role}/connect-whatsapp`. Sem poluição visual.
-
-### 6. Sidebars
-Adicionar item **"Conexão WhatsApp"** (ícone `MessageCircle` verde) nas sidebars:
-- `TenantSidebar`, `ArenaSidebar`, `OrganizerSidebar`, `CompanySidebar`.
-- `AdminSidebar`: já tem Instances/Bindings — adicionar atalho **"Status global WhatsApp"**.
-
-### 7. Roteamento (`src/App.tsx`)
-Adicionar (fora dos Shells para evitar redirect loop do gate):
-```tsx
-<Route path="/connect-whatsapp" element={<ConnectWhatsApp />} />
-<Route path="/tenant/connect-whatsapp" element={<TenantConnectWhatsApp />} />
-<Route path="/arena/connect-whatsapp" element={<ArenaConnectWhatsApp />} />
-<Route path="/organizer/connect-whatsapp" element={<OrganizerConnectWhatsApp />} />
-<Route path="/company/connect-whatsapp" element={<CompanyConnectWhatsApp />} />
-```
-
-### 8. Cliente helper (`src/lib/wa.ts`)
-Adicionar:
-```ts
-export async function orkymWaConnection(input: {action, scope_type, tenant_id, arena_id?, organizer_user_id?, company_id?})
-  → { ok, status, qr_code?, pairing_code?, instance?, degraded? }
-```
-
-### 9. `supabase/config.toml`
-Adicionar:
-```toml
-[functions.orkym-whatsapp-connection]
-verify_jwt = true
-```
-
-### 10. Memória
-- Atualizar `mem://integration/orkym-gateway-architecture.md` (nova linha "WhatsApp connection lifecycle").
-- Criar `mem://features/whatsapp-connection-gate.md` (gate, escopos, exceções).
-- Atualizar `mem://index.md` Core: "WhatsApp obrigatório para Tenant/Arena/Organizer/Company. ORKYM dona do canal."
-
-## O que NÃO faremos
-- Sem provider WhatsApp local (Twilio/Meta/Evolution direto).
-- Sem novas tabelas (reutilizar `whatsapp_instances` + `whatsapp_bindings`).
-- Sem envio/recebimento paralelo no MoodPlay.
-- Sem IA de decisão.
-- Sem alterar `moodplay-execute-action`, `wa-bridge`, `moodplay-session-step`.
-
-## Fluxo end-to-end
+### `conversational_memory`
 ```text
-User (Arena owner) → /arena/dashboard
-  └─ ArenaShell.guard → !connected → redirect /arena/connect-whatsapp
-        └─ WhatsAppConnectionPanel.mount → orkym-whatsapp-connection {action:get_status}
-        └─ user clicks "Conectar" → {action:start_connection}
-              └─ ORKYM returns {qr_code, pairing_code, instance}
-              └─ DB: upsert whatsapp_instances + binding(arena)
-        └─ polling get_status (3s) → status:connected
-        └─ CTA "Ir para o dashboard" → /arena/dashboard
-              └─ guard passes → ArenaDashboard renderiza
+id uuid pk
+tenant_id uuid not null              -- isolamento obrigatório
+arena_id uuid null                   -- escopo opcional
+user_id uuid null                    -- escopo opcional (atleta/aluno)
+profile_type text not null           -- athlete|arena|organizer|company|tenant
+entity_type text not null            -- 'user'|'arena'|'organizer'|'company'|'tenant'
+entity_id uuid not null              -- a chave do dono da memória
+memory_type text not null            -- 'preference'|'pattern'|'history'|'behavior'|'insight'
+key text not null                    -- 'preferred_sport', 'preferred_time', 'top_product'…
+value jsonb not null                 -- {value, label?, count?, samples?}
+confidence numeric(3,2) not null default 0.50  -- 0.00..1.00
+source text not null                 -- 'enrollments'|'bookings'|'commands'|'orders'|'events'|'manual'
+sample_size int not null default 1
+last_seen_at timestamptz default now()
+expires_at timestamptz null          -- null = sem expiração
+created_at timestamptz default now()
+updated_at timestamptz default now()
+unique (entity_type, entity_id, key)
 ```
 
-## Critério de sucesso (verificável)
-- [ ] 4 perfis conseguem conectar via fluxo idêntico.
-- [ ] Acesso ao dashboard é bloqueado sem WhatsApp ativo.
-- [ ] Badge de status aparece nos 4 dashboards.
-- [ ] Instância vinculada corretamente em `whatsapp_bindings` com escopo certo.
-- [ ] Falha da ORKYM mostra estado degradado, não quebra app.
-- [ ] Super Admin nunca é bloqueado.
-- [ ] Nenhuma chamada direta a provider WhatsApp no MoodPlay.
+Índices: `(tenant_id, profile_type)`, `(entity_type, entity_id)`, `(arena_id, key)`, `(expires_at)` parcial WHERE not null.
 
-Pronto para aprovação. Após aprovado, executo migração mínima (nenhuma — apenas config.toml), edge function, componente, páginas, gate e wiring.
+### `conversational_memory_events` (auditoria leve)
+```text
+id, tenant_id, memory_id (nullable), event_type ('created'|'updated'|'expired'|'used'),
+context jsonb, created_at
+```
+
+### RLS
+- `conversational_memory`: SELECT permitido a admin do tenant, dono do escopo (arena owner, company owner, organizer, próprio user). Sem INSERT/UPDATE direto pelo client — só funções `SECURITY DEFINER`.
+- `conversational_memory_events`: SELECT só admin/owner; INSERT só via funções.
+
+---
+
+## 2. Extração determinística (SQL puro)
+
+### RPCs SECURITY DEFINER
+- `memory_upsert(_entity_type, _entity_id, _tenant, _arena, _user, _profile_type, _memory_type, _key, _value, _confidence, _source, _sample_size, _ttl_days)` — upsert com merge de `sample_size`/`last_seen_at` e re-cálculo de confidence (`min(0.99, 0.3 + sample_size*0.05)`).
+- `memory_extract_athlete(_user_id)` — varre `enrollments`, `bookings`, `athlete_activities` dos últimos 180d e calcula:
+  - `preferred_sport` (modalidade mais frequente, mín. 3 ocorrências)
+  - `preferred_time_window` (faixa horária mais usada em bookings)
+  - `preferred_arena` (arena com mais bookings/enrollments)
+  - `level_category` (último `category` mais usado)
+  - `enrollment_pattern` (`'last_minute'` | `'early_bird'` baseado em delta médio)
+- `memory_extract_arena(_arena_id)` — varre 90d:
+  - `idle_slot_pattern` (dia/hora com ocupação <30%)
+  - `recurring_students` (top 10 alunos ativos)
+  - `chronic_overdue_students` (>= 2 ciclos overdue)
+  - `top_instructor` (mais aulas atendidas)
+  - `low_occupancy_classes`
+- `memory_extract_organizer(_organizer_user_id)`:
+  - `frequent_tournament_type`, `frequent_categories`, `preferred_arenas`
+- `memory_extract_company(_company_id)`:
+  - `top_products` (top 5 por unidades), `best_campaign_type`
+- `memory_extract_tenant(_tenant_id)`:
+  - `top_arenas`, `recurring_issues` (de `arena_operational_events`), `orkym_usage_pattern`
+- `memory_extract_all()` — orquestrador que itera entidades ativas (atletas com atividade últimos 60d, arenas ativas, etc.) e chama os extractors. Limita batch (ex: 200 entidades por chamada).
+
+### Triggers leves (incrementais)
+- `trg_memory_from_booking` AFTER INSERT em `bookings` (status confirmed) → bump `preferred_time_window` + `preferred_arena` do user.
+- `trg_memory_from_enrollment` AFTER INSERT em `enrollments` → bump `preferred_sport` (modalidade) do atleta.
+- `trg_memory_from_order` AFTER INSERT em `marketplace_orders` (status paid) → bump `top_products` da company.
+
+Triggers chamam `memory_upsert` com `sample_size=1`. Confidence cresce naturalmente.
+
+### Decay
+- Função `memory_apply_decay()` chamada pelo `orkym-cron-tick`:
+  - Marca `expires_at = now()` para memórias com `last_seen_at < now() - interval '180 days'`.
+  - Insere evento `expired`.
+  - Decrementa confidence em 0.05 quando `last_seen_at` > 60d (sem expirar ainda).
+
+---
+
+## 3. Edge function `moodplay-memory-context`
+
+Path: `supabase/functions/moodplay-memory-context/index.ts` (`verify_jwt = false`, HMAC obrigatório igual a `moodplay-execute-action`).
+
+**Request**:
+```json
+{
+  "tenant_id": "uuid",
+  "arena_id": "uuid?",
+  "user_id": "uuid?",
+  "company_id": "uuid?",
+  "organizer_user_id": "uuid?",
+  "profile_type": "athlete|arena|organizer|company|tenant",
+  "context": "booking|billing|tournament|marketplace|growth|general",
+  "max_items": 20
+}
+```
+
+**Lógica**:
+1. Verifica HMAC + timestamp (reusa helpers de `moodplay-execute-action`).
+2. Resolve `entity_type`/`entity_id` pelo `profile_type`.
+3. Filtra `conversational_memory` por entity + tenant + (opcional) `key` relevantes para `context`:
+   - `booking` → time_window, arena, sport
+   - `billing` → overdue patterns, recurring_students
+   - `tournament` → preferred_sport, level_category, frequent_categories
+   - `marketplace` → top_products, best_campaign
+   - `growth` → tenant/arena patterns
+   - `general` → tudo, ordenado por confidence
+4. Ordena por `confidence DESC, last_seen_at DESC`, limita `max_items`.
+5. Gera `summary` determinístico (template string em PT-BR concatenando top 3 chaves — sem LLM).
+6. Registra `memory.used` em `conversational_memory_events`.
+
+**Response**:
+```json
+{
+  "ok": true,
+  "memory_context": {
+    "entity_type": "user",
+    "entity_id": "...",
+    "memories": [
+      { "key": "preferred_sport", "value": {"value":"beach_tennis","count":7},
+        "confidence": 0.78, "source": "enrollments",
+        "last_seen_at": "..." }
+    ],
+    "summary": "Atleta costuma jogar beach tennis à noite na Arena Praia Grande."
+  }
+}
+```
+
+7. Falhas → `{ok:true, memory_context:null, degraded:true}` (nunca quebra ORKYM).
+
+---
+
+## 4. Injeção nos fluxos existentes
+
+Sem reescrever lógica. Apenas anexar campo opcional `memory_context` na resposta:
+
+- **`moodplay-execute-action`**: depois de resolver tenant/arena/user, chamar internamente `getMemoryContext()` (helper compartilhado em `_shared/memory.ts` que faz query direta — sem HTTP). Anexar `memory_context` ao response payload. Custo: 1 query.
+- **`moodplay-session-step`**: idem ao iniciar/avançar sessão; injeta `memory_context` no snapshot da sessão.
+- **`wa-bridge`**: ao resolver identidade, anexar `memory_context` no payload encaminhado para ORKYM.
+
+ORKYM consome ou ignora — MoodPlay não muda seu comportamento.
+
+Helper `_shared/memory.ts`:
+```ts
+export async function getMemoryContext(admin, params): Promise<MemoryContext|null>
+```
+
+---
+
+## 5. Governança
+
+- `confidence` recalculado a cada upsert: `min(0.99, 0.3 + log(sample_size+1)*0.15)`.
+- `expires_at` opcional via `_ttl_days` no upsert.
+- `memory_apply_decay()` no cron (já agendado em `orkym-cron-tick`).
+- Eventos `created`/`updated`/`expired`/`used` em `conversational_memory_events`.
+- Cap por entidade: máx 50 memórias ativas (extractor descarta as de menor confidence).
+
+---
+
+## 6. UI mínima de transparência
+
+Componente `src/components/memory/MemoryTransparencyCard.tsx` (lista chave/valor/confidence/última atualização).
+
+Aplicar em:
+- `src/pages/Profile.tsx` (atleta) — seção "Preferências percebidas".
+- `src/pages/arena-dashboard/ArenaDashboard.tsx` — card "Padrões da arena".
+- `src/pages/organizer/OrganizerDashboard.tsx` — card "Padrões dos seus eventos".
+- `src/pages/company/CompanyDashboard.tsx` — card "Padrões dos clientes".
+- `src/pages/tenant/TenantDashboard.tsx` — card "Padrões da rede".
+
+Hook `src/hooks/useMemoryContext.ts` que faz SELECT direto em `conversational_memory` (RLS protege). Sem botão de edição (governança automática). Toggle "ocultar" só visual.
+
+---
+
+## 7. Arquivos
+
+**Migrações**:
+- `supabase/migrations/<ts>_phase_12_8_memory_layer.sql` — tabelas, RLS, RPCs upsert/extract/decay, triggers.
+
+**Edge functions**:
+- `supabase/functions/moodplay-memory-context/index.ts`
+- `supabase/functions/_shared/memory.ts` (helper para injeção)
+- editar: `moodplay-execute-action/index.ts`, `moodplay-session-step/index.ts`, `wa-bridge/index.ts`, `orkym-cron-tick/index.ts` (chamar `memory_apply_decay` + `memory_extract_all` em cadence).
+
+**Config**:
+- `supabase/config.toml`: `[functions.moodplay-memory-context] verify_jwt = false`.
+
+**Frontend**:
+- `src/components/memory/MemoryTransparencyCard.tsx`
+- `src/hooks/useMemoryContext.ts`
+- editar 5 dashboards + Profile (1 import + 1 card cada).
+
+**Testes**:
+- `supabase/functions/moodplay-memory-context/integration_test.ts` — HMAC, escopo, isolamento entre tenants, degraded mode.
+
+**Memória do projeto**:
+- `mem/features/memory-personalization.md` (novo)
+- atualizar `mem/integration/orkym-gateway-architecture.md` (linha 12.8)
+- atualizar `mem/index.md` Core: "Memória operacional em `conversational_memory`. Extração determinística. ORKYM consome via `moodplay-memory-context`."
+
+---
+
+## 8. NÃO faremos
+- Sem embeddings, sem vector search, sem LLM.
+- Sem nova tabela por perfil (uma única `conversational_memory`).
+- Sem armazenar conteúdo bruto de mensagens (só sinais agregados em `value` jsonb).
+- Sem alterar lógica de `orkym-handlers.ts`.
+- Sem expor memória cross-tenant.
+- Sem permitir client-side INSERT/UPDATE direto.
+
+---
+
+## 9. Critério de sucesso (verificável)
+- [ ] Tabela + RLS + RPCs criadas, migração roda limpa.
+- [ ] Triggers populam memória após booking/enrollment/order.
+- [ ] `memory_extract_all` roda no cron sem erro.
+- [ ] `moodplay-memory-context` retorna `memory_context` correto por escopo, com HMAC válido.
+- [ ] `moodplay-execute-action` anexa `memory_context` no response sem regredir os 11 testes existentes.
+- [ ] UI mostra preferências em 5 dashboards + Profile.
+- [ ] Isolamento por tenant validado em teste integration.
+- [ ] Decay marca expiração corretamente.
+- [ ] Zero código de IA/LLM/embedding adicionado.
+
+Pronto para aprovação. Após aprovado executo: migração → edge function nova → helper compartilhado → injeção nos 3 edge functions → cron → UI → testes → memória.
