@@ -82,7 +82,9 @@ const Marketplace = () => {
       }
 
       list.sort((a: any, b: any) => {
-        if (a.featured !== b.featured) return a.featured ? -1 : 1;
+        const aFeat = featuredProducts.has(a.id) || a.featured;
+        const bFeat = featuredProducts.has(b.id) || b.featured;
+        if (aFeat !== bFeat) return aFeat ? -1 : 1;
         if (userCity) {
           const aLocal = a.city?.toLowerCase() === userCity.toLowerCase();
           const bLocal = b.city?.toLowerCase() === userCity.toLowerCase();
