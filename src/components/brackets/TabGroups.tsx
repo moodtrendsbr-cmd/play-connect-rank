@@ -1,13 +1,17 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Layers, Trophy } from "lucide-react";
+import { Layers, Trophy, Shuffle, Loader2 } from "lucide-react";
 import { useEntryMembers } from "@/hooks/useEntryMembers";
 import AthleteAvatar from "./AthleteAvatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 interface TabGroupsProps {
   modalityId: string;
   numGroups?: number;
+  canManage?: boolean;
 }
 
 interface Standing {
