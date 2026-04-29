@@ -28,9 +28,20 @@ type: feature
 
 Ícones do catálogo mapeados via `ICON_MAP` em BadgesGrid; fallback Award.
 
-## Pendências (G-3+)
-- Featured listings (auto-aprovação + kill-switch admin) — monetização social.
-- Aplicar `social_event_should_emit` nos triggers `trg_social_from_*` existentes.
+## G-4 (Engine mínima — pontos/ranking/streak) — entregue
+**Princípio:** reaproveitar G-1 — `athlete_xp` = pontos, `xp_events` = log, `athlete_streaks` = streaks. Não criar `player_points*`.
+**Trigger novo:** `trg_award_xp_on_booking_paid` em `bookings` (status paid/confirmed → +6 + update_streak + evaluate_badges).
+**Views públicas (security_invoker):**
+- `athlete_points_summary` — total/weekly/monthly/level/streak por atleta.
+- `ranking_global` — top 100 por lifetime_xp + dados de profiles_public (com `position`).
+- `ranking_by_arena` — soma de XP por arena via bookings/attendance.
+- `ranking_by_modality` — soma de XP por modality via modality_matches.
+**Eventos sociais:** `trg_emit_ranking_update` (athlete_xp, top 10) e `trg_emit_streak_update` (múltiplos de 5 dias). Ambos usam `social_event_should_emit` com janela 6h.
+**RPC pública:** `get_athlete_progress(uuid)` retorna jsonb com total/weekly/monthly/level/streak/rank_global. Usado por ORKYM e UI.
+**UI:** `XpLevelBar` lê `athlete_points_summary` e mostra "+X esta semana"; `RankPosition` mostra "#N" quando atleta está no top 100; integrado no `GamificationPanel`.
+
+## Pendências
+- Aplicar `social_event_should_emit` nos triggers `trg_social_from_*` legados.
 - Substituir `Ranking.tsx` por chamada paginada à RPC.
 - Matview `athlete_stats` canônica (volume alto).
-- Toast "Badge desbloqueada!" ao detectar nova badge (realtime ou polling).
+- Toast "Badge desbloqueada!" via realtime.

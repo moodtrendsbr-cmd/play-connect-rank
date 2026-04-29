@@ -11,19 +11,23 @@ interface Props {
 const xpForLevel = (level: number) => Math.pow(Math.max(level - 1, 0), 2) * 100;
 
 const XpLevelBar = ({ athleteId }: Props) => {
-  const [data, setData] = useState<{ lifetime_xp: number; level: number } | null>(null);
+  const [data, setData] = useState<{ lifetime_xp: number; level: number; weekly_points: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const { data } = await (supabase as any)
-        .from("athlete_xp")
-        .select("lifetime_xp, level")
+      const { data: summary } = await (supabase as any)
+        .from("athlete_points_summary")
+        .select("total_points, level, weekly_points")
         .eq("athlete_id", athleteId)
         .maybeSingle();
       if (!mounted) return;
-      setData(data || { lifetime_xp: 0, level: 1 });
+      setData({
+        lifetime_xp: summary?.total_points ?? 0,
+        level: summary?.level ?? 1,
+        weekly_points: summary?.weekly_points ?? 0,
+      });
       setLoading(false);
     })();
     return () => { mounted = false; };
@@ -82,6 +86,11 @@ const XpLevelBar = ({ athleteId }: Props) => {
       <p className="text-[10px] mt-1 text-muted-foreground">
         {progressed} / {span} XP para o nível {level + 1}
       </p>
+      {(data?.weekly_points ?? 0) > 0 && (
+        <p className="text-[10px] mt-0.5" style={{ color: "#2BFF88" }}>
+          +{data?.weekly_points} esta semana
+        </p>
+      )}
     </div>
   );
 };

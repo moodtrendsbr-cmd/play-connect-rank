@@ -1,266 +1,113 @@
 
-# Auditoria — Gamificação & Monetização Social no MoodPlay
+# Gamification Engine Mínima — Plano
 
-> **Modo diagnóstico.** Nenhuma tabela, rota, view, RPC ou edge function será alterada nesta fase. Este documento serve como **mapa de decisão arquitetural** antes de qualquer evolução.
+## Diagnóstico
 
----
+O sistema **já tem** uma base de gamificação implementada (G-1/G-2) que cobre ~80% do pedido com nomes diferentes:
 
-## 1. Resumo executivo
+| Pedido            | Já existe                                                                |
+|-------------------|--------------------------------------------------------------------------|
+| `player_points`   | `athlete_xp` (current_xp / lifetime_xp / level)                          |
+| `player_points_log` | `xp_events` (UNIQUE source+source_id, idempotente)                     |
+| `calculate_points`  | `award_xp` + triggers fixos (win=50, played=10, attendance=10, enrollment=20) |
+| `player_streaks`    | `athlete_streaks` (current_streak / longest_streak / last_activity_date) |
+| ranking views     | RPC `get_athlete_ranking` (já corrigida no G-0)                          |
 
-O MoodPlay já tem **75% da fundação social/financeira** pronta — identidade phone-first, feed de eventos automático via triggers, ads, sponsorships, splits, attribution ORKYM. O que falta é **a camada explícita de gamificação** (níveis, badges, streaks, ranking persistente) e **monetização social self-service** (empresa/arena/organizador criando destaques sem passar pelo admin).
+**Decisão:** não duplicar. Reusar as tabelas existentes e fechar apenas as lacunas reais. Os nomes ficam `athlete_xp/xp_events/athlete_streaks` no banco; a UI/feed/ORKYM podem chamar de "pontos" sem problema.
 
-Veredicto direto:
-- **Identidade & feed social**: pronto e funcionando (Fase Social-1 cobriu isso).
-- **Histórico esportivo**: existe via `athlete_activities` + `modality_matches`, mas é cru — não vira "perfil de atleta com stats".
-- **Ranking**: existe parcialmente, mas inconsistente — três fontes diferentes (`Ranking.tsx` calcula no client a partir de `match_results`, RPC `get_athlete_ranking` lê uma tabela `athlete_rankings` que **não existe**, view `athletes_public` agrega wins).
-- **Gamificação (níveis/badges/streaks/conquistas)**: **inexistente**. Zero schema, zero UI, zero menção.
-- **Monetização social**: estrutura existe (ads, sponsorships, sponsored_posts, marketplace, splits, attribution), mas **operada quase 100% por admin**. Tabelas vazias em produção (`ad_campaigns=0`, `sponsored_posts=0`, `tournament_sponsorships=0`).
-- **ORKYM**: já recebe sinais via `social_events` e `orkym_revenue_attribution`, mas **não há triggers de gamificação** ("você está perto do nível 5", "sua streak vai quebrar").
+## Lacunas reais a implementar
 
----
+1. **Bookings não dão pontos hoje** — adicionar trigger.
+2. **Falta janela semanal/mensal** — adicionar 2 colunas calculadas em runtime via view, sem nova tabela.
+3. **Ranking por arena / por modalidade** — só existe global; criar 2 views.
+4. **Eventos `ranking_update` / `streak_update` no feed** — ainda não emitidos.
+5. **ORKYM não consulta pontos/ranking/streak** — adicionar handler.
+6. **Profile já mostra XP/streak/badges** (G-2) — só validar.
 
-## 2. Estruturas existentes — inventário
+## Escopo
 
-### 2.1 Identidade e perfil social
+### 1. Bookings → pontos (trigger novo)
+Trigger em `bookings` AFTER UPDATE quando `status` muda para `paid`/`confirmed`:
+- `award_xp(booker_user_id, 6, 'booking', booking.id)`
+- `update_streak(booker_user_id)`
 
-| Recurso | Existe? | Em uso? | Onde | Observação |
-|---|---|---|---|---|
-| `profiles` (base) | Sim | Sim | toda app | FK em auth.users |
-| `profiles_public` (view) | Sim | Sim | feed, perfis | Colunas seguras |
-| `social_identities` (phone-first) | Sim | Sim (6 rows) | wa-bridge | Unifica WA + auth + guest |
-| `social_profiles` | Sim | Sim (6 rows) | `/u/:username`, feed | username, visibility, bio |
-| `social_profiles_public` (view) | Sim | Sim | feed v2 | Filtra visibility |
-| `social_event_description` (RPC) | Sim | Sim | view | Templates determinísticos |
-| `social_identity_upsert` (RPC) | Sim | Sim | wa-bridge | Phone → identity |
-| `social_identity_for_user` (RPC) | Sim | Sim | SocialPrivacyToggle | |
-| `social_profile_set_visibility` (RPC) | Sim | Sim | privacy toggle | |
+Idempotência garantida pelo UNIQUE (source, source_id) em `xp_events`.
 
-### 2.2 Histórico esportivo / atividades
-
-| Recurso | Existe? | Em uso? | Alimentado por |
-|---|---|---|---|
-| `athlete_activities` (49 rows) | Sim | Sim | 4 triggers (enrollments, modality_matches, arena_attendance, posts/clips) |
-| `athlete_activities_public` (view) | Sim | Sim | UserProfile / SocialProfile |
-| `athletes_public` (view, agrega wins/participations/attendances) | Sim | Sim | Explore, Ranking secundário, search_global |
-| `social_events` (28 rows) | Sim | Sim | 4 triggers (`trg_social_from_*`) |
-| `social_feed_public_v2` (view) | Sim | Sim | Feed.tsx, SocialActivityFeed, SocialProfile |
-| `modality_matches` (69 rows) | Sim | Sim | brackets, alimenta activities |
-| `match_results` | Sim | Sim | Ranking.tsx (client-side) |
-| `arena_attendance` (0 rows) | Sim | Estrutura | aulas (Phase 3) |
-| `enrollments` (28 rows) | Sim | Sim | torneios |
-
-> **Duplicação detectada**: `athlete_activities` e `social_events` registram **eventos quase idênticos** (`tournament.match_won` vs `match_win`, `tournament.checked_in` vs `checkin`). Os triggers de `social_events` na verdade leem de `athlete_activities`, então não é duplicação destrutiva — é uma **camada de projeção**. Mas significa que adicionar evento novo exige tocar dois lugares.
-
-### 2.3 Ranking
-
-| Fonte | Status |
-|---|---|
-| `Ranking.tsx` calcula client-side a partir de `match_results` | **Funciona, mas frágil** — sem paginação, sem categoria, sem modalidade |
-| RPC `get_athlete_ranking` lê `athlete_rankings` | ⚠️ **Tabela `athlete_rankings` NÃO existe** — RPC retorna sempre `[]` com note `rankings_table_unavailable` |
-| `athletes_public` agrega wins | Funciona, é a base real |
-| `get_tournament_standings` lê `enrollments` | Funciona mas não calcula colocação real |
-
-### 2.4 Monetização — ads, sponsorships, marketplace, finance
-
-| Tabela | Rows | Em uso real? | Quem opera |
-|---|---|---|---|
-| `ad_campaigns` | 0 | UI existe (AdSlot, AdminAdCampaigns) | **Só admin** |
-| `ad_slots` | 5 | Sim | Admin |
-| `ad_events` | 0 | Sim (`ad_record_event`) | Auto |
-| `ads_public` (view) | — | Sim (AdSlot) | — |
-| `sponsored_posts` | 0 | UI existe (SponsoredPostCard) | **Só admin/cron** (`generate-sponsored-posts`) |
-| `tournament_sponsorships` | 0 | UI existe (SponsorTournamentDialog) | Empresa **pode** comprar (sponsor flow funciona) |
-| `tournament_sponsor_plans` | — | Sim | Organizer cria plano |
-| `athlete_sponsors` | — | Existe | Não auditado UI |
-| `sponsorship_giveaways` | — | Existe | Admin |
-| `products` | 6 | Sim | Empresa/admin |
-| `marketplace_orders` | 5 | Sim | MP webhook |
-| `marketplace_public` (view) | — | Sim | Marketplace |
-| `financial_transactions` | 4 | Sim | MP webhook |
-| `transaction_splits` | 8 | Sim | `finance_record_payment` |
-| `split_rules` | — | Sim | Admin |
-| `orkym_revenue_attribution` | 4 | Sim | Trigger `tg_orkym_attribute_revenue` em `financial_transactions` paid |
-
-### 2.5 ORKYM — engajamento e proatividade
-
-| Recurso | Existe? | Pode receber sinal de gamificação? |
-|---|---|---|
-| `orkym_triggers_queue` | Sim | Sim, é o canal correto |
-| `orkym_proactive_eligibility` | Sim | Cooldown e opt-in |
-| `orkym_revenue_attribution` | Sim | proactive/assisted/reactive |
-| `orkym_trigger_feedback` | Sim | Loop de aprendizado |
-| Triggers existentes | Reativação, upsell genérico | **Nenhum trigger de "streak", "level-up", "near-badge"** |
-
----
-
-## 3. Maturidade — classificação brutal
-
-### Gamificação
-
-| Item | Status | Observação |
-|---|---|---|
-| Histórico de partidas | 🟢 pronto | `modality_matches` + `athlete_activities` |
-| Ranking por wins (global) | 🟡 parcial | Funciona client-side, sem categoria/modalidade |
-| Ranking por torneio | 🟡 parcial | `get_tournament_standings` retorna lista, não classificação real |
-| Ranking por arena | 🔴 inexistente | Nenhum agregado |
-| Pontuação | 🟡 parcial | `wins * 10` hardcoded em Ranking.tsx |
-| **Nível do atleta** | 🔴 inexistente | Sem schema, sem UI |
-| **Badges/conquistas** | 🔴 inexistente | Zero |
-| **Streak (presença/jogos)** | 🔴 inexistente | Zero |
-| **Frequência** | 🔴 inexistente | Há `arena_attendance` mas sem agregação |
-| Estatísticas no perfil | 🟡 parcial | `athletes_public` tem wins/participations/attendances; `get_athlete_performance` calcula winrate em `matches` (tabela diferente de `modality_matches` ⚠️) |
-| Perfil social | 🟢 pronto | `/u/:username` |
-| Feed de atividades | 🟢 pronto | Feed.tsx + SocialActivityFeed |
-
-### Monetização social
-
-| Item | Status | Observação |
-|---|---|---|
-| Ads (campanhas/slots/events) | 🟢 schema pronto, 🔴 **sem auto-serviço** | Só admin cria campanha |
-| Slot público no feed | 🟢 pronto | `AdSlot code="feed.inline"` |
-| Empresa patrocinadora (sponsorships) | 🟢 pronto | Empresa compra plano de torneio |
-| Produtos destacados | 🟡 parcial | Existe `products`, sem flag "boost"/"featured" pago |
-| Eventos destacados (torneios) | 🔴 inexistente | Sem mecânica de "boost" pago para tornar torneio destaque |
-| Marketplace público | 🟢 pronto | `marketplace_public` |
-| Feed patrocinado | 🟢 schema, 🟡 operação | `sponsored_posts` existe mas alimentado por cron, não por empresa |
-| Revenue attribution ORKYM | 🟢 pronto | `orkym_revenue_attribution` |
-| Split financeiro | 🟢 pronto | `transaction_splits` |
-| **Self-service de destaque (empresa)** | 🔴 inexistente | Nenhuma página "destacar meu produto/evento" |
-| **Tenant vendendo destaque** | 🔴 inexistente | TenantDashboard mostra receita, mas não vende slots |
-| **Arena vendendo patrocínio** | 🔴 inexistente | Sem fluxo |
-| Relatório de campanha p/ empresa | 🟡 parcial | CompanyDashboard mostra cliques/impressões mas dados zerados |
-
----
-
-## 4. Dashboards — o que aparece hoje
-
-| Shell | Tem | Falta |
-|---|---|---|
-| Athlete | atividades, próximas partidas, performance básica | nível, badges, streak, progresso, próxima conquista |
-| Arena | finance, alunos, classes | ranking de alunos, alunos mais ativos, oportunidade de patrocínio |
-| Organizer | finance, torneios, members | engajamento de torneio, ranking do evento, destaque |
-| Company | sponsor bridge, dashboard básico | métricas reais de campanha (dados zerados), CTA "destacar produto" |
-| Tenant | revenue, control tower | venda de destaques, empresas ativas no tenant |
-| Admin | ads, monetização, sponsorships, control tower | painel unificado de "saúde social" |
-
----
-
-## 5. Privacidade — checklist
-
-| Verificação | Status |
-|---|---|
-| Dados públicos vêm de views `security_invoker=on` | ✅ Sim (todas `*_public`) |
-| Atleta pode ficar privado | ✅ `social_profile_set_visibility` |
-| Empresa controla visibilidade | 🟡 só via approved/active |
-| Feed evita spam | ⚠️ **não há dedup explícito** entre `social_events` repetidos (ex: múltiplos checkins no mesmo dia) |
-| Eventos repetidos agrupados | 🔴 não |
-| Dados sensíveis não vazam | ✅ payments excluídos do feed v2 |
-| Patrocinado é identificado | ✅ `SponsoredPostCard` e `AdSlot` mostram badge "Patrocinado" |
-
----
-
-## 6. Riscos e gaps
-
-### Riscos
-
-1. **`athlete_rankings` referenciada por RPC mas não existe** → `get_athlete_ranking` é dead code silencioso. Qualquer caller pensa que está pegando ranking real.
-2. **Duas fontes de "matches"**: `matches` (usada em `get_athlete_performance`) e `modality_matches` (real, usada em brackets). Performance retornada para ORKYM provavelmente é zerada.
-3. **Duplicação `athlete_activities` ↔ `social_events`**: cada evento novo precisa ser projetado em dois lugares. Risco de drift.
-4. **Spam de feed**: sem dedup, um atleta que faz 5 checkins seguidos polui o feed global.
-5. **Ranking client-side**: Ranking.tsx puxa todos os `match_results` para o cliente. Não escala.
-
-### Gaps de gamificação
-
-- Sem `athlete_levels`, `athlete_badges`, `athlete_streaks`, `achievement_definitions`.
-- Sem fórmula de XP unificada.
-- Sem trigger ORKYM "near level-up", "streak prestes a quebrar", "primeiro badge".
-- Sem ranking persistente (matview ou tabela).
-
-### Gaps de monetização social
-
-- Empresa não tem fluxo self-service para criar campanha de ad ou destaque de produto.
-- Organizer não tem fluxo para "boost de torneio" pago.
-- Arena não tem fluxo para vender patrocínio local (slot na arena, destaque entre alunos).
-- Tenant não tem painel de "marketplace de destaques" próprio.
-- Sem `featured_until` em `products` / `tournaments` para destaque pago temporário.
-
----
-
-## 7. Reaproveitamento — o que NÃO precisa ser refeito
-
-- **Identidade phone-first** (`social_identities`): base sólida para qualquer nova feature social.
-- **`social_events` + view v2**: pipeline pronto para receber novos `event_type` (level_up, badge_earned, streak_milestone) sem nova arquitetura.
-- **`orkym_triggers_queue` + `orkym_revenue_attribution`**: canal para todo trigger de gamificação e attribution de upsell.
-- **`ad_campaigns` + `ad_slots` + `ad_record_event`**: schema completo, só faltam **fluxos self-service** em cima.
-- **`transaction_splits` + `split_rules`**: qualquer destaque pago entra direto no split engine.
-- **`tournament_sponsorships` + `tournament_sponsor_plans`**: padrão a replicar para arena_sponsorships e product_features.
-
----
-
-## 8. Recomendação de arquitetura (sem implementar)
-
-Princípio: **não criar mundo paralelo de gamificação** — usar `social_events` como espinha dorsal e adicionar 3 tabelas finas + 1 RPC de cálculo determinístico.
-
+### 2. Janelas semanal/mensal (view, sem tabela nova)
 ```text
-                    ┌─────────────────────────┐
-                    │   social_events         │ (já existe)
-                    │   (event_type +payload) │
-                    └─────────┬───────────────┘
-                              │ projeção via trigger
-              ┌───────────────┼───────────────────────┐
-              ▼               ▼                       ▼
-      athlete_xp_ledger   athlete_streaks      athlete_badges
-      (append-only)       (current+best)       (earned_at)
-              │               │                       │
-              └───────────────┴───────────┬───────────┘
-                                          ▼
-                                athlete_stats (matview)
-                                          │
-                                          ▼
-                                  ORKYM triggers
-                                  (near-level, streak-risk)
+View athlete_points_summary (security_invoker):
+  athlete_id
+  total_points        ← athlete_xp.lifetime_xp
+  weekly_points       ← SUM(xp_events.delta) WHERE created_at >= now() - 7d
+  monthly_points      ← SUM(xp_events.delta) WHERE created_at >= now() - 30d
+  current_streak      ← athlete_streaks.current_streak
+  level               ← athlete_xp.level
 ```
+Cobre o requisito de `weekly_points` / `monthly_points` sem schema novo.
 
-Para monetização: **um padrão único de "boost"** (`featured_listings`) que cobre torneio em destaque, produto em destaque, post patrocinado por empresa, com `featured_until`, `paid_via_transaction_id`, e split automático.
+### 3. Ranking views
+```text
+ranking_global       ← top atletas por lifetime_xp + nome/avatar via profiles_public
+ranking_by_arena     ← JOIN xp_events com arena_attendance/bookings filtrando por arena_id
+ranking_by_modality  ← JOIN xp_events com modality_matches filtrando por modality
+```
+Todas `security_invoker=on`, leitura pública. Topo limitado a 100 linhas para evitar payloads grandes.
 
----
+### 4. Feed: `ranking_update` / `streak_update`
+Adicionar `social_event_type` enum + emissão idempotente (já temos `social_event_should_emit` da G-0):
+- Ao subir de posição no ranking_global (top 10) → emitir `ranking_update`.
+- Ao atingir múltiplos de 5 dias de streak → emitir `streak_update`.
+- Trigger único em `athlete_xp` AFTER UPDATE + `athlete_streaks` AFTER UPDATE, com guarda de janela 6h.
 
-## 9. Próximas fases sugeridas (ordem de impacto vs custo)
+### 5. ORKYM lê pontos/ranking/streak
+Adicionar 1 handler em `supabase/functions/_shared/orkym-handlers.ts`:
+- Action `get_athlete_progress(profile_id)` → retorna `{ total, weekly, monthly, level, streak, rank_global, rank_arena? }` lendo a view `athlete_points_summary` + `ranking_global`.
+- Sem IA, sem decisão; apenas leitura. ORKYM decide o copy.
 
-| Fase | Escopo | Por quê primeiro |
-|---|---|---|
-| **G-0 Cleanup** | Remover/corrigir `get_athlete_ranking` + `get_athlete_performance` (apontar p/ `modality_matches`); add dedup em `social_events` | Tira riscos silenciosos antes de empilhar |
-| **G-1 Stats canônicas** | matview `athlete_stats` (wins, losses, winrate, attendances, last_active, total_xp); RPC `get_athlete_card`; integrar em UserProfile/SocialProfile/ORKYM | Fundação única para todo resto |
-| **G-2 XP & Níveis** | `athlete_xp_ledger` + trigger projetando de `social_events` com tabela determinística de XP (win=50, checkin=10, etc.); `level = floor(sqrt(total_xp/100))` | Pequeno, deterministico, alto impacto visual |
-| **G-3 Badges & Streaks** | `achievement_definitions` (seed), `athlete_badges`, `athlete_streaks`; trigger projetando; emit `social_events` `badge_earned`/`streak_milestone` | Reusa pipeline social existente |
-| **G-4 Ranking persistente** | matview por modalidade/categoria/cidade; refresh agendado; substitui Ranking.tsx client-side | Resolve dívida + escala |
-| **M-1 Featured listings unificado** | tabela `featured_listings` + checkout via MP + split + `featured_until` | Self-service para empresa/organizer/arena |
-| **M-2 Self-service de ads** | Páginas Company/Organizer para criar `ad_campaigns` direto, com aprovação leve do admin | Liga schema existente ao usuário final |
-| **M-3 Tenant marketplace de destaques** | TenantShell com painel "vender slots no meu tenant" | Multi-tenant revenue |
-| **O-1 ORKYM gamification triggers** | novos triggers: near-level, streak-risk, first-badge, ranking-climb | Loop de retenção |
-| **O-2 ORKYM revenue triggers** | sugerir featured/sponsorship com base em performance do atleta/torneio | Loop de monetização |
+### 6. UI
+`GamificationPanel` já existe e está em `Profile.tsx` / `UserProfile.tsx` (G-2). Apenas:
+- Ler também `weekly_points` da nova view e mostrar uma linha pequena: "Esta semana: +X pontos".
+- Mostrar posição global ("#42 no ranking") quando disponível.
 
----
+Sem página nova. Reutiliza componentes existentes.
 
-## 10. Decisões pendentes (precisam de você antes de codar)
+### 7. Testes (vitest)
+- `xpEvents.idempotency.test.ts` — 2 inserts mesmo source+source_id → 1 linha.
+- `bookingPoints.test.ts` — booking pago dispara +6 e atualiza streak.
+- `rankingViews.test.ts` — atleta com mais XP aparece em ranking_global na pos 1.
+- `streakReset.test.ts` — gap > 1 dia reseta para 1.
 
-1. **Fórmula de XP** deve ser fixa (hardcoded em SQL) ou configurável por tenant?
-2. **Badges**: catálogo global único ou pode ter badges custom por arena/torneio?
-3. **Streak**: por presença em aula, por jogo disputado, ou ambos contam pra mesma streak?
-4. **Featured listings**: empresa precisa de aprovação admin antes de ir ao ar, ou aprovação automática com kill-switch?
-5. **Ranking**: global único ou um por modalidade × categoria × cidade?
+## Detalhes técnicos
 
----
+**Migrations (1 só):**
+- Trigger `trg_award_xp_on_booking_paid` em `bookings`.
+- Views `athlete_points_summary`, `ranking_global`, `ranking_by_arena`, `ranking_by_modality` (security_invoker=on).
+- Trigger `trg_emit_ranking_update` em `athlete_xp` AFTER UPDATE.
+- Trigger `trg_emit_streak_update` em `athlete_streaks` AFTER UPDATE.
 
-## 11. Conclusão
+**Edge function:**
+- `_shared/orkym-handlers.ts` — adicionar action `get_athlete_progress`.
 
-O MoodPlay está **muito mais perto** de ter gamificação e monetização social do que parece — a fundação social, financeira e ORKYM já está madura. O trabalho real não é "construir do zero", é:
+**Frontend:**
+- `XpLevelBar` — adicionar pequeno "+X esta semana" lendo a view.
+- `GamificationPanel` — adicionar linha "Posição: #N" via ranking_global (top 100 only; senão mostra nada).
+- 4 arquivos `.test.tsx` em `src/test/`.
 
-1. **Limpar dívidas silenciosas** (RPCs apontando para tabelas inexistentes, duplicação de pipeline).
-2. **Criar 3 tabelas finas** (XP ledger, badges, streaks) que projetam de `social_events`.
-3. **Padronizar "boost pago"** numa única tabela `featured_listings` reutilizada por todos os atores.
-4. **Conectar ORKYM** aos sinais que já existem mas ninguém escuta (near-level, streak-risk, ranking-climb).
+**O que NÃO fazer (reforço do pedido):**
+- Não criar `player_points` / `player_points_log` / `player_streaks` (duplicação).
+- Não criar tabela de ranking.
+- Não mexer em badges existentes.
+- Não criar moedas/loja/níveis adicionais.
+- Não criar página nova.
 
-Não há necessidade de IA local, nem de novo mundo paralelo. A arquitetura atual sustenta tudo isso.
+## Memória a atualizar
+- `mem/features/gamification-foundations.md` — adicionar seção G-4 (este plano).
+- Core do index: adicionar regra "Pontos = athlete_xp.lifetime_xp; nunca criar player_points".
 
-**Aguardando suas respostas para as 5 decisões pendentes** antes de propor o plano executável da Fase G-0/G-1.
+## Critérios de sucesso
+- Booking pago gera +6 automaticamente.
+- `ranking_global` retorna top atletas ordenados.
+- Feed recebe `ranking_update`/`streak_update` com dedupe.
+- ORKYM lê progresso via `get_athlete_progress`.
+- Profile mostra "esta semana" e posição.
+- Idempotência preservada (sem pontos duplicados).
