@@ -200,6 +200,16 @@ const AdminControlTower = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* FASE 13 — Receita global ORKYM */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-[#2BFF88]" /> Receita conversacional global</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RevenueDashboardPanel scope={{ type: "admin" }} />
+        </CardContent>
+      </Card>
     </div>
   );
 };
