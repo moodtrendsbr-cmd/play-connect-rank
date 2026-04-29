@@ -60,7 +60,7 @@ export function useGrowthDashboard(scope: GrowthScope) {
 
       const { data, error: err } = await q;
       if (err) throw err;
-      setRows((data ?? []) as GrowthDashboardRow[]);
+      setRows(((data ?? []) as unknown) as GrowthDashboardRow[]);
 
       // Budgets visible to current user (RLS scopes them automatically)
       let bq = supabase.from("growth_budgets").select("*").eq("active", true);
