@@ -56,6 +56,32 @@ const TournamentDetail = () => {
     if (id) fetch();
   }, [id, user]);
 
+  // Update document title + og meta tags whenever tournament loads
+  useEffect(() => {
+    if (!tournament) return;
+    const desc = `${tournament.city || ""} - ${tournament.state || ""} · ${tournament.start_date} a ${tournament.end_date} · R$ ${Number(tournament.entry_fee || 0).toFixed(2)}`;
+    const title = `${tournament.name} · MOOD PLAY`;
+    document.title = title;
+
+    const setMeta = (selector: string, attr: "content", value: string) => {
+      let el = document.head.querySelector<HTMLMetaElement>(selector);
+      if (!el) {
+        el = document.createElement("meta");
+        const [, key, name] = selector.match(/^meta\[(name|property)="([^"]+)"\]$/) || [];
+        if (key && name) el.setAttribute(key, name);
+        document.head.appendChild(el);
+      }
+      el.setAttribute(attr, value);
+    };
+    setMeta('meta[name="description"]', "content", desc);
+    setMeta('meta[property="og:title"]', "content", title);
+    setMeta('meta[property="og:description"]', "content", desc);
+    setMeta('meta[property="og:type"]', "content", "website");
+    setMeta('meta[property="og:url"]', "content", `${window.location.origin}/tournaments/${tournament.id}`);
+    setMeta('meta[name="twitter:title"]', "content", title);
+    setMeta('meta[name="twitter:description"]', "content", desc);
+  }, [tournament]);
+
   const handleEnroll = () => {
     if (!user) {
       navigate("/login");
