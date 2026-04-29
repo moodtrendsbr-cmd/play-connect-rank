@@ -1,135 +1,198 @@
 
-## Phase 13 — Conversational Revenue Engine
+# 🔍 Auditoria de Go Live — MoodPlay
 
-Track, attribute and analyze every revenue event that originated from (or was assisted by) an ORKYM/WhatsApp interaction. No new sales logic, no local AI: we sit on top of `financial_transactions`, `bookings`, `enrollments`, `marketplace_orders`, and the existing ORKYM tables (12.5/12.7/12.8/12.9).
+> Diagnóstico apenas. Nada será alterado no código, banco, edge functions ou RLS.
 
-### Data flow
+---
 
-```text
-financial_transactions (paid)
-        │  AFTER UPDATE/INSERT trigger
-        ▼
-attribution resolver  (window lookup vs ORKYM activity)
-   ├── proactive  → outbound trigger msg in last 24h to same user/entity
-   ├── assisted   → multi-turn session touched the entity in last 24h
-   ├── reactive   → user-initiated command in last 24h
-   └── none       → no attribution row (organic)
-        │
-        ▼
-public.orkym_revenue_attribution
-        │
-        ▼
-KPI views + RPCs  →  dashboards (Arena / Tenant / Company / Admin)
-                  →  optimization signals back into orkym_triggers_queue
-```
+## 1. Resumo Executivo
 
-### 1. Database (one migration)
+O MoodPlay é um produto **funcionalmente ambicioso** com forte estrutura por perfis (Athlete, Organizer, Arena, Tenant Admin, Company, Super Admin), shells separados, gating WhatsApp, e camadas de ORKYM (Memory, Proactive Ops, Revenue Attribution).
 
-**`public.orkym_revenue_attribution`**
-- `id uuid pk`
-- `tenant_id uuid not null`, `arena_id uuid null`, `user_id uuid null`, `profile_type text`
-- `trigger_id uuid null` → `orkym_triggers_queue(id)`
-- `command_id uuid null` → `conversational_commands(id)`
-- `message_id uuid null` → `whatsapp_messages(id)`
-- `session_id uuid null` → `conversation_sessions(id)` (12.7)
-- `entity_type text` ∈ `booking | enrollment | marketplace_order | arena_billing_cycle | sponsorship`
-- `entity_id uuid`
-- `financial_transaction_id uuid null` → `financial_transactions(id)`
-- `revenue_amount numeric(10,2) not null`, `currency text default 'BRL'`
-- `attribution_type text` ∈ `proactive | assisted | reactive`
-- `attribution_confidence numeric(3,2)` (1.0 proactive, 0.75 assisted, 0.5 reactive)
-- `conversion_window_seconds int`
-- `metadata jsonb`, `created_at timestamptz default now()`
-- Unique `(entity_type, entity_id)` — one attribution per revenue event.
-- Indexes: `(tenant_id, created_at desc)`, `(arena_id, created_at desc)`, `(trigger_id)`, `(attribution_type, created_at desc)`.
-- RLS: admin / tenant_admin / arena_owner read; service role writes.
+Porém a auditoria revelou **um bloqueador crítico de produção (P0)** e várias inconsistências relevantes (P1) que tornam **inviável o go live em produção pago hoje**, mas viável um **beta fechado, controlado, com Super Admin como único operador real**.
 
-**RPC `orkym_attribute_revenue(_source_type, _source_id)`** (security definer)
-1. Loads `financial_transactions` row → `(tenant, arena, user, amount, currency, paid_at)`. Skip if not `paid`.
-2. Resolves `entity_type/entity_id` from `source_type/source_id` (1:1 mapping; marketplace_order has buyer_user_id; bookings have user_id; enrollments have payer/user).
-3. Window = 24h before `paid_at`.
-4. Look up in priority order:
-   - **proactive**: most recent `orkym_triggers_queue` row for `(user_id, entity_type)` with `status='processed'` + a feedback `message_sent` event in window. Capture trigger_id, command_id, message_id.
-   - **assisted**: open `conversation_sessions` (12.7) for that user that referenced the entity (via `linked_entity_id` on conversational_commands within the session, or session payload).
-   - **reactive**: most recent `conversational_commands` with `direction='inbound'`, `user_id=...`, status `completed`, in window, mentioning the entity (linked_entity_id) or the same domain shortcode.
-5. Insert with conflict-do-nothing on `(entity_type, entity_id)`. Logs only when at least one of trigger/command/session matches.
-6. If matched proactive trigger, also append `orkym_trigger_feedback (event='converted', metadata={amount,currency})`.
+**Status geral: 🔴 BLOCKED para produção aberta · 🟡 PASS WITH FIXES para beta fechado.**
 
-**Triggers**
-- `financial_transactions` AFTER INSERT OR UPDATE OF `status` WHEN `NEW.status='paid'`: call `orkym_attribute_revenue(NEW.source_type, NEW.source_id)`.
-- Backfill statement at end of migration to attribute the last 30 days of paid transactions.
+---
 
-**KPI helpers (SQL functions, all security definer + scope-checked)**
-- `orkym_revenue_kpis_arena(_arena_id, _from, _to)` → `{ revenue_total, revenue_orkym, bookings_total, bookings_via_wa, conversion_rate }`.
-- `orkym_revenue_kpis_tenant(_tenant_id, _from, _to)` + per-arena breakdown.
-- `orkym_revenue_kpis_company(_company_user_id, _from, _to)` for marketplace orders.
-- `orkym_revenue_kpis_admin(_from, _to)` global ROI.
-- `orkym_message_performance(_scope_type, _scope_id, _from, _to)` aggregating `whatsapp_messages` (sent / replied) joined with attribution (converted / revenue / conv_rate).
+## 2. Status Geral por Perfil
 
-**Optimization signals (no new schema)**
-- New SQL function `orkym_generate_optimization_triggers()` invoked by `orkym-cron-tick`:
-  - Finds `(tenant_id, trigger_type)` with ≥30 sends and conversion_rate < 5% in last 14d → enqueue `low_message_performance` trigger (priority=low, dedup=`opt|<scope>|<trigger_type>|<week>`).
-  - Finds best 3-hour window per tenant where conversion_rate is highest → store as `payload.preferred_send_window` on the same enqueue. ORKYM consumes it via `memory_context`.
-  - All it does is enqueue ORKYM-decidable triggers; no auto-actions.
+| Perfil | Status | Bloqueador principal |
+|---|---|---|
+| Super Admin | 🟡 PASS WITH FIXES | Phase 12.9/13 RPCs ausentes no DB |
+| Tenant Admin | 🔴 BLOCKED | Sem dados (0 tenants utilizáveis), rotas-alias quebradas |
+| Arena | 🔴 BLOCKED | 0 arenas no DB, ArenaShell não usado nas rotas reais |
+| Organizer | 🟡 PASS WITH FIXES | 4 rotas distintas renderizam o mesmo componente |
+| Athlete | 🟡 PASS WITH FIXES | 3 rotas distintas renderizam o mesmo componente |
+| Company | 🟡 PASS WITH FIXES | 3 rotas distintas renderizam o mesmo componente |
 
-**Adaptive rate-limit**
-- Update `orkym_proactive_check_eligibility` to read a `roi_multiplier` from the new helper:
-  - `effective_user_cap = base_cap * clamp(roi_multiplier, 0.5, 2.0)`.
-  - `roi_multiplier = case when conversion_rate(tenant,trigger_type, 14d) >= 0.15 then 2.0 when <0.03 then 0.5 else 1.0`.
-- Only multiplies caps; never bypasses opt-in or per-trigger cooldowns.
+---
 
-### 2. Edge functions
+## 3. 🚨 Problemas P0 — Bloqueiam Go Live
 
-No new functions. Edits only:
+### P0-1 — Migrations das Fases 12.9 e 13 NÃO foram aplicadas no banco
+A migration declara 15+ funções (`orkym_attribute_revenue`, `orkym_proactive_check_eligibility`, `orkym_revenue_kpis_arena/tenant/company/admin`, `orkym_message_performance`, `orkym_trigger_enqueue`, `orkym_trigger_claim_batch`, `orkym_trigger_complete`, `orkym_proactive_record_send`, `orkym_generate_periodic_triggers`, `orkym_generate_optimization_triggers`, `orkym_roi_multiplier`, `tg_orkym_attribute_revenue`, `trg_proactive_subscription/attendance/order`).
 
-- **`orkym-cron-tick`**: after the existing 12.9 block, run `orkym_generate_optimization_triggers()` (try/catch).
-- **`wa-send-message`**: include the inserted `message_id` on the response and ensure it is logged in `whatsapp_messages.metadata.trigger_id` (already done) for attribution lookups.
-- **`wa-bridge`**: when a conversion-related inbound is processed and a recent matching outbound trigger exists, run `orkym_attribute_revenue` opportunistically if the inbound led to an immediate paid event (defensive — main path is the financial_transactions trigger).
+**Verificado via `pg_proc`**: nenhuma dessas funções existe no DB. Apenas as funções da Fase 12.5 (`orkym_action_approve`, `orkym_check_quota`, `orkym_get_tenant_tier`, etc.) estão presentes. **Zero triggers de attribution/proactive registrados em `information_schema.triggers`.**
 
-(All existing functions keep current `verify_jwt` settings — no `config.toml` changes needed.)
+Consequências:
+- `RevenueDashboardPanel` (usado em Arena/Tenant/Company/Admin Dashboards) chamará RPCs inexistentes → erro RPC 404 ou retorno vazio.
+- `useOrkymTriggers` lerá tabela vazia.
+- `orkym-proactive-process` falhará ao chamar `orkym_trigger_claim_batch`.
+- `orkym-cron-tick` falhará ao chamar `orkym_generate_periodic_triggers` e `orkym_generate_optimization_triggers`.
+- `wa-bridge` feedback loop (`orkym_trigger_feedback`) sem trigger source → tabela ficará vazia.
+- Edge function `wa-send-message` não tem fallback se `ORKYM_API_BASE_URL` / `ORKYM_SERVICE_TOKEN` / `ORKYM_HMAC_SECRET` não estão configurados (verificar Secrets).
 
-### 3. Frontend
+### P0-2 — Banco em estado vazio para validação de fluxos
+- `arenas`: **0 registros**
+- `whatsapp_instances`: **0**
+- `wa_identities`: **0**
+- `financial_transactions`: **0**
+- `orkym_triggers_queue`: **0**
+- `conversational_memory`: **0**
 
-New shared components in `src/components/revenue/`:
-- `RevenueCard.tsx` — total revenue / ORKYM revenue / share %, sparkline placeholder.
-- `ConversionRateCard.tsx` — messages sent vs converted, % rate, delta vs previous period.
-- `MessagePerformanceCard.tsx` — table per `trigger_type`: sent, delivered, responded, converted, revenue, conv rate.
+Sem arena, ArenaShell redireciona para `/feed`. Sem WA instances, todo gate WhatsApp dos shells (Tenant/Arena/Organizer/Company) **bloqueia 100% dos usuários não-admin** indefinidamente em `/connect-whatsapp`. Não dá para vender beta sem ao menos 1 cliente seedado.
 
-New hook `src/hooks/useRevenueKpis.ts` calling the scope-appropriate RPC.
+### P0-3 — `ArenaShell` está implementado mas NÃO está em uso
+`src/App.tsx` ainda usa o legado `ArenaLayout` em `/arena/dashboard/*`. O `ArenaShell` (com gate WhatsApp + sidebar nova) foi criado mas só é importado, nunca rotado. Resultado: Phase 13 connection gate **não bloqueia arenas** — qualquer arena owner entra direto no dashboard sem WhatsApp conectado, divergindo da política declarada na Core memory.
 
-Mounted in:
-- `src/pages/arena-dashboard/...` main dashboard (under existing ORKYM section).
-- `src/pages/tenant/TenantDashboard.tsx` (network view, with per-arena breakdown table).
-- `src/pages/company/CompanyDashboard.tsx` (marketplace conversion only).
-- `src/pages/admin/AdminControlTower.tsx` (global ROI).
+---
 
-Reuse existing card/typography styling. Sentence case, Bebas headings, `#2BFF88` for highlight numbers per project style.
+## 4. ⚠️ Problemas P1 — Corrigir Antes de Vender
 
-### 4. Memory & rules
+### P1-1 — Rotas-alias renderizando o MESMO componente (UX quebrada)
+- **Organizer**: `/organizer/dashboard`, `/eventos`, `/inscricoes`, `/jogos`, `/performance` → todas renderizam `<OrganizerDashboard />`. Sidebar promete páginas distintas; usuário vai clicar e ver a mesma tela.
+- **Athlete**: `/athlete/dashboard`, `/meu-dia`, `/jogos`, `/historico` → todas renderizam `<AthleteDashboard />`.
+- **Company**: `/company/dashboard`, `/campanhas`, `/performance`, `/visibilidade` → todas renderizam `<CompanyDashboard />`.
+- **Tenant**: `/tenant/empresas` renderiza `<OrganizerArenas />` (página de arenas, não empresas). `/tenant/branding` renderiza `<OrganizerSettings />` (settings, não branding). `/tenant/overview` idem.
 
-- Update `mem/index.md` Core: add line "Phase 13 revenue: `orkym_revenue_attribution` (proactive|assisted|reactive). Triggered by `financial_transactions` paid. Adaptive caps via ROI; never bypass opt-in."
-- New `mem/features/conversational-revenue.md` documenting attribution rules, window, KPIs, optimization-trigger names, and the strict no-AI / no-finance-mutation boundary.
+Itens da sidebar têm rota válida mas conteúdo inexistente para a feature anunciada.
 
-### 5. Strict boundaries (do NOT)
+### P1-2 — Atalho de Check-in do Organizer aponta para hash inexistente
+`OrganizerSidebar`: `/organizer/dashboard/jogos#checkin`. Não há `id="checkin"` em `OrganizerDashboard.tsx` — `scroll-mt-20` espera anchor que provavelmente não existe.
 
-- No mutation of `financial_transactions`, `bookings`, `enrollments`, `marketplace_orders` (read-only).
-- No local AI/LLM. Optimization signals are pure SQL aggregates.
-- No new sales/checkout flow. Attribution observes existing payment paths.
-- No edits to `auth/storage/realtime/supabase_functions/vault`.
-- No raw SQL execution from edge functions.
+### P1-3 — Gate WhatsApp obrigatório com 0 instâncias = lock-out total
+TenantShell, ArenaShell (não-rotado), OrganizerShell, CompanyShell todos redirecionam para `/connect-whatsapp` se não-admin e não-conectado. Como `whatsapp_instances` está vazio e a integração ORKYM depende de secrets externos não verificáveis aqui, **nenhum usuário comum consegue usar o app**. Apenas Super Admin (bypass) funciona.
 
-### 6. Acceptance
+### P1-4 — `ConnectWhatsApp` dispatcher pode redirecionar para `/` em loop
+Se um usuário autenticado **sem** tenant membership, sem arena, sem company e sem role `organizer` cair em `/connect-whatsapp`, o dispatcher manda para `/`. Em `/` (Index), se ele for redirecionado para shell, volta a cair em `/connect-whatsapp`. Loop sutil para perfil "atleta puro" — mas atleta não tem gate, então ok. Risco real: usuário que perdeu vínculo (ex.: arena deletada).
 
-- A booking paid 2h after a `subscription_due` outbound trigger to the same user creates an `orkym_revenue_attribution` row with `attribution_type='proactive'` + a `converted` feedback event with the amount.
-- A marketplace order paid after the buyer sent a WhatsApp command (no proactive trigger) creates `attribution_type='reactive'`.
-- A tenant dashboard shows `revenue_orkym / revenue_total` and per-arena ranking.
-- Conversion rate < 5% on `low_enrollment` triggers for 14d → a `low_message_performance` trigger appears in the queue for ORKYM to react to.
-- Caps adjust: a tenant with 18% conversion on `subscription_due` sends up to 2× the base daily user cap; a tenant with 1% conversion sends 0.5×.
-- Opt-out users still receive zero proactive messages regardless of ROI.
+### P1-5 — Hardcodes & mocks visíveis no Admin
+- `AdminWhatsAppInstances.tsx`: provider default = `"mock"`, opção `Mock (dev)` exposta na UI de produção.
+- `AdminSplitRules.tsx`: texto literal "Fallback hardcoded (platform=10%)" — denuncia regra fixa, mas se a regra for de fato hard-coded fora do DB (a auditar em código de split), é P1 financeiro.
 
-### Deliverables checklist
+### P1-6 — `RevenueDashboardPanel` em 4 dashboards quebrados
+Como as RPCs `orkym_revenue_kpis_*` não existem (P0-1), os 4 dashboards principais mostrarão erro ou cards zerados sem contexto. Visual fica "vazio sem motivo claro" em produção.
 
-- [ ] Migration: `orkym_revenue_attribution`, `orkym_attribute_revenue`, financial_transactions trigger, KPI functions, `orkym_generate_optimization_triggers`, eligibility update, 30d backfill.
-- [ ] Edits: `orkym-cron-tick`, `wa-bridge` (defensive call), `wa-send-message` (metadata pass-through).
-- [ ] Frontend: `RevenueCard`, `ConversionRateCard`, `MessagePerformanceCard`, `useRevenueKpis`, dashboard mounts (Arena/Tenant/Company/Admin).
-- [ ] Memory: `mem/index.md` core line + `mem/features/conversational-revenue.md`.
+### P1-7 — `TenantContext` chama `set_current_tenant` GUC sem garantia de uso
+Hook seta GUC por sessão para RLS-aware, mas RLS de tabelas multi-tenant atuais usa `is_tenant_admin(tenant_id, auth.uid())` direto, não `current_setting`. O GUC vira no-op e mascara intenção; risco de manutenção.
+
+---
+
+## 5. 🟢 P2 — Pode Corrigir Depois
+
+- **P2-1** — `AdminLayout` (legado) coexiste com `AdminShell` (novo); `AdminShell` é importado mas nunca rotado. Consolidar.
+- **P2-2** — `OrganizerLayout` (legado em `/organizer`) coexiste com `OrganizerShell` (`/organizer/dashboard`). Mantém duas IAs simultâneas.
+- **P2-3** — Sidebar do Tenant tem entrada "Eventos" → `/tenant/dashboard#operacoes` (anchor; aceitável, mas frágil).
+- **P2-4** — `AthleteShell` sem header com nome do atleta (sempre "MoodPlay").
+- **P2-5** — `ArenaShell` header sempre mostra "MoodPlay" em vez do nome da arena (vs `ArenaLayout` legado, que mostra `arena.name`).
+- **P2-6** — `Dashboard.tsx` (rota `/dashboard`) ainda existe sem shell e sem guard explícito; fallback histórico.
+- **P2-7** — `AdminDashboard` mistura "Receita Canônica" + "Receita Mood (Comissões)" + "Receita Marketplace" — três métricas de receita sem hierarquia clara.
+
+---
+
+## 6. 🔵 P3 — Melhorias Futuras
+
+- Consolidar 6 sidebars em um sistema declarativo único.
+- Mostrar empty states ricos quando tabelas estão vazias (hoje só renderiza zero/`—`).
+- `TenantWhatsAppRouting` carece de explicação de impacto antes de criar binding.
+- Dark mode é o único modo suportado (Core memory) — confirmar que nenhum componente shadcn assumiu light tokens.
+
+---
+
+## 7. Auditoria por Eixo
+
+### 7.1 Rotas (App.tsx — 334 linhas, 6 árvores de routing paralelas)
+- **Quebradas/órfãs**: nenhuma rota 404 dura, mas várias **renderizam o componente errado** (ver P1-1).
+- **Aliases legados ainda ativos**: `/dashboard`, `/admin` (AdminLayout), `/organizer/*` (OrganizerLayout), `/arena/dashboard/*` (ArenaLayout), `/sponsor/*`. **Nenhum redirect para os novos shells** — coexistência permanente.
+- **Conexão WhatsApp**: rotas fora de shells ✅ (correto p/ evitar loop).
+- **Phase 11.1 promete deprecação progressiva via redirects** — não foi feita.
+
+### 7.2 Permissões / RLS
+- **Banco saudável**: 0 tabelas com RLS habilitada **e** 0 policies. Todas têm policy.
+- Helpers `is_admin`, `is_tenant_admin`, `is_arena_owner`, `is_company_owner` existem ✅.
+- Policies de Phase 12.8/12.9/13 usam essas helpers corretamente, isolando por escopo. ✅
+- **Risco**: como tabelas Phase 12.9/13 estão vazias e os triggers de attribution não foram criados, **ninguém valida o fluxo end-to-end de RLS em produção**.
+
+### 7.3 Multi-Tenant
+- Único tenant existente: `MoodPlay Default` (`00000000-...0001`).
+- `resolve_tenant_by_host` retorna `null` para o domínio do preview ✅ (esperado), e cai no slug `moodplay`.
+- **0 arenas**, **3 companies**, **7 user_roles** — base mínima para Super Admin auditar, **insuficiente** para validar isolamento entre tenants reais.
+
+### 7.4 WhatsApp / ORKYM
+- **Tabelas de identidade vazias.**
+- `wa-send-message` depende de 4 envs: `ORKYM_API_BASE_URL`, `ORKYM_SERVICE_TOKEN`, `ORKYM_HMAC_SECRET`, `ORKYM_INTERNAL_TOKEN`. Se alguma faltar, function não envia (e nem loga erro útil).
+- `orkym-cron-tick` referencia `orkym_generate_periodic_triggers` que **não existe** no DB → cron falha silenciosamente desde 12.9.
+- Memory layer (`conversational_memory`) presente, vazio.
+
+### 7.5 Financeiro
+- Tabelas presentes ✅.
+- `financial_transactions` vazia → trigger de attribution nunca disparou (e mesmo se disparasse, não existe no DB).
+- `RevenueDashboardPanel` mostra zeros ou erro.
+- `AdminFinances`, `AdminAdjustments`, `AdminSplitRules` lêem de tabelas reais — funcional mas sem dados de teste.
+
+### 7.6 UX / UI
+- Dashboards principais bem estruturados (helpers `SectionHeader`, `KpiCard`, `ShortcutLink`) ✅.
+- Padrão visual consistente: dark theme, accent verde, Bebas Neue + Inter.
+- **Problema sistêmico**: cards de receita/triggers/memory sem dados → sensação de produto vazio, sem empty states explicativos.
+- Mobile: 1013×549 atual está em desktop; sidebars usam `collapsible="icon"` (ok).
+
+### 7.7 Dados Mockados
+- Apenas **2 ocorrências reais**:
+  1. `AdminWhatsAppInstances` — opção `"mock"` exposta como provider default (P1).
+  2. `AdminSplitRules` — texto "Fallback hardcoded (platform=10%)" (auditar lógica de split em código).
+- Nenhum lorem/dummy/TODO/FIXME no front. ✅
+
+### 7.8 Performance
+- Dashboards usam `Promise.all` para queries paralelas ✅.
+- `useEffect` sem cleanup em vários dashboards — risco de setState após unmount.
+- TenantDashboard faz ~10 queries ao montar; aceitável.
+- Nenhum realtime ativo encontrado nos dashboards (correto).
+
+### 7.9 Erros Técnicos
+- TypeScript types regenerados após cada migration ✅.
+- 1 console error na sessão atual: `Unknown message type: RESET_BLANK_CHECK` — externa (lovable.js), ignorar.
+- Edge function `orkym-cron-tick` última atividade há ~50 min, log diz `shutdown` + `booted` = idle/timer.
+
+---
+
+## 8. Recomendação Final
+
+### ❌ NÃO ir para produção aberta hoje
+- Migrations P0 ausentes quebram dashboards de receita em **todos os 4 perfis pagantes**.
+- Gate WhatsApp obrigatório + zero instâncias = produto inutilizável fora do Super Admin.
+
+### ⚠️ Beta fechado é viável SE (e somente se):
+1. Re-aplicar migrations Phase 12.9 e 13 (validar via `\df orkym_*` e `pg_trigger`).
+2. Configurar ORKYM secrets (`ORKYM_API_BASE_URL`, `ORKYM_SERVICE_TOKEN`, `ORKYM_HMAC_SECRET`, `ORKYM_INTERNAL_TOKEN`).
+3. Seedar ao menos 1 arena + 1 whatsapp_instance + 1 wa_identity ligada ao primeiro cliente piloto.
+4. Trocar `/arena/dashboard` para usar `ArenaShell` (ou desabilitar gate WA na rota legada).
+5. Resolver as 4 famílias de rotas-alias renderizando o mesmo componente (ou marcar como "em breve" honestamente).
+6. Esconder opção `provider=mock` no Admin em produção.
+
+### 🟢 Pode auditar / vender showcase ao Super Admin agora
+- AdminControlTower, AdminDashboard, AdminFinances, AdminUsers, AdminTournaments funcionam.
+- Layouts de Athlete/Organizer/Tenant/Company são navegáveis (com bypass admin).
+
+---
+
+## 9. Próximos Passos Sugeridos (sem implementar ainda)
+
+1. **Imediato (P0)** — Diagnosticar por que migrations 20260429014856 / 20260429021449 / 20260429021541 não criaram funções no DB. Confirmar via Lovable Cloud history se rodaram com erro.
+2. **Antes do beta (P1)** — Corrigir aliases de rota e gate WhatsApp em ambiente sem instâncias.
+3. **Antes de vender (P1+P2)** — Consolidar layouts legados, esconder opções "mock", popular empty states.
+4. **Pós-beta (P3)** — Refator de sidebars, redirects de deprecação, hierarquia financeira clara.
+
+---
+
+**Conclusão honesta:** o produto tem **arquitetura sofisticada** (memory, proactive ops, revenue attribution), mas **as últimas 3 fases não chegaram ao banco**. Visualmente está pronto; operacionalmente, metade da cadeia ORKYM está desconectada. Fix de migrations + seed mínimo + ajuste de aliases destravam beta fechado em horas.
