@@ -1,113 +1,158 @@
-# Social Monetization Engine
+## Autonomous Growth Engine (Phase G)
 
-Reuses 100% of existing infrastructure. No parallel system, no new AI. Five monetization types unified into ONE feed ranking pipeline.
+Costura fina sobre Phases 8/9/10/12.9/13. Zero IA local. Zero tabelas paralelas. ORKYM decide, MoodPlay detecta/executa/limita/registra.
 
-## What's already in place (do NOT rebuild)
-- `ad_campaigns` (kind, target_type, target_id, priority, status, starts_at/ends_at) + `ad_slots` (codes: `feed.inline`, `home.hero`, `marketplace.featured`, `tournaments.list_top`, `arena.banner`) + `ad_placements` + `ad_events` + view `ads_public` + `AdSlot.tsx`.
-- `featured_listings` + `featured_pricing` + `featured_active_v` + auto-approval trigger on `financial_transactions.status='paid'` + `FeaturedBadge` + `useFeaturedSet`.
-- `tournament_sponsorships` (tournament_id, company_id, plan_id, logo_url, message, link, views/clicks_count, payment_id, status).
-- `financial_transactions` + `transaction_splits` + `orkym_revenue_attribution` (revenue auto-attributed by paid trigger).
-- `social_feed` + `social_feed_public_v2` + `SocialActivityFeed`.
-- `Feed.tsx` already injects `<AdSlot code="feed.inline" />` and sponsored posts every 5 organic posts.
+### Mapeamento "spec → infra existente"
 
-## Gaps this plan closes
+| Spec | Já existe | Adicionar agora |
+|---|---|---|
+| Modos suggest/approve/auto | `autonomy_policies` + `autonomy_resolve_policy` | reusar — só estender allowlist |
+| Guardrails / kill-switch / cooldown / max_amount / allowed_hours | `autonomy_check_guardrails` | só estender condições com `max_daily_budget` |
+| Tier / quota por plano | `orkym_get_tenant_tier` + `orkym_check_quota` | reusar |
+| Detecção de oportunidades | `orkym_generate_periodic_triggers`, `orkym_generate_optimization_triggers` | + 4 detectores novos |
+| ORKYM decide | `orkym-invoke` + `orkym-proactive-process` (proactive/decide) | + ação `growth/decide` |
+| Execução | `orkym-execute-action` + `moodplay-execute-action` | + 6 novos action_types na allowlist |
+| Outbound WA | `wa-send-message` (eligibility+cooldown) | reusar |
+| Atribuição de receita / ROI / cap adaptativo | `orkym_revenue_attribution` + `orkym_roi_multiplier` | reusar |
+| Feed monetização | `ad_campaigns` + `feed_unified_v` + `purchase_boost` | reusar |
+| Budget control | — | **novo: `growth_budgets` + `growth_check_budget`** |
+| Dashboard | `RevenueDashboardPanel`, `OrkymActionsCard`, `ProactiveTriggersPanel` | + `GrowthDashboardPanel` agregando |
 
-### M-1 — Unify campaign kinds (DB)
-Single migration extending `ad_campaigns.kind` allowed values to: `tournament_boost`, `company_boost`, `product_boost`, `feed_ads`, `tournament_sponsorship`. Use existing `target_type`/`target_id` (no new columns):
-- tournament_boost → target_type='tournament', target_id=tournament_id
-- company_boost   → target_type='company',    target_id=company_id
-- product_boost   → target_type='product',    target_id=product_id
-- feed_ads        → target_type='slot',       target_id=null (uses ad_placements)
-- tournament_sponsorship → kept on `tournament_sponsorships` table (already exists)
+### 1. Migration `phase_g_growth_engine.sql`
 
-Add `boost_level int default 1` (1–3) to `ad_campaigns` (only new column needed). Validation trigger (not CHECK) ensures kind+target_type consistency.
+**Allowlist Phase 8 estendida** (em `autonomy_action_risk` + ingest):
+- `tournament_boost` (high → bloqueado em auto por padrão; arena_owner pode aprovar)
+- `send_proactive_message` (low — já passa por eligibility)
+- `create_campaign` (high)
+- `recommend_product` (low)
+- `reactivation_message` (low)
+- `fill_idle_slots` (medium)
+- `upsell_plan` (medium)
 
-### M-2 — Unified Feed Ranking View
-Create `feed_unified_v` (security_invoker) that UNIONs:
-1. Organic posts from `posts` (type='organic', priority_score = recency_decay)
-2. Social events from `social_feed_public_v2` (already public)
-3. Sponsored posts (existing `sponsored_posts`, type='sponsored', score += boost_level*10)
-4. Boosted tournaments via `ad_campaigns` where kind='tournament_boost' and active (type='boost', score += boost_level*15)
-5. Boosted companies/products (same shape)
-
-Columns: `item_type, item_id, occurred_at, type ('organic'|'sponsored'|'boost'), campaign_id, company_id, target_type, target_id, priority_score, payload`.
-
-Anti-spam enforced client-side via injection rule: **max 1 sponsored every 5–7 organic items** (already implemented in `Feed.tsx` modulo 5 — keep it, just extend source).
-
-### M-3 — Feed integration (Frontend)
-Update `Feed.tsx`:
-- Replace direct `sponsored_posts` query with single fetch from `feed_unified_v` for promoted items, ordered by `priority_score`.
-- Keep organic post fetch as-is.
-- Reuse existing 1-every-5 injection rule; pull next promoted item from queue (rotates: tournament boost → product → company → sponsored post → ad slot).
-- `<AdSlot code="feed.inline" />` stays for fallback.
-- Render variants:
-  - tournament_boost → new `BoostedTournamentCard.tsx`
-  - product_boost → new `BoostedProductCard.tsx`
-  - company_boost → reuse `SponsoredPostCard.tsx`
-  - feed_ads → existing `AdSlot`
-  - tournament_sponsorship → badge "Patrocinado por X" on existing tournament card variant
-
-### M-4 — Owner promotion flows (Frontend)
-Add "Promover" buttons (reusing `PromoteFeaturedDialog` pattern, but for ad_campaigns):
-- New `PromoteCampaignDialog.tsx` — selects boost_level (1/2/3), duration (3/7/15 days), shows price from new `boost_pricing` table (3 rows seed: lvl1=R$19/3d, lvl2=R$49/7d, lvl3=R$129/15d). Calls `purchase_boost(_kind, _target_type, _target_id, _boost_level, _duration_days)` RPC.
-- Wire into:
-  - Organizer dashboard (`OrganizerDashboard.tsx`) → tournament_boost
-  - MyCompany products list → product_boost (already has Promover for featured; add second action "Boost Feed")
-  - MyCompany header → company_boost
-  - Sponsor flow already covered by existing `SponsorTournamentDialog` (no change)
-
-### M-5 — Auto-activation + revenue attribution (DB)
-Extend the existing `trg_featured_activate_on_paid` pattern with a sibling trigger `trg_boost_activate_on_paid`:
-- When `financial_transactions.status='paid' AND source_type='boost'`, find the pending `ad_campaigns` row (created via `purchase_boost`) and flip status='active', set starts_at=now(), ends_at=now()+duration.
-- `orkym_revenue_attribution` already auto-fills via existing trigger when paid (no change).
-- `transaction_splits` already wired (no change).
-
-### M-6 — Dashboards (light reuse, no new components where possible)
-Reuse `useRevenueKpis`:
-- Organizer: extend `orkym_revenue_kpis_tenant` to expose `boost_views`, `boost_clicks`, `enrollments_from_boost` (computed from `ad_events` joined to enrollments via attribution_window). New SQL view `boost_performance_v` per campaign.
-- Company: same view filtered by company_id (impressions/clicks/conversions already in `ad_events`).
-- Tenant/Admin: aggregate from `boost_performance_v`. Add tile to `RevenueDashboardPanel`.
-
-### M-7 — ORKYM suggestions (no new AI)
-Add 2 deterministic triggers to `orkym_triggers_queue` populated by existing `orkym-cron-tick`:
-- `tournament_low_enrollment` → fires when tournament has <30% capacity and starts in <7d → ORKYM suggests boost.
-- `product_low_views` → fires when product has <10 views in 7d and company plan supports ads → ORKYM suggests boost.
-ORKYM remains the decision-maker; we only enqueue + provide `memory_context`. No local AI.
-
-### M-8 — Anti-spam guardrails (DB function)
-`feed_should_inject_promo(_user_id, _last_n_items)` returns boolean — checks user-level ratio in last 50 items shown (logged via `ad_events` viewer_id). Caps at 20% sponsored. Called by `Feed.tsx` before each injection.
-
-## Files to touch
-
-```text
-supabase/migrations/<new>.sql        # boost_level col, kind expansion, boost_pricing,
-                                     # purchase_boost RPC, activation trigger,
-                                     # feed_unified_v, boost_performance_v,
-                                     # feed_should_inject_promo()
-src/components/featured/PromoteCampaignDialog.tsx   # NEW
-src/components/feed/BoostedTournamentCard.tsx       # NEW
-src/components/feed/BoostedProductCard.tsx          # NEW
-src/hooks/useFeedUnified.ts                         # NEW (queries feed_unified_v)
-src/pages/Feed.tsx                                  # use unified hook + injection rule
-src/pages/MyCompany.tsx                             # add "Boost Feed" action
-src/pages/organizer/OrganizerDashboard.tsx          # add Promover button per tournament
-src/components/revenue/RevenueDashboardPanel.tsx    # add Boost ROI tile
-supabase/functions/orkym-cron-tick/index.ts         # enqueue boost suggestion triggers
-mem/features/social-monetization.md                 # NEW memory file
-mem/index.md                                        # register new memory
+**Tabela `growth_budgets`** (única tabela nova):
 ```
+scope_type ('global'|'tenant'|'arena'|'company'|'campaign')
+scope_id uuid null
+period ('daily'|'weekly'|'monthly')
+budget_brl numeric, spent_brl numeric default 0
+boost_count_limit int null, boost_count_used int default 0
+period_started_at timestamptz, active bool
+UNIQUE(scope_type, scope_id, period)
+```
+RLS: admin tudo; tenant_admin tenant/arena/company do seu tenant; arena_owner sua arena; company owner sua company. Service role bypass.
 
-## What is explicitly NOT done (per spec)
-- No bidding, no auction, no advanced targeting, no local AI/recommendation, no heavy analytics, no banners.
+**RPC `growth_check_budget(_scope_type, _scope_id, _amount_brl)`** SECURITY DEFINER:
+- soma `spent_brl` do período corrente vs `budget_brl`
+- aplica também budget pai (arena → tenant → global)
+- retorna `{allowed, remaining_brl, blocked_by}`
+- chamado pelo guardrail `autonomy_check_guardrails` quando action_type ∈ {tournament_boost, create_campaign, fill_idle_slots, upsell_plan} antes de permitir auto.
 
-## Tests (Vitest + manual)
-1. Organizer purchases tournament_boost → financial_transactions paid → ad_campaigns activated → tournament appears in feed_unified_v with elevated score.
-2. Company creates product_boost → product surfaces in Feed at correct interval (≤1 every 5).
-3. Anti-spam: with 100 items, sponsored ratio ≤ 20%.
-4. ad_events impression/click logged via existing `ad_record_event` RPC.
-5. transaction_splits row created on paid boost.
-6. orkym_revenue_attribution row created with attribution_type='reactive' (or 'proactive' if from ORKYM trigger).
-7. ORKYM cron enqueues `tournament_low_enrollment` for an under-filled tournament.
+**RPC `growth_record_spend(_scope_type,_scope_id,_amount_brl,_campaign_id)`** SECURITY DEFINER:
+- chamado pelo `trg_boost_activate_on_paid` para incrementar `spent_brl`/`boost_count_used`.
 
-## Memory updates
-Create `mem/features/social-monetization.md` documenting unified ad_campaigns kinds, feed_unified_v contract, anti-spam cap (20%), boost_pricing tiers, and the rule "ORKYM decides — we only enqueue triggers." Add Core line to index: `Monetization unified via ad_campaigns kinds; feed cap 20% sponsored; activation via paid trigger.`
+**Detectores novos em `orkym_generate_periodic_triggers`** (já roda no `orkym-cron-tick`):
+- `tournament_low_enrollment` — torneios públicos start_date 3-7d, enrollment < 30% dos slots → enqueue (priority=high, dedup=`growth:low_enroll:<tournament_id>:<day>`)
+- `idle_court_slot` — `arena_court_slots` sem booking nas próximas 48h em horário de pico (18-22h) → enqueue (medium)
+- `inactive_athlete` — atleta sem booking/enrollment em 30d com opt-in → enqueue (low)
+- `near_rank_up` — `athlete_xp` a < 100 XP do próximo nível → enqueue (low)
+- `top_converting_product` — já existe via `marketplace_orders` trigger → reusar
+- `low_campaign_conversion` — já existe via `orkym_generate_optimization_triggers` → reusar
+
+**View `v_growth_dashboard`** (security_invoker):
+agrega por tenant/arena/company:
+- ações sugeridas/aprovadas/auto-executadas (last 30d)
+- ações bloqueadas por guardrail (com source: budget|kill_switch|tier|cooldown|policy)
+- receita atribuída (`orkym_revenue_attribution` filtrada)
+- ROI por action_type (revenue / spent_brl)
+- top trigger types por receita
+
+### 2. Edge functions
+
+**Estender `orkym-proactive-process`**: além de `proactive/decide`, claim batch também roteia triggers de growth para `orkym-invoke` action `growth/decide`. ORKYM responde:
+```
+{
+  action_type: "tournament_boost"|"send_proactive_message"|...,
+  confidence: 0..1,
+  expected_impact_brl: number,
+  recommended: bool,
+  payload: {...},
+  proposal_text?: string  // se for proactive_message
+}
+```
+Se `recommended=false` → marca trigger `skipped`.
+Se `recommended=true` → injeta em `orkym_ingest_actions` (Phase 8 pipeline). Policy resolver + tier + guardrail + budget decidem `suggest|approve|auto`. Se cair em `auto` e action for `send_proactive_message` → chama `wa-send-message` direto (já com eligibility/cooldown).
+
+**Sem nova edge function** — reusa `orkym-invoke`, `orkym-execute-action`, `moodplay-execute-action`, `wa-send-message`, `orkym-cron-tick`, `orkym-proactive-process`.
+
+**Novos handlers em `_shared/orkym-handlers.ts`** para os 6 action_types novos:
+- `tournament_boost` → chama `purchase_boost` RPC com `_kind='tournament_boost'` + cria `financial_transactions` pendente (precisa pagamento — só executa se policy=`approve` com aprovador humano OU se houver budget pré-aprovado via `growth_budgets`)
+- `create_campaign` → INSERT `ad_campaigns` (status='pending') — humano aprova
+- `recommend_product` / `reactivation_message` → roteia para `wa-send-message` (passa por eligibility)
+- `fill_idle_slots` → cria `ad_campaigns kind='company_boost'` (low) ou envia mensagem para alunos do bairro (passa por eligibility)
+- `upsell_plan` → cria `arena_operational_tasks` para o owner (manual) OU mensagem (auto se eligibility passar)
+
+### 3. Frontend
+
+**Novo `src/components/growth/GrowthDashboardPanel.tsx`** consumindo `v_growth_dashboard`:
+- 4 KPI cards: Sugeridas / Auto-executadas / Bloqueadas / Receita atribuída
+- Tabela de últimas 20 ações com badge de policy source (reusa `PolicyDecisionBadge`)
+- Gráfico ROI por action_type (recharts) — semanal últimos 30d
+- Painel de budgets: barra de gasto vs limite por escopo
+
+**Novo `src/components/growth/BudgetEditor.tsx`** (admin/tenant/arena/company):
+- CRUD de `growth_budgets` por escopo permitido pelo RLS
+- Form: período, budget_brl, boost_count_limit, active
+
+**Mounts**:
+- `src/pages/admin/AdminControlTower.tsx` → adiciona aba "Growth"
+- `src/pages/arena-dashboard/ArenaDashboard.tsx` → bloco GrowthDashboardPanel scope=arena
+- `src/pages/tenant/TenantDashboard.tsx` → scope=tenant
+- `src/pages/company/CompanyDashboard.tsx` → scope=company
+- `src/pages/admin/AdminMonetization.tsx` → BudgetEditor global
+- Hook `src/hooks/useGrowthDashboard.ts` (scope-aware, reusa padrão de `useRevenueKpis`).
+
+### 4. Memória
+Criar `mem/features/autonomous-growth.md` documentando: detectores, action_types novos, budget guardrail, fluxo `growth/decide`, dashboards, hard limits.
+Atualizar `mem://index.md` com entrada `[Autonomous Growth Engine](mem://features/autonomous-growth)` e linha de Core: "Phase G growth: detectors→ORKYM decide→Phase 8 ingest. Budget via `growth_budgets`+`growth_check_budget` no guardrail. Nunca criar IA local nem bypass de eligibility/cooldown/budget."
+
+### 5. Testes obrigatórios (extension dos integration_test.ts existentes)
+
+1. trigger `tournament_low_enrollment` enfileira corretamente (SQL)
+2. ORKYM `recommended=false` marca skipped (mock orkym-invoke)
+3. ação `tournament_boost` em auto sem budget → guardrail rebaixa para approve com `policy_source='budget_block'`
+4. ação `send_proactive_message` em auto sem opt-in → eligibility bloqueia
+5. ação executada com `financial_transactions paid` → `orkym_attribute_revenue` registra `attribution_type='proactive'` e `growth_record_spend` incrementa
+6. kill_switch ativo → todas ações de growth caem para suggest
+7. tier free → `create_campaign`/`tournament_boost` em auto rebaixados (tier_no_auto)
+
+### Hard rules (não negociar)
+
+- Eligibility, cooldown, opt-in **nunca** são bypassados — nem por enterprise tier.
+- `tournament_boost`/`create_campaign`/`upsell_plan` em `auto` SEMPRE checam `growth_check_budget` antes; bloqueio rebaixa para `approve`.
+- Toda ação financeira (`tournament_boost`) só executa após `financial_transactions.status='paid'` (já é o trigger atual `trg_boost_activate_on_paid`).
+- Zero IA local: `orkym-invoke action='growth/decide'` é a ÚNICA origem da decisão.
+- Outbound WA SOMENTE via `wa-send-message`.
+- Sem novas edge functions; sem novas tabelas além de `growth_budgets`.
+
+### Arquivos
+
+**Novos**
+- `supabase/migrations/<ts>_phase_g_growth_engine.sql`
+- `src/components/growth/GrowthDashboardPanel.tsx`
+- `src/components/growth/BudgetEditor.tsx`
+- `src/hooks/useGrowthDashboard.ts`
+- `mem/features/autonomous-growth.md`
+
+**Editados**
+- `supabase/functions/_shared/orkym-handlers.ts` (6 handlers novos)
+- `supabase/functions/orkym-proactive-process/index.ts` (rota growth/decide)
+- `supabase/functions/orkym-cron-tick/index.ts` (chama detectores novos via RPC já existente)
+- `src/pages/admin/AdminControlTower.tsx`, `AdminMonetization.tsx`
+- `src/pages/arena-dashboard/ArenaDashboard.tsx`
+- `src/pages/tenant/TenantDashboard.tsx`
+- `src/pages/company/CompanyDashboard.tsx`
+- `src/lib/orkym.ts` (tipos `OrkymActionType` extendidos)
+- `src/integrations/supabase/types.ts` (auto-gerado)
+- `mem://index.md`
+
+Aprova para implementar?

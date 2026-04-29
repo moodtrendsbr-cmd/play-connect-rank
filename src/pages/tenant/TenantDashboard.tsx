@@ -21,6 +21,7 @@ import { CommandExamplesCard } from "@/components/conversational/CommandExamples
 import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
+import { GrowthDashboardPanel } from "@/components/growth/GrowthDashboardPanel";
 import { DollarSign as RevDollar } from "lucide-react";
 
 // ─────────────── helpers locais (não exportados) ───────────────
@@ -561,6 +562,7 @@ const TenantDashboard = () => {
         </div>
         <p className="text-xs text-muted-foreground">Atribuição de receita gerada pelo WhatsApp · 30 dias</p>
         {tenant?.id && <RevenueDashboardPanel scope={{ type: "tenant", id: tenant.id }} />}
+        {tenant?.id && <GrowthDashboardPanel scope={{ type: "tenant", id: tenant.id }} />}
       </section>
     </div>
   );

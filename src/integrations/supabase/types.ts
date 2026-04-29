@@ -3038,6 +3038,54 @@ export type Database = {
         }
         Relationships: []
       }
+      growth_budgets: {
+        Row: {
+          active: boolean
+          boost_count_limit: number | null
+          boost_count_used: number
+          budget_brl: number
+          created_at: string
+          id: string
+          notes: string | null
+          period: string
+          period_started_at: string
+          scope_id: string | null
+          scope_type: string
+          spent_brl: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          boost_count_limit?: number | null
+          boost_count_used?: number
+          budget_brl?: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          period: string
+          period_started_at?: string
+          scope_id?: string | null
+          scope_type: string
+          spent_brl?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          boost_count_limit?: number | null
+          boost_count_used?: number
+          budget_brl?: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          period?: string
+          period_started_at?: string
+          scope_id?: string | null
+          scope_type?: string
+          spent_brl?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       hashtag_searches: {
         Row: {
           created_at: string
@@ -7148,6 +7196,22 @@ export type Database = {
         }
         Relationships: []
       }
+      v_growth_dashboard: {
+        Row: {
+          action_type: string | null
+          approve_30d: number | null
+          arena_id: string | null
+          auto_30d: number | null
+          blocked_30d: number | null
+          execution_mode: string | null
+          policy_source: string | null
+          revenue_30d: number | null
+          suggested_30d: number | null
+          tenant_id: string | null
+          total_30d: number | null
+        }
+        Relationships: []
+      }
       v_organizer_balances_canonical: {
         Row: {
           gross_total: number | null
@@ -7447,6 +7511,24 @@ export type Database = {
       get_tournament_status_summary: {
         Args: { _tournament_id: string }
         Returns: Json
+      }
+      growth_check_budget: {
+        Args: { _amount_brl?: number; _scope_id: string; _scope_type: string }
+        Returns: {
+          allowed: boolean
+          reason: string
+          remaining_brl: number
+        }[]
+      }
+      growth_generate_opportunity_triggers: { Args: never; Returns: number }
+      growth_record_spend: {
+        Args: {
+          _amount_brl: number
+          _is_boost?: boolean
+          _scope_id: string
+          _scope_type: string
+        }
+        Returns: undefined
       }
       has_role: {
         Args: {

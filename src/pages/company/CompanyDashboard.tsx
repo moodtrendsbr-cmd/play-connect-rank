@@ -15,6 +15,7 @@ import { CommandExamplesCard } from "@/components/conversational/CommandExamples
 import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
+import { GrowthDashboardPanel } from "@/components/growth/GrowthDashboardPanel";
 
 // ---------- Local helpers (not exported) ----------
 const SectionHeader = ({ id, icon: Icon, title, subtitle, action }: any) => (
@@ -437,6 +438,7 @@ const CompanyDashboard = () => {
         <section className="space-y-3">
           <SectionHeader id="revenue" icon={TrendingUp} title="Vendas via WhatsApp" subtitle="Receita atribuída à ORKYM · 30 dias" />
           <RevenueDashboardPanel scope={{ type: "company", id: company.id }} />
+          <GrowthDashboardPanel scope={{ type: "company", id: company.id }} />
         </section>
       )}
     </div>

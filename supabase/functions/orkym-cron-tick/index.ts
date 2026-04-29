@@ -144,6 +144,7 @@ Deno.serve(async (req) => {
   let proactiveGen: unknown = null;
   let proactiveProcess: unknown = null;
   let optimizationGen: unknown = null;
+  let growthGen: unknown = null;
   try {
     const { data: g } = await admin.rpc("orkym_generate_periodic_triggers");
     proactiveGen = g;
@@ -153,6 +154,11 @@ Deno.serve(async (req) => {
     const { data: o } = await admin.rpc("orkym_generate_optimization_triggers");
     optimizationGen = o;
   } catch (e) { console.error("orkym_generate_optimization_triggers failed", e); }
+  // Phase G — Autonomous Growth Engine: emit opportunity triggers
+  try {
+    const { data: gg } = await admin.rpc("growth_generate_opportunity_triggers");
+    growthGen = gg;
+  } catch (e) { console.error("growth_generate_opportunity_triggers failed", e); }
   try {
     const internalToken = Deno.env.get("ORKYM_INTERNAL_TOKEN") || "";
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/orkym-proactive-process`, {
@@ -178,5 +184,6 @@ Deno.serve(async (req) => {
     proactive_generated: proactiveGen,
     proactive_processed: proactiveProcess,
     optimization_generated: optimizationGen,
+    growth_generated: growthGen,
   }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
