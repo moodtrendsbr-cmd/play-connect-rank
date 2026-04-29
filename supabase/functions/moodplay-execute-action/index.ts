@@ -62,6 +62,9 @@ const READ_ACTIONS = new Set([
   "get_athlete_performance",
   "get_tournament_standings",
   "list_upcoming_classes",
+  // Tournament conversational layer
+  "get_my_next_match",
+  "get_tournament_status_summary",
 ]);
 
 const RPC_OPERATIONAL_ACTIONS = new Set([
@@ -70,6 +73,11 @@ const RPC_OPERATIONAL_ACTIONS = new Set([
   "validate_checkin",
   "create_tournament",
   "create_class",
+  // Tournament conversational layer
+  "register_match_score",
+  "enroll_in_tournament",
+  "validate_tournament_checkin",
+  "sortear_grupos",
 ]);
 
 const PROPOSAL_ACTIONS = new Set([
@@ -279,6 +287,8 @@ Deno.serve(async (req) => {
       get_athlete_performance:  { rpc: "get_athlete_performance",  args: { _athlete_id: payload.athlete_id ?? user_id, _period_days: payload.period_days ?? 30 } },
       get_tournament_standings: { rpc: "get_tournament_standings", args: { _tournament_id: payload.tournament_id } },
       list_upcoming_classes:    { rpc: "list_upcoming_classes",    args: { _arena_id: arena_id, _days: payload.days ?? 7 } },
+      get_my_next_match:        { rpc: "get_my_next_match",        args: { _user_id: payload.athlete_id ?? user_id ?? null } },
+      get_tournament_status_summary: { rpc: "get_tournament_status_summary", args: { _tournament_id: payload.tournament_id } },
     };
     const spec = readSpecs[action_type];
     const { data, error } = await admin.rpc(spec.rpc, spec.args as never);
@@ -370,6 +380,38 @@ Deno.serve(async (req) => {
         if (error) throw error;
         result = { class_id: data.id };
         linkedType = "arena_class"; linkedId = data.id;
+      } else if (action_type === "register_match_score") {
+        const { data, error } = await admin.rpc("register_match_score", {
+          _match_id: payload.match_id,
+          _score_a: payload.score_a,
+          _score_b: payload.score_b,
+        });
+        if (error) throw error;
+        result = data;
+        linkedType = "modality_match"; linkedId = payload.match_id;
+      } else if (action_type === "enroll_in_tournament") {
+        const { data, error } = await admin.rpc("enroll_athlete_in_tournament", {
+          _tournament_id: payload.tournament_id,
+          _modality_id: payload.modality_id ?? null,
+        });
+        if (error) throw error;
+        result = data;
+        linkedType = "enrollment"; linkedId = (data as any)?.enrollment_id ?? null;
+      } else if (action_type === "validate_tournament_checkin") {
+        const { data, error } = await admin.rpc("enrollment_checkin_validate", {
+          _token: payload.token,
+        });
+        if (error) throw error;
+        result = data;
+        linkedType = "enrollment"; linkedId = (data as any)?.enrollment_id ?? null;
+      } else if (action_type === "sortear_grupos") {
+        const { data, error } = await admin.rpc("sortear_grupos", {
+          _modality_id: payload.modality_id,
+          _num_groups: payload.num_groups,
+        });
+        if (error) throw error;
+        result = data;
+        linkedType = "tournament_modality"; linkedId = payload.modality_id;
       }
     } catch (e: any) {
       err = e?.message ?? String(e);
