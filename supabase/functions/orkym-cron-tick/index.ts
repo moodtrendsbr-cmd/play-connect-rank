@@ -128,11 +128,25 @@ Deno.serve(async (req) => {
     console.error("expire_stale_sessions failed", e);
   }
 
+  // Phase 12.8 — memory decay + periodic extraction (best-effort)
+  let memoryDecay: unknown = null;
+  let memoryExtract: unknown = null;
+  try {
+    const { data: d } = await admin.rpc("memory_apply_decay");
+    memoryDecay = d;
+  } catch (e) { console.error("memory_apply_decay failed", e); }
+  try {
+    const { data: x } = await admin.rpc("memory_extract_all", { _batch_size: 100 });
+    memoryExtract = x;
+  } catch (e) { console.error("memory_extract_all failed", e); }
+
   return new Response(JSON.stringify({
     ok: true,
     processed: processedIds.length,
     buckets: buckets.size,
     invoked_ok: invokedOk,
     expired_sessions: expiredSessions,
+    memory_decay: memoryDecay,
+    memory_extract: memoryExtract,
   }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
