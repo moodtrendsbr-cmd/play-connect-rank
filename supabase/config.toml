@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.orkym-whatsapp-connection]
 verify_jwt = true
+
+[functions.moodplay-memory-context]
+verify_jwt = false
