@@ -17,6 +17,7 @@ import { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
 import PostGrid from "@/components/profile/PostGrid";
 import TournamentMemories from "@/components/profile/TournamentMemories";
+import GamificationPanel from "@/components/gamification/GamificationPanel";
 import { SocialPrivacyToggle } from "@/components/social/SocialPrivacyToggle";
 import { WaIdentityPanel } from "@/components/conversational/WaIdentityPanel";
 
@@ -324,6 +325,14 @@ const Profile = () => {
             <Button onClick={handleSave} style={{ background: "#2BFF88", color: "#050708" }}>Salvar</Button>
             <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
           </div>
+        </div>
+      )}
+
+      {/* Gamification */}
+      {user && (
+        <div>
+          <h2 className="text-lg font-display text-white mb-3">Gamificação</h2>
+          <GamificationPanel athleteId={user.id} />
         </div>
       )}
 
