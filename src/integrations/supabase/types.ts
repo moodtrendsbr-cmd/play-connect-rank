@@ -4592,6 +4592,168 @@ export type Database = {
         }
         Relationships: []
       }
+      social_events: {
+        Row: {
+          arena_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          profile_id: string
+          tenant_id: string | null
+          visibility: string
+        }
+        Insert: {
+          arena_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          profile_id: string
+          tenant_id?: string | null
+          visibility?: string
+        }
+        Update: {
+          arena_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          profile_id?: string
+          tenant_id?: string | null
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_events_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "social_feed_public_v2"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "social_events_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "social_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_events_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "social_profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_identities: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          first_arena_id: string | null
+          first_tenant_id: string | null
+          id: string
+          phone_e164: string
+          source: string
+          updated_at: string
+          user_id: string | null
+          wa_identity_id: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          first_arena_id?: string | null
+          first_tenant_id?: string | null
+          id?: string
+          phone_e164: string
+          source?: string
+          updated_at?: string
+          user_id?: string | null
+          wa_identity_id?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          first_arena_id?: string | null
+          first_tenant_id?: string | null
+          id?: string
+          phone_e164?: string
+          source?: string
+          updated_at?: string
+          user_id?: string | null
+          wa_identity_id?: string | null
+        }
+        Relationships: []
+      }
+      social_profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          city: string | null
+          created_at: string
+          display_name: string
+          id: string
+          identity_id: string
+          level: string | null
+          main_sport: string | null
+          notif_opt_in: boolean
+          state: string | null
+          updated_at: string
+          username: string | null
+          visibility: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          city?: string | null
+          created_at?: string
+          display_name: string
+          id?: string
+          identity_id: string
+          level?: string | null
+          main_sport?: string | null
+          notif_opt_in?: boolean
+          state?: string | null
+          updated_at?: string
+          username?: string | null
+          visibility?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          city?: string | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          identity_id?: string
+          level?: string | null
+          main_sport?: string | null
+          notif_opt_in?: boolean
+          state?: string | null
+          updated_at?: string
+          username?: string | null
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_profiles_identity_id_fkey"
+            columns: ["identity_id"]
+            isOneToOne: true
+            referencedRelation: "social_identities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       split_rules: {
         Row: {
           affiliate_pct: number
@@ -6435,6 +6597,63 @@ export type Database = {
         }
         Relationships: []
       }
+      social_feed_public_v2: {
+        Row: {
+          arena_id: string | null
+          arena_name: string | null
+          avatar_url: string | null
+          description: string | null
+          display_name: string | null
+          event_id: string | null
+          event_type: string | null
+          occurred_at: string | null
+          payload: Json | null
+          profile_id: string | null
+          tenant_id: string | null
+          tenant_name: string | null
+          username: string | null
+        }
+        Relationships: []
+      }
+      social_profiles_public: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          city: string | null
+          created_at: string | null
+          display_name: string | null
+          id: string | null
+          level: string | null
+          main_sport: string | null
+          state: string | null
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          city?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          id?: string | null
+          level?: string | null
+          main_sport?: string | null
+          state?: string | null
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          city?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          id?: string | null
+          level?: string | null
+          main_sport?: string | null
+          state?: string | null
+          username?: string | null
+        }
+        Relationships: []
+      }
       tenant_settings_public: {
         Row: {
           default_locale: string | null
@@ -6583,6 +6802,21 @@ export type Database = {
       }
     }
     Functions: {
+      _social_insert_event: {
+        Args: {
+          _arena_id: string
+          _entity_id: string
+          _entity_type: string
+          _event_type: string
+          _payload: Json
+          _profile_id: string
+          _tenant_id: string
+          _visibility?: string
+        }
+        Returns: undefined
+      }
+      _social_normalize_phone: { Args: { _phone: string }; Returns: string }
+      _social_username_generate: { Args: { _base: string }; Returns: string }
       abandon_session: {
         Args: {
           _reason?: string
@@ -7171,10 +7405,39 @@ export type Database = {
       search_global: { Args: { _term: string }; Returns: Json }
       set_current_tenant: { Args: { _tenant_id: string }; Returns: undefined }
       set_tenant_from_user: { Args: { _user_id: string }; Returns: string }
+      social_event_description: {
+        Args: {
+          _arena_name: string
+          _event_type: string
+          _name: string
+          _payload: Json
+        }
+        Returns: string
+      }
+      social_event_hide: { Args: { _event_id: string }; Returns: undefined }
+      social_identity_for_user: { Args: { _user_id: string }; Returns: string }
+      social_identity_upsert: {
+        Args: {
+          _arena_id?: string
+          _avatar_url?: string
+          _name?: string
+          _phone: string
+          _source?: string
+          _tenant_id?: string
+          _user_id?: string
+          _wa_identity_id?: string
+        }
+        Returns: string
+      }
+      social_profile_set_visibility: {
+        Args: { _visibility: string }
+        Returns: undefined
+      }
       sortear_grupos: {
         Args: { _modality_id: string; _num_groups: number }
         Returns: Json
       }
+      unaccent_safe: { Args: { _s: string }; Returns: string }
       update_session_context: {
         Args: { _session_id: string; _ttl_minutes?: number; _values: Json }
         Returns: undefined
