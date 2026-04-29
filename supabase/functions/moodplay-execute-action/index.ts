@@ -287,6 +287,8 @@ Deno.serve(async (req) => {
       get_athlete_performance:  { rpc: "get_athlete_performance",  args: { _athlete_id: payload.athlete_id ?? user_id, _period_days: payload.period_days ?? 30 } },
       get_tournament_standings: { rpc: "get_tournament_standings", args: { _tournament_id: payload.tournament_id } },
       list_upcoming_classes:    { rpc: "list_upcoming_classes",    args: { _arena_id: arena_id, _days: payload.days ?? 7 } },
+      get_my_next_match:        { rpc: "get_my_next_match",        args: { _user_id: payload.athlete_id ?? user_id ?? null } },
+      get_tournament_status_summary: { rpc: "get_tournament_status_summary", args: { _tournament_id: payload.tournament_id } },
     };
     const spec = readSpecs[action_type];
     const { data, error } = await admin.rpc(spec.rpc, spec.args as never);
