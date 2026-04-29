@@ -1,6 +1,7 @@
 import XpLevelBar from "./XpLevelBar";
 import StreakCounter from "./StreakCounter";
 import BadgesGrid from "./BadgesGrid";
+import RankPosition from "./RankPosition";
 
 interface Props {
   athleteId: string;
@@ -14,6 +15,7 @@ const GamificationPanel = ({ athleteId, showBadges = true }: Props) => {
         <XpLevelBar athleteId={athleteId} />
         <StreakCounter athleteId={athleteId} />
       </div>
+      <RankPosition athleteId={athleteId} />
       {showBadges && (
         <div>
           <h3 className="text-sm font-display text-foreground/80 mb-2">Conquistas</h3>
