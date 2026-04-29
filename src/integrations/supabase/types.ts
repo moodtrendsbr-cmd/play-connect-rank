@@ -3874,6 +3874,108 @@ export type Database = {
           },
         ]
       }
+      orkym_revenue_attribution: {
+        Row: {
+          arena_id: string | null
+          attribution_confidence: number
+          attribution_type: string
+          command_id: string | null
+          conversion_window_seconds: number | null
+          created_at: string
+          currency: string
+          entity_id: string
+          entity_type: string
+          financial_transaction_id: string | null
+          id: string
+          message_id: string | null
+          metadata: Json
+          profile_type: string | null
+          revenue_amount: number
+          session_id: string | null
+          tenant_id: string
+          trigger_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          arena_id?: string | null
+          attribution_confidence?: number
+          attribution_type: string
+          command_id?: string | null
+          conversion_window_seconds?: number | null
+          created_at?: string
+          currency?: string
+          entity_id: string
+          entity_type: string
+          financial_transaction_id?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json
+          profile_type?: string | null
+          revenue_amount: number
+          session_id?: string | null
+          tenant_id: string
+          trigger_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          arena_id?: string | null
+          attribution_confidence?: number
+          attribution_type?: string
+          command_id?: string | null
+          conversion_window_seconds?: number | null
+          created_at?: string
+          currency?: string
+          entity_id?: string
+          entity_type?: string
+          financial_transaction_id?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json
+          profile_type?: string | null
+          revenue_amount?: number
+          session_id?: string | null
+          tenant_id?: string
+          trigger_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orkym_revenue_attribution_command_id_fkey"
+            columns: ["command_id"]
+            isOneToOne: false
+            referencedRelation: "conversational_commands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orkym_revenue_attribution_financial_transaction_id_fkey"
+            columns: ["financial_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "financial_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orkym_revenue_attribution_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orkym_revenue_attribution_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "conversation_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orkym_revenue_attribution_trigger_id_fkey"
+            columns: ["trigger_id"]
+            isOneToOne: false
+            referencedRelation: "orkym_triggers_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orkym_trigger_feedback: {
         Row: {
           correlation_id: string | null
@@ -6734,6 +6836,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      orkym_attribute_revenue: {
+        Args: { _source_id: string; _source_type: string }
+        Returns: string
+      }
       orkym_check_domain_allowed: {
         Args: { _domain: string; _tenant: string }
         Returns: boolean
@@ -6748,6 +6854,7 @@ export type Database = {
           tier: string
         }[]
       }
+      orkym_generate_optimization_triggers: { Args: never; Returns: number }
       orkym_generate_periodic_triggers: { Args: never; Returns: Json }
       orkym_get_tenant_tier: {
         Args: { _tenant: string }
@@ -6777,6 +6884,23 @@ export type Database = {
       }
       orkym_ingest_actions: { Args: { _payload: Json }; Returns: number }
       orkym_ingest_tasks: { Args: { _payload: Json }; Returns: number }
+      orkym_message_performance: {
+        Args: {
+          _from: string
+          _scope_id: string
+          _scope_type: string
+          _to: string
+        }
+        Returns: {
+          conversion_rate: number
+          converted: number
+          delivered: number
+          responded: number
+          revenue: number
+          sent: number
+          trigger_type: string
+        }[]
+      }
       orkym_proactive_check_eligibility: {
         Args: {
           _category: string
@@ -6793,6 +6917,26 @@ export type Database = {
         Returns: undefined
       }
       orkym_purge_dedup: { Args: never; Returns: number }
+      orkym_revenue_kpis_admin: {
+        Args: { _from: string; _to: string }
+        Returns: Json
+      }
+      orkym_revenue_kpis_arena: {
+        Args: { _arena_id: string; _from: string; _to: string }
+        Returns: Json
+      }
+      orkym_revenue_kpis_company: {
+        Args: { _company_id: string; _from: string; _to: string }
+        Returns: Json
+      }
+      orkym_revenue_kpis_tenant: {
+        Args: { _from: string; _tenant_id: string; _to: string }
+        Returns: Json
+      }
+      orkym_roi_multiplier: {
+        Args: { _tenant_id: string; _trigger_type: string }
+        Returns: number
+      }
       orkym_trigger_claim_batch: {
         Args: { _limit?: number }
         Returns: {
