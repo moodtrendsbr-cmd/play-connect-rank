@@ -97,7 +97,7 @@ const Marketplace = () => {
       setLoading(false);
     };
     fetchProducts();
-  }, [search, category, userCity]);
+  }, [search, category, userCity, featuredProducts]);
 
   return (
     <>
