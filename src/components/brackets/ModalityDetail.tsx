@@ -121,7 +121,7 @@ const ModalityDetail = ({ modality, tournamentId, isOrganizer, onBack }: Modalit
           <TabEntries modalityId={modality.id} tournamentId={tournamentId} isOrganizer={isOrganizer} />
         </TabsContent>
         <TabsContent value="groups">
-          <TabGroups modalityId={modality.id} numGroups={modality.num_groups || 0} />
+          <TabGroups modalityId={modality.id} numGroups={modality.num_groups || 0} canManage={isOrganizer} />
         </TabsContent>
         <TabsContent value="matches">
           <TabMatches modalityId={modality.id} tournamentId={tournamentId} isOrganizer={isOrganizer} />

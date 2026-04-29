@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Store, Settings, ArrowLeft } from "lucide-react";
+import { Store, Settings, ArrowLeft, Share2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
@@ -55,6 +55,32 @@ const TournamentDetail = () => {
     };
     if (id) fetch();
   }, [id, user]);
+
+  // Update document title + og meta tags whenever tournament loads
+  useEffect(() => {
+    if (!tournament) return;
+    const desc = `${tournament.city || ""} - ${tournament.state || ""} · ${tournament.start_date} a ${tournament.end_date} · R$ ${Number(tournament.entry_fee || 0).toFixed(2)}`;
+    const title = `${tournament.name} · MOOD PLAY`;
+    document.title = title;
+
+    const setMeta = (selector: string, attr: "content", value: string) => {
+      let el = document.head.querySelector<HTMLMetaElement>(selector);
+      if (!el) {
+        el = document.createElement("meta");
+        const [, key, name] = selector.match(/^meta\[(name|property)="([^"]+)"\]$/) || [];
+        if (key && name) el.setAttribute(key, name);
+        document.head.appendChild(el);
+      }
+      el.setAttribute(attr, value);
+    };
+    setMeta('meta[name="description"]', "content", desc);
+    setMeta('meta[property="og:title"]', "content", title);
+    setMeta('meta[property="og:description"]', "content", desc);
+    setMeta('meta[property="og:type"]', "content", "website");
+    setMeta('meta[property="og:url"]', "content", `${window.location.origin}/tournaments/${tournament.id}`);
+    setMeta('meta[name="twitter:title"]', "content", title);
+    setMeta('meta[name="twitter:description"]', "content", desc);
+  }, [tournament]);
 
   const handleEnroll = () => {
     if (!user) {
@@ -158,6 +184,12 @@ const TournamentDetail = () => {
               </Button>
             )
           ) : null}
+
+          <Button variant="outline" className="w-full h-12 font-bold mt-3" asChild>
+            <Link to={`/tournaments/${id}/share`}>
+              <Share2 className="mr-2 h-4 w-4" /> Compartilhar / QR
+            </Link>
+          </Button>
 
           {user?.id === tournament.organizer_id && (
             <Button variant="outline" className="w-full h-14 text-lg font-bold mt-3" asChild>

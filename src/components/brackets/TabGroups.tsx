@@ -1,13 +1,17 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Layers, Trophy } from "lucide-react";
+import { Layers, Trophy, Shuffle, Loader2 } from "lucide-react";
 import { useEntryMembers } from "@/hooks/useEntryMembers";
 import AthleteAvatar from "./AthleteAvatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 interface TabGroupsProps {
   modalityId: string;
   numGroups?: number;
+  canManage?: boolean;
 }
 
 interface Standing {
@@ -21,48 +25,69 @@ interface Standing {
   points: number;
 }
 
-const TabGroups = ({ modalityId }: TabGroupsProps) => {
+const TabGroups = ({ modalityId, canManage = false }: TabGroupsProps) => {
   const [groups, setGroups] = useState<any[]>([]);
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [drawing, setDrawing] = useState(false);
+  const [numGroupsInput, setNumGroupsInput] = useState("2");
 
-  useEffect(() => {
-    const fetch = async () => {
-      setLoading(true);
-      const { data: groupsData } = await supabase
-        .from("modality_groups")
-        .select("*")
-        .eq("modality_id", modalityId)
-        .order("group_name");
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const { data: groupsData } = await supabase
+      .from("modality_groups")
+      .select("*")
+      .eq("modality_id", modalityId)
+      .order("group_name");
 
-      const gList = groupsData || [];
+    const gList = groupsData || [];
 
-      if (gList.length > 0) {
-        const groupIds = gList.map((g) => g.id);
-        const [{ data: members }, { data: matchData }] = await Promise.all([
-          supabase
-            .from("modality_group_members")
-            .select("*, modality_entries(*)")
-            .in("group_id", groupIds),
-          supabase
-            .from("modality_matches")
-            .select("*")
-            .in("group_id", groupIds),
-        ]);
+    if (gList.length > 0) {
+      const groupIds = gList.map((g) => g.id);
+      const [{ data: members }, { data: matchData }] = await Promise.all([
+        supabase
+          .from("modality_group_members")
+          .select("*, modality_entries(*)")
+          .in("group_id", groupIds),
+        supabase
+          .from("modality_matches")
+          .select("*")
+          .in("group_id", groupIds),
+      ]);
 
-        const enriched = gList.map((g) => ({
-          ...g,
-          members: (members || []).filter((m) => m.group_id === g.id),
-        }));
-        setGroups(enriched);
-        setMatches(matchData || []);
-      } else {
-        setGroups([]);
-      }
-      setLoading(false);
-    };
-    fetch();
+      const enriched = gList.map((g) => ({
+        ...g,
+        members: (members || []).filter((m) => m.group_id === g.id),
+      }));
+      setGroups(enriched);
+      setMatches(matchData || []);
+    } else {
+      setGroups([]);
+    }
+    setLoading(false);
   }, [modalityId]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleSortear = async () => {
+    const n = parseInt(numGroupsInput, 10);
+    if (!n || n < 1 || n > 32) {
+      toast.error("Informe um número de grupos entre 1 e 32");
+      return;
+    }
+    setDrawing(true);
+    const { data, error } = await supabase.rpc("sortear_grupos", {
+      _modality_id: modalityId,
+      _num_groups: n,
+    });
+    setDrawing(false);
+    if (error) {
+      toast.error("Falha ao sortear", { description: error.message });
+      return;
+    }
+    toast.success(`Sorteio concluído: ${(data as any)?.distributed ?? 0} entradas em ${n} grupos`);
+    fetchData();
+  };
 
   const allEntryIds = useMemo(() => {
     const ids: string[] = [];
@@ -107,11 +132,34 @@ const TabGroups = ({ modalityId }: TabGroupsProps) => {
     );
   }
 
+  const drawPanel = canManage ? (
+    <div className="rounded-lg border border-border bg-card/50 p-3 mb-4 flex flex-wrap items-center gap-2">
+      <Shuffle className="h-4 w-4 text-primary" />
+      <span className="text-sm text-foreground">Sortear automaticamente em</span>
+      <Input
+        type="number"
+        min={1}
+        max={32}
+        value={numGroupsInput}
+        onChange={(e) => setNumGroupsInput(e.target.value)}
+        className="w-20 h-8"
+      />
+      <span className="text-sm text-muted-foreground">grupos</span>
+      <Button size="sm" onClick={handleSortear} disabled={drawing} className="ml-auto">
+        {drawing ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Shuffle className="h-3.5 w-3.5 mr-1" />}
+        Sortear
+      </Button>
+    </div>
+  ) : null;
+
   if (groups.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <Layers className="h-10 w-10 mx-auto mb-3 opacity-40" />
-        <p>Nenhum grupo definido para esta modalidade.</p>
+      <div>
+        {drawPanel}
+        <div className="text-center py-12 text-muted-foreground">
+          <Layers className="h-10 w-10 mx-auto mb-3 opacity-40" />
+          <p>Nenhum grupo definido para esta modalidade.</p>
+        </div>
       </div>
     );
   }
@@ -136,7 +184,9 @@ const TabGroups = ({ modalityId }: TabGroupsProps) => {
   const qualifiers = (size: number) => Math.max(2, Math.floor(size / 2));
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div>
+      {drawPanel}
+      <div className="grid gap-4 sm:grid-cols-2">
       {groups.map((group) => {
         const standings = computeStandings(group);
         const cut = qualifiers(standings.length);
@@ -200,6 +250,7 @@ const TabGroups = ({ modalityId }: TabGroupsProps) => {
           </div>
         );
       })}
+      </div>
     </div>
   );
 };
