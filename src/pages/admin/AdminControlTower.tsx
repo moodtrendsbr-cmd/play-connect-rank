@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Gauge, Zap, TrendingUp, Clock, RefreshCw, AlertTriangle } from "lucide-react";
 import { fetchAllTenantsUsage, TIER_LABELS, formatTimeSaved, type UsageSummary, type AutonomyTier } from "@/lib/autonomyTier";
 import { supabase } from "@/integrations/supabase/client";
+import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 
 const tierColor: Record<AutonomyTier, string> = {
   free: "bg-muted text-muted-foreground border-border",
