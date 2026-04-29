@@ -8,6 +8,7 @@ import PostSkeleton from "@/components/feed/PostSkeleton";
 import PostGrid from "@/components/profile/PostGrid";
 import AthleteActivities from "@/components/profile/AthleteActivities";
 import TournamentMemories from "@/components/profile/TournamentMemories";
+import GamificationPanel from "@/components/gamification/GamificationPanel";
 
 const UserProfile = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -158,6 +159,11 @@ const UserProfile = () => {
         isOwnProfile={user?.id === userId}
         onFollowToggle={handleFollowToggle}
       />
+
+      <div>
+        <h2 className="text-lg font-display text-white mb-3">Gamificação</h2>
+        <GamificationPanel athleteId={userId!} />
+      </div>
 
       <div>
         <h2 className="text-lg font-display text-white mb-3">Memórias de torneios</h2>
