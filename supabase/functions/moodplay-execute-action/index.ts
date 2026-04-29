@@ -417,6 +417,7 @@ Deno.serve(async (req) => {
       err = e?.message ?? String(e);
     }
 
+    const summary = err
       ? `Falhou: ${err}`
       : summarizeResult(action_type, result);
 
