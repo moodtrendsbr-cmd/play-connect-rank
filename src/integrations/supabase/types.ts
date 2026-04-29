@@ -6583,6 +6583,10 @@ export type Database = {
         Returns: string
       }
       current_tenant_id: { Args: never; Returns: string }
+      enqueue_enrollment_reminder: {
+        Args: { _enrollment_id: string }
+        Returns: string
+      }
       enroll_athlete_in_tournament: {
         Args: { _modality_id?: string; _tournament_id: string }
         Returns: Json
