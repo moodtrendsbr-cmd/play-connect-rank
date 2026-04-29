@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Search, Store, ShoppingBag, Star } from "lucide-react";
 import AdSlot from "@/components/ads/AdSlot";
+import { useFeaturedSet } from "@/hooks/useFeaturedSet";
+import FeaturedBadge from "@/components/featured/FeaturedBadge";
 
 const CATEGORIES = [
   { label: "Todos", value: "" },
@@ -26,6 +28,7 @@ const Marketplace = () => {
   const [userCity, setUserCity] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasCompany, setHasCompany] = useState(false);
+  const { featuredSet: featuredProducts } = useFeaturedSet("product");
 
   useEffect(() => {
     if (user) {
@@ -79,7 +82,9 @@ const Marketplace = () => {
       }
 
       list.sort((a: any, b: any) => {
-        if (a.featured !== b.featured) return a.featured ? -1 : 1;
+        const aFeat = featuredProducts.has(a.id) || a.featured;
+        const bFeat = featuredProducts.has(b.id) || b.featured;
+        if (aFeat !== bFeat) return aFeat ? -1 : 1;
         if (userCity) {
           const aLocal = a.city?.toLowerCase() === userCity.toLowerCase();
           const bLocal = b.city?.toLowerCase() === userCity.toLowerCase();
@@ -92,7 +97,7 @@ const Marketplace = () => {
       setLoading(false);
     };
     fetchProducts();
-  }, [search, category, userCity]);
+  }, [search, category, userCity, featuredProducts]);
 
   return (
     <>
@@ -160,9 +165,9 @@ const Marketplace = () => {
                 className="rounded-lg overflow-hidden transition-opacity hover:opacity-80 relative"
                 style={{ background: "#0B0F12" }}
               >
-                {p.featured && (
-                  <span className="absolute top-2 left-2 z-10 flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#2BFF88", color: "#050708" }}>
-                    <Star className="h-3 w-3" /> Destaque
+                {(p.featured || featuredProducts.has(p.id)) && (
+                  <span className="absolute top-2 left-2 z-10">
+                    <FeaturedBadge entityType="product" entityId={p.id} />
                   </span>
                 )}
                 {p.image_urls?.[0] ? (

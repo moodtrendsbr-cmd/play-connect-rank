@@ -12,6 +12,8 @@ import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Plus, Store, Package, CreditCard, Crown, Zap, X, Image, Video, DollarSign, CheckCircle, Truck } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import PromoteFeaturedDialog from "@/components/featured/PromoteFeaturedDialog";
+import { Sparkles } from "lucide-react";
 
 const MyCompany = () => {
   const { user } = useAuth();
@@ -20,6 +22,7 @@ const MyCompany = () => {
   const [plan, setPlan] = useState<any>(null);
   const [allPlans, setAllPlans] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [promoteProduct, setPromoteProduct] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -295,9 +298,29 @@ const MyCompany = () => {
               }}>
                 {p.status === "approved" ? "Aprovado" : p.status === "rejected" ? "Rejeitado" : "Pendente"}
               </span>
+              {p.status === "approved" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => setPromoteProduct(p)}
+                >
+                  <Sparkles className="h-3 w-3 mr-1" /> Promover
+                </Button>
+              )}
             </div>
           ))}
         </div>
+      )}
+
+      {promoteProduct && (
+        <PromoteFeaturedDialog
+          open={!!promoteProduct}
+          onOpenChange={(o) => !o && setPromoteProduct(null)}
+          entityType="product"
+          entityId={promoteProduct.id}
+          entityLabel={promoteProduct.name}
+        />
       )}
 
       {/* Orders */}

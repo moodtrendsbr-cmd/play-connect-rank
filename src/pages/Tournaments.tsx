@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Search, Trophy, MapPin, Calendar } from "lucide-react";
+import { useFeaturedSet } from "@/hooks/useFeaturedSet";
+import FeaturedBadge from "@/components/featured/FeaturedBadge";
 
 type StatusFilter = "all" | "active" | "upcoming" | "finished";
 
@@ -30,6 +32,7 @@ const Tournaments = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("all");
+  const { featuredSet: featuredTournaments } = useFeaturedSet("tournament");
 
   useEffect(() => {
     const fetch = async () => {
@@ -63,15 +66,22 @@ const Tournaments = () => {
     fetch();
   }, []);
 
-  const filtered = tournaments.filter((t) => {
-    const matchesSearch = search === "" ||
-      t.city?.toLowerCase().includes(search.toLowerCase()) ||
-      t.state?.toLowerCase().includes(search.toLowerCase()) ||
-      t.name?.toLowerCase().includes(search.toLowerCase());
-    const status = getTournamentStatus(t);
-    const matchesFilter = filter === "all" || status === filter;
-    return matchesSearch && matchesFilter;
-  });
+  const filtered = tournaments
+    .filter((t) => {
+      const matchesSearch = search === "" ||
+        t.city?.toLowerCase().includes(search.toLowerCase()) ||
+        t.state?.toLowerCase().includes(search.toLowerCase()) ||
+        t.name?.toLowerCase().includes(search.toLowerCase());
+      const status = getTournamentStatus(t);
+      const matchesFilter = filter === "all" || status === filter;
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      const aFeat = featuredTournaments.has(a.id);
+      const bFeat = featuredTournaments.has(b.id);
+      if (aFeat !== bFeat) return aFeat ? -1 : 1;
+      return new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
+    });
 
   return (
     <div className="min-h-screen bg-background">
@@ -153,6 +163,11 @@ const Tournaments = () => {
                         {statusInfo.label}
                       </Badge>
                     </div>
+                    {featuredTournaments.has(t.id) && (
+                      <div className="mt-1">
+                        <FeaturedBadge entityType="tournament" entityId={t.id} />
+                      </div>
+                    )}
                     {t.arena && (
                       <p className="text-sm text-muted-foreground">🏟️ {t.arena}</p>
                     )}
