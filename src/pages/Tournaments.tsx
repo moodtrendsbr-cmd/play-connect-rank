@@ -66,15 +66,22 @@ const Tournaments = () => {
     fetch();
   }, []);
 
-  const filtered = tournaments.filter((t) => {
-    const matchesSearch = search === "" ||
-      t.city?.toLowerCase().includes(search.toLowerCase()) ||
-      t.state?.toLowerCase().includes(search.toLowerCase()) ||
-      t.name?.toLowerCase().includes(search.toLowerCase());
-    const status = getTournamentStatus(t);
-    const matchesFilter = filter === "all" || status === filter;
-    return matchesSearch && matchesFilter;
-  });
+  const filtered = tournaments
+    .filter((t) => {
+      const matchesSearch = search === "" ||
+        t.city?.toLowerCase().includes(search.toLowerCase()) ||
+        t.state?.toLowerCase().includes(search.toLowerCase()) ||
+        t.name?.toLowerCase().includes(search.toLowerCase());
+      const status = getTournamentStatus(t);
+      const matchesFilter = filter === "all" || status === filter;
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      const aFeat = featuredTournaments.has(a.id);
+      const bFeat = featuredTournaments.has(b.id);
+      if (aFeat !== bFeat) return aFeat ? -1 : 1;
+      return new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
+    });
 
   return (
     <div className="min-h-screen bg-background">
