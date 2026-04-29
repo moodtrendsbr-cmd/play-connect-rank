@@ -2276,6 +2276,101 @@ export type Database = {
           },
         ]
       }
+      conversational_memory: {
+        Row: {
+          arena_id: string | null
+          confidence: number
+          created_at: string
+          entity_id: string
+          entity_type: string
+          expires_at: string | null
+          id: string
+          key: string
+          last_seen_at: string
+          memory_type: string
+          profile_type: string
+          sample_size: number
+          source: string
+          tenant_id: string
+          updated_at: string
+          user_id: string | null
+          value: Json
+        }
+        Insert: {
+          arena_id?: string | null
+          confidence?: number
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          expires_at?: string | null
+          id?: string
+          key: string
+          last_seen_at?: string
+          memory_type: string
+          profile_type: string
+          sample_size?: number
+          source: string
+          tenant_id: string
+          updated_at?: string
+          user_id?: string | null
+          value?: Json
+        }
+        Update: {
+          arena_id?: string | null
+          confidence?: number
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          expires_at?: string | null
+          id?: string
+          key?: string
+          last_seen_at?: string
+          memory_type?: string
+          profile_type?: string
+          sample_size?: number
+          source?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
+      conversational_memory_events: {
+        Row: {
+          context: Json
+          created_at: string
+          event_type: string
+          id: string
+          memory_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          event_type: string
+          id?: string
+          memory_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          event_type?: string
+          id?: string
+          memory_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversational_memory_events_memory_id_fkey"
+            columns: ["memory_id"]
+            isOneToOne: false
+            referencedRelation: "conversational_memory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       court_availability: {
         Row: {
           court_id: string
@@ -6374,6 +6469,34 @@ export type Database = {
       mark_session_executing: {
         Args: { _idempotency_key: string; _session_id: string }
         Returns: Json
+      }
+      memory_apply_decay: { Args: never; Returns: Json }
+      memory_extract_all: { Args: { _batch_size?: number }; Returns: Json }
+      memory_extract_arena: { Args: { _arena_id: string }; Returns: number }
+      memory_extract_athlete: { Args: { _user_id: string }; Returns: number }
+      memory_extract_company: { Args: { _company_id: string }; Returns: number }
+      memory_extract_organizer: {
+        Args: { _organizer_user_id: string }
+        Returns: number
+      }
+      memory_extract_tenant: { Args: { _tenant_id: string }; Returns: number }
+      memory_upsert: {
+        Args: {
+          _arena: string
+          _confidence?: number
+          _entity_id: string
+          _entity_type: string
+          _key: string
+          _memory_type: string
+          _profile_type: string
+          _sample_size?: number
+          _source?: string
+          _tenant: string
+          _ttl_days?: number
+          _user: string
+          _value: Json
+        }
+        Returns: string
       }
       orkym_action_approve: {
         Args: { _proposal_id: string }
