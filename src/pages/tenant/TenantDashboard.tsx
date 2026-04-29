@@ -21,6 +21,7 @@ import { CommandExamplesCard } from "@/components/conversational/CommandExamples
 import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
+import { GrowthDashboardPanel } from "@/components/growth/GrowthDashboardPanel";
 import { DollarSign as RevDollar } from "lucide-react";
 
 // ─────────────── helpers locais (não exportados) ───────────────
