@@ -62,6 +62,9 @@ const READ_ACTIONS = new Set([
   "get_athlete_performance",
   "get_tournament_standings",
   "list_upcoming_classes",
+  // Tournament conversational layer
+  "get_my_next_match",
+  "get_tournament_status_summary",
 ]);
 
 const RPC_OPERATIONAL_ACTIONS = new Set([
@@ -70,6 +73,11 @@ const RPC_OPERATIONAL_ACTIONS = new Set([
   "validate_checkin",
   "create_tournament",
   "create_class",
+  // Tournament conversational layer
+  "register_match_score",
+  "enroll_in_tournament",
+  "validate_tournament_checkin",
+  "sortear_grupos",
 ]);
 
 const PROPOSAL_ACTIONS = new Set([
