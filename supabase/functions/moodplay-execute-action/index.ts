@@ -300,6 +300,7 @@ Deno.serve(async (req) => {
       execution_status: ok ? "executed" : "failed",
       data,
       response_summary: summary,
+      memory_context,
     });
   }
 
@@ -396,6 +397,7 @@ Deno.serve(async (req) => {
       linked_entity: linkedType ? { type: linkedType, id: linkedId } : null,
       response_summary: summary,
       error: err,
+      memory_context,
     });
   }
 
@@ -467,6 +469,7 @@ Deno.serve(async (req) => {
       linked_entity: linkedType ? { type: linkedType, id: linkedId } : null,
       response_summary: summary,
       proposal_id: proposal.id,
+      memory_context,
     });
   }
 
