@@ -188,6 +188,7 @@ const App = () => (
               <Route path="/arenas" element={<ArenasList />} />
               <Route path="/arenas/:arenaSlug" element={<ArenaPublic />} />
               <Route path="/arenas/:arenaSlug/reservar" element={<ArenaBooking />} />
+              <Route path="/u/:username" element={<SocialProfile />} />
             </Route>
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />
