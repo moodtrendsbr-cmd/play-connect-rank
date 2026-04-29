@@ -274,6 +274,7 @@ const Feed = () => {
       <main ref={mainRef} className="pt-16 pb-20 px-4 max-w-xl mx-auto space-y-4">
         <ClipsBar />
         <AdSlot code="feed.inline" />
+        <SocialActivityFeed limit={6} title="Atividade da rede" />
         {loading ? (
           <><PostSkeleton /><PostSkeleton /><PostSkeleton /></>
         ) : posts.length === 0 ? (
