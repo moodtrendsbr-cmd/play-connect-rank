@@ -26,6 +26,8 @@ import { CommandExamplesCard } from "@/components/conversational/CommandExamples
 import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { QrEntryCard } from "@/components/conversational/QrEntryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
+import PromoteCampaignDialog from "@/components/featured/PromoteCampaignDialog";
+import { Rocket } from "lucide-react";
 
 // ----- Helpers (locais, não exportados) -----
 const SectionHeader = ({
@@ -479,6 +481,23 @@ const OrganizerDashboard = () => {
                         label="Brackets"
                         icon={GitBranch}
                       />
+                      {!isUpcoming && !isActive ? null : (
+                        <PromoteCampaignDialog
+                          kind="tournament_boost"
+                          targetType="tournament"
+                          targetId={t.id}
+                          trigger={
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-[11px] font-medium hover:bg-primary/10 transition-colors"
+                              style={{ color: "#2BFF88" }}
+                            >
+                              <Rocket className="h-3 w-3" />
+                              Impulsionar
+                            </button>
+                          }
+                        />
+                      )}
                     </div>
                   </CardContent>
                 </Card>
