@@ -29,6 +29,7 @@ const groups = [
     label: "Event Control Tower",
     items: [
       { title: "Dashboard", url: "/organizer/dashboard", icon: LayoutDashboard, end: true },
+      { title: "Conexão WhatsApp", url: "/organizer/connect-whatsapp", icon: MessageCircle },
       { title: "Comandos", url: "/organizer/dashboard/comandos", icon: MessageCircle },
     ],
   },

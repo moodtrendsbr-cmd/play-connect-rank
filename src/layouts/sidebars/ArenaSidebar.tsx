@@ -26,6 +26,7 @@ const groups = [
     items: [
       { title: "Dashboard", url: "/arena/dashboard", icon: LayoutDashboard, end: true },
       { title: "Visão geral", url: "/arena/dashboard/control-tower", icon: Gauge },
+      { title: "Conexão WhatsApp", url: "/arena/connect-whatsapp", icon: MessageCircle },
       { title: "Ações ORKYM", url: "/arena/dashboard/acoes-ia", icon: Sparkles },
       { title: "Autonomia", url: "/arena/dashboard/autonomia", icon: ShieldCheck },
       { title: "Comandos", url: "/arena/dashboard/comandos", icon: MessageCircle },
