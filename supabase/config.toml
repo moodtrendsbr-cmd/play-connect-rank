@@ -54,3 +54,6 @@ verify_jwt = false
 [functions.seed-pilot-arena]
 verify_jwt = true
 
+[functions.smoke-test-payment]
+verify_jwt = true
+

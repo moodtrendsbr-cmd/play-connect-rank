@@ -22,6 +22,7 @@ const AdminControlTower = () => {
   const [planPrices, setPlanPrices] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
+  const [smoking, setSmoking] = useState(false);
 
   const seedPilot = async () => {
     setSeeding(true);
@@ -32,6 +33,26 @@ const AdminControlTower = () => {
       return;
     }
     toast.success((data as any)?.message ?? "Piloto criado");
+  };
+
+  const smokeTestPayment = async () => {
+    setSmoking(true);
+    const { data, error } = await supabase.functions.invoke("smoke-test-payment", { body: {} });
+    setSmoking(false);
+    if (error || (data as any)?.ok === false) {
+      toast.error((error?.message ?? (data as any)?.error) || "Falha no smoke-test");
+      console.error("smoke-test", data, error);
+      return;
+    }
+    const d = data as any;
+    const ftxOk = (d.financial_transactions ?? []).length > 0;
+    const attrOk = (d.revenue_attribution ?? []).length > 0;
+    const queueOk = (d.triggers_queued ?? []).length > 0;
+    const actsOk = (d.athlete_activities ?? []).length > 0;
+    toast.success(
+      `Smoke-test OK · activity:${actsOk ? "✓" : "✗"} ftx:${ftxOk ? "✓" : "✗"} attr:${attrOk ? "✓" : "✗"} queue:${queueOk ? "✓" : "✗"}`
+    );
+    console.log("smoke-test result", d);
   };
 
   const load = async () => {
