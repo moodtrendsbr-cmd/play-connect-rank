@@ -12,6 +12,8 @@ import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Plus, Store, Package, CreditCard, Crown, Zap, X, Image, Video, DollarSign, CheckCircle, Truck } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import PromoteFeaturedDialog from "@/components/featured/PromoteFeaturedDialog";
+import { Sparkles } from "lucide-react";
 
 const MyCompany = () => {
   const { user } = useAuth();
