@@ -27,8 +27,15 @@ const DEFAULT_SESSION_TTL_MIN = 15;
 const RESUME_WINDOW_MIN = 30;
 const LOCK_TTL_SECONDS = 30;
 
+// Phase 12.8 — request-scoped memory context (best-effort)
+let currentMemory: MemoryContext | null = null;
+
 function safeJson(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+  let payload = body;
+  if (currentMemory && body && typeof body === "object" && (body as Record<string, unknown>).ok === true) {
+    payload = { ...(body as Record<string, unknown>), memory_context: currentMemory };
+  }
+  return new Response(JSON.stringify(payload), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
