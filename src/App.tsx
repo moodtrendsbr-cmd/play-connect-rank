@@ -125,6 +125,11 @@ import TenantWhatsAppRouting from "./pages/tenant/TenantWhatsAppRouting";
 import ArenaMessages from "./pages/arena-dashboard/ArenaMessages";
 import TenantMessages from "./pages/tenant/TenantMessages";
 import OrganizerMessages from "./pages/organizer/OrganizerMessages";
+import ConnectWhatsApp from "./pages/connect/ConnectWhatsApp";
+import TenantConnectWhatsApp from "./pages/tenant/TenantConnectWhatsApp";
+import ArenaConnectWhatsApp from "./pages/arena-dashboard/ArenaConnectWhatsApp";
+import OrganizerConnectWhatsApp from "./pages/organizer/OrganizerConnectWhatsApp";
+import CompanyConnectWhatsApp from "./pages/company/CompanyConnectWhatsApp";
 import { Navigate } from "react-router-dom";
 
 const queryClient = new QueryClient();
@@ -144,6 +149,12 @@ const App = () => (
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            {/* Phase 13 — WhatsApp connection (outside shells to avoid gate redirect loop) */}
+            <Route path="/connect-whatsapp" element={<ConnectWhatsApp />} />
+            <Route path="/tenant/connect-whatsapp" element={<TenantConnectWhatsApp />} />
+            <Route path="/arena/connect-whatsapp" element={<ArenaConnectWhatsApp />} />
+            <Route path="/organizer/connect-whatsapp" element={<OrganizerConnectWhatsApp />} />
+            <Route path="/company/connect-whatsapp" element={<CompanyConnectWhatsApp />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/tournaments/create" element={<CreateTournament />} />
             <Route element={<AppLayout />}>
