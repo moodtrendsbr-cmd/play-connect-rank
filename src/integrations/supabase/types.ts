@@ -16,10 +16,12 @@ export type Database = {
     Tables: {
       ad_campaigns: {
         Row: {
+          boost_level: number
           budget: number
           company_id: string
           created_at: string
           cta_label: string | null
+          duration_days: number | null
           ends_at: string
           id: string
           image_url: string | null
@@ -36,10 +38,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          boost_level?: number
           budget?: number
           company_id: string
           created_at?: string
           cta_label?: string | null
+          duration_days?: number | null
           ends_at?: string
           id?: string
           image_url?: string | null
@@ -56,10 +60,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          boost_level?: number
           budget?: number
           company_id?: string
           created_at?: string
           cta_label?: string | null
+          duration_days?: number | null
           ends_at?: string
           id?: string
           image_url?: string | null
@@ -143,6 +149,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "ad_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "boost_performance_v"
+            referencedColumns: ["campaign_id"]
+          },
+          {
             foreignKeyName: "ad_events_slot_id_fkey"
             columns: ["slot_id"]
             isOneToOne: false
@@ -194,6 +207,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "ads_public"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_placements_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "boost_performance_v"
+            referencedColumns: ["campaign_id"]
           },
           {
             foreignKeyName: "ad_placements_slot_id_fkey"
@@ -1960,6 +1980,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      boost_pricing: {
+        Row: {
+          active: boolean
+          boost_level: number
+          description: string | null
+          display_name: string
+          duration_days: number
+          price_brl: number
+        }
+        Insert: {
+          active?: boolean
+          boost_level: number
+          description?: string | null
+          display_name: string
+          duration_days: number
+          price_brl: number
+        }
+        Update: {
+          active?: boolean
+          boost_level?: number
+          description?: string | null
+          display_name?: string
+          duration_days?: number
+          price_brl?: number
+        }
+        Relationships: []
       }
       clips: {
         Row: {
@@ -6645,6 +6692,46 @@ export type Database = {
         }
         Relationships: []
       }
+      boost_performance_v: {
+        Row: {
+          boost_level: number | null
+          budget: number | null
+          campaign_id: string | null
+          clicks: number | null
+          company_id: string | null
+          ends_at: string | null
+          impressions: number | null
+          kind: string | null
+          starts_at: string | null
+          status: string | null
+          target_id: string | null
+          target_type: string | null
+          tenant_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_campaigns_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_campaigns_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_campaigns_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies_contact_public: {
         Row: {
           address: string | null
@@ -6765,6 +6852,22 @@ export type Database = {
             referencedColumns: ["tier"]
           },
         ]
+      }
+      feed_unified_v: {
+        Row: {
+          campaign_id: string | null
+          company_id: string | null
+          item_id: string | null
+          item_key: string | null
+          item_type: string | null
+          occurred_at: string | null
+          payload: Json | null
+          priority_score: number | null
+          target_id: string | null
+          target_type: string | null
+          type: string | null
+        }
+        Relationships: []
       }
       marketplace_public: {
         Row: {
@@ -7275,6 +7378,10 @@ export type Database = {
         Args: { _resume_window_minutes?: number }
         Returns: number
       }
+      feed_should_inject_promo: {
+        Args: { _last_n?: number; _user_id: string }
+        Returns: boolean
+      }
       finance_apply_split_override: {
         Args: { _reason: string; _splits: Json; _transaction_id: string }
         Returns: string
@@ -7700,6 +7807,16 @@ export type Database = {
       prepare_session_confirmation: {
         Args: { _hash: string; _session_id: string; _snapshot: Json }
         Returns: undefined
+      }
+      purchase_boost: {
+        Args: {
+          _boost_level: number
+          _company_id?: string
+          _kind: string
+          _target_id: string
+          _target_type: string
+        }
+        Returns: Json
       }
       purchase_featured: {
         Args: { _entity_id: string; _entity_type: string; _tier: string }
