@@ -32,6 +32,7 @@ const Tournaments = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("all");
+  const { featuredSet: featuredTournaments } = useFeaturedSet("tournament");
 
   useEffect(() => {
     const fetch = async () => {
