@@ -1514,6 +1514,35 @@ export type Database = {
         }
         Relationships: []
       }
+      athlete_badges: {
+        Row: {
+          athlete_id: string
+          badge_code: string
+          earned_at: string
+          id: string
+        }
+        Insert: {
+          athlete_id: string
+          badge_code: string
+          earned_at?: string
+          id?: string
+        }
+        Update: {
+          athlete_id?: string
+          badge_code?: string
+          earned_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_badges_badge_code_fkey"
+            columns: ["badge_code"]
+            isOneToOne: false
+            referencedRelation: "badges_catalog"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       athlete_sponsors: {
         Row: {
           amount: number
@@ -1565,6 +1594,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      athlete_streaks: {
+        Row: {
+          athlete_id: string
+          current_streak: number
+          last_activity_date: string | null
+          longest_streak: number
+          updated_at: string
+        }
+        Insert: {
+          athlete_id: string
+          current_streak?: number
+          last_activity_date?: string | null
+          longest_streak?: number
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: string
+          current_streak?: number
+          last_activity_date?: string | null
+          longest_streak?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      athlete_xp: {
+        Row: {
+          athlete_id: string
+          current_xp: number
+          level: number
+          lifetime_xp: number
+          updated_at: string
+        }
+        Insert: {
+          athlete_id: string
+          current_xp?: number
+          level?: number
+          lifetime_xp?: number
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: string
+          current_xp?: number
+          level?: number
+          lifetime_xp?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       autonomy_kill_switches: {
         Row: {
@@ -1768,6 +1845,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      badges_catalog: {
+        Row: {
+          active: boolean
+          category: string
+          code: string
+          created_at: string
+          criteria: Json
+          description: string
+          icon: string | null
+          name: string
+          xp_reward: number
+        }
+        Insert: {
+          active?: boolean
+          category?: string
+          code: string
+          created_at?: string
+          criteria?: Json
+          description: string
+          icon?: string | null
+          name: string
+          xp_reward?: number
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          code?: string
+          created_at?: string
+          criteria?: Json
+          description?: string
+          icon?: string | null
+          name?: string
+          xp_reward?: number
+        }
+        Relationships: []
       }
       bookings: {
         Row: {
@@ -6257,6 +6370,36 @@ export type Database = {
         }
         Relationships: []
       }
+      xp_events: {
+        Row: {
+          athlete_id: string
+          created_at: string
+          delta: number
+          id: string
+          reason: string | null
+          source: string
+          source_id: string | null
+        }
+        Insert: {
+          athlete_id: string
+          created_at?: string
+          delta: number
+          id?: string
+          reason?: string | null
+          source: string
+          source_id?: string | null
+        }
+        Update: {
+          athlete_id?: string
+          created_at?: string
+          delta?: number
+          id?: string
+          reason?: string | null
+          source?: string
+          source_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       ads_public: {
@@ -6912,6 +7055,16 @@ export type Database = {
           risk_level: string
         }[]
       }
+      award_xp: {
+        Args: {
+          _athlete: string
+          _delta: number
+          _reason?: string
+          _source: string
+          _source_id: string
+        }
+        Returns: Json
+      }
       complete_session: {
         Args: { _result: Json; _session_id: string; _success: boolean }
         Returns: undefined
@@ -6930,6 +7083,7 @@ export type Database = {
         Returns: Json
       }
       enrollment_checkin_validate: { Args: { _token: string }; Returns: Json }
+      evaluate_badges: { Args: { _athlete: string }; Returns: Json }
       expire_pending_enrollments: { Args: never; Returns: number }
       expire_stale_sessions: {
         Args: { _resume_window_minutes?: number }
@@ -7450,6 +7604,10 @@ export type Database = {
       update_session_context: {
         Args: { _session_id: string; _ttl_minutes?: number; _values: Json }
         Returns: undefined
+      }
+      update_streak: {
+        Args: { _activity_date?: string; _athlete: string }
+        Returns: Json
       }
       wa_consume_qr_token: {
         Args: { _consumer_user_id: string; _token: string }
