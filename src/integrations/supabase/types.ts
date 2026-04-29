@@ -7415,6 +7415,15 @@ export type Database = {
         Returns: string
       }
       social_event_hide: { Args: { _event_id: string }; Returns: undefined }
+      social_event_should_emit: {
+        Args: {
+          _entity_id: string
+          _event_type: string
+          _profile_id: string
+          _window?: string
+        }
+        Returns: boolean
+      }
       social_identity_for_user: { Args: { _user_id: string }; Returns: string }
       social_identity_upsert: {
         Args: {
