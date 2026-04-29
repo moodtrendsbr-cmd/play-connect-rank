@@ -413,8 +413,10 @@ Deno.serve(async (req) => {
         result = data;
         linkedType = "tournament_modality"; linkedId = payload.modality_id;
       }
+    } catch (e: any) {
+      err = e?.message ?? String(e);
+    }
 
-    const summary = err
       ? `Falhou: ${err}`
       : summarizeResult(action_type, result);
 
