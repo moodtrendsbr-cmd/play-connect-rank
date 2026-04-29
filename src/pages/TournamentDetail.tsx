@@ -21,6 +21,7 @@ const TournamentDetail = () => {
   const [alreadyEnrolled, setAlreadyEnrolled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [partners, setPartners] = useState<any[]>([]);
+  const [sponsors, setSponsors] = useState<any[]>([]);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
@@ -52,6 +53,14 @@ const TournamentDetail = () => {
         .eq("tournament_id", id!)
         .order("position_order");
       setPartners(partnerData || []);
+
+      // Active paid sponsorships (P3 — produto/CTA in-tournament)
+      const { data: sponsorData } = await supabase
+        .from("tournament_sponsorships")
+        .select("id, logo_url, link, message, company_id, companies:company_id(id, name, logo_url)")
+        .eq("tournament_id", id!)
+        .eq("status", "active");
+      setSponsors(sponsorData || []);
     };
     if (id) fetch();
   }, [id, user]);
