@@ -7,8 +7,11 @@ import PostSkeleton from "@/components/feed/PostSkeleton";
 import ClipsBar from "@/components/feed/ClipsBar";
 import FriendSuggestions from "@/components/feed/FriendSuggestions";
 import SponsoredPostCard from "@/components/feed/SponsoredPostCard";
+import BoostedTournamentCard from "@/components/feed/BoostedTournamentCard";
+import BoostedProductCard from "@/components/feed/BoostedProductCard";
 import AdSlot from "@/components/ads/AdSlot";
 import { SocialActivityFeed } from "@/components/social/SocialActivityFeed";
+import { useFeedUnified, type UnifiedFeedItem } from "@/hooks/useFeedUnified";
 
 const PAGE_SIZE = 20;
 
@@ -19,11 +22,13 @@ const Feed = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sponsoredPosts, setSponsoredPosts] = useState<any[]>([]);
+  
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef(0);
   const mainRef = useRef<HTMLElement>(null);
+  const { items: promoItems } = useFeedUnified(12);
+  const [canInjectPromo, setCanInjectPromo] = useState(true);
 
   // Expose scroll to top for bottom nav
   useEffect(() => {
@@ -32,24 +37,16 @@ const Feed = () => {
     return () => window.removeEventListener("feed-scroll-top", handler);
   }, []);
 
-  // Fetch sponsored posts
+  // Anti-spam guard: hourly cap per user (10 promos/hour)
   useEffect(() => {
-    const fetchSponsored = async () => {
-      const { data } = await supabase
-        .from("sponsored_posts")
-        .select("*, companies(name, logo_url)")
-        .eq("active", true)
-        .lte("active_from", new Date().toISOString())
-        .gte("active_to", new Date().toISOString());
-      setSponsoredPosts(
-        (data || []).map((sp: any) => ({
-          id: sp.id, title: sp.title, content: sp.content, image_url: sp.image_url,
-          company_id: sp.company_id, company_name: sp.companies?.name, company_logo: sp.companies?.logo_url,
-        }))
-      );
-    };
-    fetchSponsored();
-  }, []);
+    if (!user) { setCanInjectPromo(true); return; }
+    (async () => {
+      const { data } = await supabase.rpc("feed_should_inject_promo", {
+        _user_id: user.id, _last_n: 50,
+      } as any);
+      setCanInjectPromo(data !== false);
+    })();
+  }, [user]);
 
   // Debounce search
   useEffect(() => {
@@ -283,15 +280,39 @@ const Feed = () => {
             <p className="text-sm mt-1 text-muted-foreground">Seja o primeiro a publicar!</p>
           </div>
         ) : (
-          posts.map((post, index) => (
-            <div key={post.id}>
-              {index === 3 && <FriendSuggestions />}
-              {index > 0 && index % 5 === 0 && sponsoredPosts.length > 0 && (
-                <SponsoredPostCard post={sponsoredPosts[Math.floor(index / 5 - 1) % sponsoredPosts.length]} />
-              )}
-              <PostCard post={post} userId={user?.id} onLike={handleLike} onSave={handleSave} onRefresh={handleRefresh} />
-            </div>
-          ))
+          posts.map((post, index) => {
+            // Anti-spam: at most one promo every 5 organic items, and respect hourly cap
+            const promoSlotIdx = index > 0 && index % 5 === 0 ? Math.floor(index / 5) - 1 : -1;
+            const promo: UnifiedFeedItem | null =
+              canInjectPromo && promoSlotIdx >= 0 && promoItems.length > 0
+                ? promoItems[promoSlotIdx % promoItems.length]
+                : null;
+            return (
+              <div key={post.id}>
+                {index === 3 && <FriendSuggestions />}
+                {promo && promo.item_type === "tournament_boost" && (
+                  <BoostedTournamentCard item={promo} />
+                )}
+                {promo && promo.item_type === "product_boost" && (
+                  <BoostedProductCard item={promo} />
+                )}
+                {promo && (promo.item_type === "company_boost" || promo.item_type === "sponsored_post") && (
+                  <SponsoredPostCard
+                    post={{
+                      id: promo.item_key,
+                      title: promo.payload?.title ?? "",
+                      content: promo.payload?.content ?? promo.payload?.cta_label ?? "",
+                      image_url: promo.payload?.image_url ?? null,
+                      company_id: promo.company_id ?? "",
+                      company_name: promo.company_name ?? undefined,
+                      company_logo: promo.company_logo ?? undefined,
+                    }}
+                  />
+                )}
+                <PostCard post={post} userId={user?.id} onLike={handleLike} onSave={handleSave} onRefresh={handleRefresh} />
+              </div>
+            );
+          })
         )}
         {loadingMore && <PostSkeleton />}
         <div ref={loadMoreRef} className="h-4" />
