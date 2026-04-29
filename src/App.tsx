@@ -125,6 +125,8 @@ import AdminWhatsAppLeads from "./pages/admin/AdminWhatsAppLeads";
 import TenantWhatsAppRouting from "./pages/tenant/TenantWhatsAppRouting";
 import ArenaMessages from "./pages/arena-dashboard/ArenaMessages";
 import TenantMessages from "./pages/tenant/TenantMessages";
+import TenantTournaments from "./pages/tenant/TenantTournaments";
+import TournamentCheckinScan from "./pages/TournamentCheckinScan";
 import OrganizerMessages from "./pages/organizer/OrganizerMessages";
 import ConnectWhatsApp from "./pages/connect/ConnectWhatsApp";
 import TenantConnectWhatsApp from "./pages/tenant/TenantConnectWhatsApp";
@@ -190,6 +192,7 @@ const App = () => (
             <Route path="/tournaments/:id/manage" element={<ManageTournament />} />
             <Route path="/tournaments/:id/brackets" element={<Brackets />} />
             <Route path="/tournaments/:id/results" element={<Results />} />
+            <Route path="/tournaments/:id/checkin/scan" element={<TournamentCheckinScan />} />
             <Route path="/sponsor" element={<SponsorLayout />}>
               <Route path="dashboard" element={<SponsorDashboard />} />
               <Route path="tournaments" element={<SponsorTournaments />} />
@@ -292,6 +295,8 @@ const App = () => (
               <Route path="comandos" element={<TenantCommands />} />
               <Route path="whatsapp-routing" element={<TenantWhatsAppRouting />} />
               <Route path="mensagens-wa" element={<TenantMessages />} />
+              <Route path="tournaments" element={<TenantTournaments />} />
+              <Route path="torneios" element={<TenantTournaments />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
