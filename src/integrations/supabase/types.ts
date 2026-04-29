@@ -3797,6 +3797,33 @@ export type Database = {
         }
         Relationships: []
       }
+      orkym_proactive_cooldowns: {
+        Row: {
+          count_24h: number
+          last_sent_at: string
+          scope_id: string
+          scope_type: string
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          count_24h?: number
+          last_sent_at?: string
+          scope_id: string
+          scope_type: string
+          trigger_type: string
+          updated_at?: string
+        }
+        Update: {
+          count_24h?: number
+          last_sent_at?: string
+          scope_id?: string
+          scope_type?: string
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       orkym_proactive_eligibility: {
         Row: {
           category: string
@@ -3846,6 +3873,104 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      orkym_trigger_feedback: {
+        Row: {
+          correlation_id: string | null
+          created_at: string
+          event: string
+          id: string
+          metadata: Json
+          trigger_id: string
+        }
+        Insert: {
+          correlation_id?: string | null
+          created_at?: string
+          event: string
+          id?: string
+          metadata?: Json
+          trigger_id: string
+        }
+        Update: {
+          correlation_id?: string | null
+          created_at?: string
+          event?: string
+          id?: string
+          metadata?: Json
+          trigger_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orkym_trigger_feedback_trigger_id_fkey"
+            columns: ["trigger_id"]
+            isOneToOne: false
+            referencedRelation: "orkym_triggers_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orkym_triggers_queue: {
+        Row: {
+          arena_id: string | null
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          dedup_key: string | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          last_error: string | null
+          payload: Json
+          priority: string
+          processed_at: string | null
+          profile_type: string
+          scheduled_for: string
+          status: string
+          tenant_id: string
+          trigger_type: string
+          user_id: string | null
+        }
+        Insert: {
+          arena_id?: string | null
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          dedup_key?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          priority?: string
+          processed_at?: string | null
+          profile_type: string
+          scheduled_for?: string
+          status?: string
+          tenant_id: string
+          trigger_type: string
+          user_id?: string | null
+        }
+        Update: {
+          arena_id?: string | null
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          dedup_key?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          priority?: string
+          processed_at?: string | null
+          profile_type?: string
+          scheduled_for?: string
+          status?: string
+          tenant_id?: string
+          trigger_type?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       orkym_usage: {
         Row: {
@@ -6623,6 +6748,7 @@ export type Database = {
           tier: string
         }[]
       }
+      orkym_generate_periodic_triggers: { Args: never; Returns: Json }
       orkym_get_tenant_tier: {
         Args: { _tenant: string }
         Returns: {
@@ -6651,7 +6777,75 @@ export type Database = {
       }
       orkym_ingest_actions: { Args: { _payload: Json }; Returns: number }
       orkym_ingest_tasks: { Args: { _payload: Json }; Returns: number }
+      orkym_proactive_check_eligibility: {
+        Args: {
+          _category: string
+          _scope_id?: string
+          _scope_type?: string
+          _tenant_id: string
+          _trigger_type: string
+          _user_id: string
+        }
+        Returns: Json
+      }
+      orkym_proactive_record_send: {
+        Args: { _scope_id: string; _scope_type: string; _trigger_type: string }
+        Returns: undefined
+      }
       orkym_purge_dedup: { Args: never; Returns: number }
+      orkym_trigger_claim_batch: {
+        Args: { _limit?: number }
+        Returns: {
+          arena_id: string | null
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          dedup_key: string | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          last_error: string | null
+          payload: Json
+          priority: string
+          processed_at: string | null
+          profile_type: string
+          scheduled_for: string
+          status: string
+          tenant_id: string
+          trigger_type: string
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "orkym_triggers_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      orkym_trigger_complete: {
+        Args: { _error?: string; _id: string; _status: string }
+        Returns: undefined
+      }
+      orkym_trigger_default_cooldown: {
+        Args: { _trigger_type: string }
+        Returns: string
+      }
+      orkym_trigger_enqueue: {
+        Args: {
+          p_arena_id: string
+          p_dedup_key: string
+          p_entity_id: string
+          p_entity_type: string
+          p_payload: Json
+          p_priority: string
+          p_profile_type: string
+          p_scheduled_for?: string
+          p_tenant_id: string
+          p_trigger_type: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       prepare_session_confirmation: {
         Args: { _hash: string; _session_id: string; _snapshot: Json }
         Returns: undefined

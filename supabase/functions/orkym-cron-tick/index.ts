@@ -140,6 +140,27 @@ Deno.serve(async (req) => {
     memoryExtract = x;
   } catch (e) { console.error("memory_extract_all failed", e); }
 
+  // Phase 12.9 — proactive ops: generate periodic triggers, then process queue
+  let proactiveGen: unknown = null;
+  let proactiveProcess: unknown = null;
+  try {
+    const { data: g } = await admin.rpc("orkym_generate_periodic_triggers");
+    proactiveGen = g;
+  } catch (e) { console.error("orkym_generate_periodic_triggers failed", e); }
+  try {
+    const internalToken = Deno.env.get("ORKYM_INTERNAL_TOKEN") || "";
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/orkym-proactive-process`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${serviceJwt}`,
+        "x-internal-token": internalToken,
+      },
+      body: JSON.stringify({ limit: 100 }),
+    });
+    proactiveProcess = await r.json().catch(() => ({ ok: false }));
+  } catch (e) { console.error("orkym-proactive-process failed", e); }
+
   return new Response(JSON.stringify({
     ok: true,
     processed: processedIds.length,
@@ -148,5 +169,7 @@ Deno.serve(async (req) => {
     expired_sessions: expiredSessions,
     memory_decay: memoryDecay,
     memory_extract: memoryExtract,
+    proactive_generated: proactiveGen,
+    proactive_processed: proactiveProcess,
   }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
