@@ -54,11 +54,14 @@ serve(async (req) => {
         let enrollmentIds: string[] = [];
         let tournamentId: string | null = null;
         let hasSplit = false;
+        let boostCampaignId: string | null = null;
 
         try {
           const ref = JSON.parse(payment.external_reference);
           if (Array.isArray(ref)) {
             enrollmentIds = ref;
+          } else if (ref?.source_type === "boost") {
+            boostCampaignId = ref.campaign_id ?? null;
           } else {
             enrollmentIds = ref.enrollment_ids || [];
             tournamentId = ref.tournament_id || null;
@@ -66,6 +69,34 @@ serve(async (req) => {
           }
         } catch {
           enrollmentIds = [payment.external_reference];
+        }
+
+        // Phase M: handle boost payment — flip financial_transactions to paid;
+        // the trg_boost_activate_on_paid trigger will activate the campaign.
+        if (boostCampaignId) {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          const supabase = createClient(supabaseUrl, supabaseKey);
+
+          const { error: ftxErr } = await supabase
+            .from("financial_transactions")
+            .update({
+              status: "paid",
+              paid_at: new Date().toISOString(),
+              payment_reference: String(paymentId),
+            })
+            .eq("source_type", "boost")
+            .eq("source_id", boostCampaignId);
+
+          if (ftxErr) {
+            console.error("Boost ftx update error:", ftxErr);
+          } else {
+            console.log(`Boost campaign ${boostCampaignId} marked paid via webhook`);
+          }
+
+          return new Response(JSON.stringify({ received: true, boost: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
 
         // Update enrollments
