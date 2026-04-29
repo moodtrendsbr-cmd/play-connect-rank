@@ -36,22 +36,13 @@ const groups = [
   {
     label: "Eventos",
     items: [
-      { title: "Meus eventos", url: "/organizer/dashboard/eventos", icon: Trophy },
+      { title: "Meus eventos", url: "/organizer/dashboard", icon: Trophy, end: true },
       { title: "Criar evento", url: "/tournaments/create", icon: PlusCircle },
-      { title: "Inscrições", url: "/organizer/dashboard/inscricoes", icon: ClipboardList },
-    ],
-  },
-  {
-    label: "Operação",
-    items: [
-      { title: "Jogos & Brackets", url: "/organizer/dashboard/jogos", icon: GitBranch },
-      { title: "Check-in", url: "/organizer/dashboard/jogos#checkin", icon: CheckCircle2 },
     ],
   },
   {
     label: "Performance & Financeiro",
     items: [
-      { title: "Performance", url: "/organizer/dashboard/performance", icon: TrendingUp },
       { title: "Financeiro do evento", url: "/organizer/dashboard/financeiro", icon: DollarSign },
     ],
   },

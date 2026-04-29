@@ -38,21 +38,13 @@ const groups = [
   {
     label: "Campanhas",
     items: [
-      { title: "Visão geral", url: "/company/campanhas", icon: Megaphone },
       { title: "Patrocinar torneio", url: "/company/sponsor/torneios", icon: Trophy },
       { title: "Meus patrocínios", url: "/company/sponsor/resumo", icon: Megaphone },
     ],
   },
   {
-    label: "Performance",
-    items: [
-      { title: "Resultados", url: "/company/performance", icon: LineChart },
-    ],
-  },
-  {
     label: "Visibilidade",
     items: [
-      { title: "Como apareço", url: "/company/visibilidade", icon: Eye },
       { title: "Explore", url: "/explore", icon: Compass },
       { title: "Feed MoodPlay", url: "/feed", icon: Rss },
     ],

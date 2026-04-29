@@ -38,7 +38,6 @@ const groups = [
   {
     label: "Meu Dia",
     items: [
-      { title: "Hoje", url: "/athlete/meu-dia", icon: Sun },
       { title: "Mensagens", url: "/athlete/mensagens", icon: MessageSquare },
     ],
   },
@@ -46,14 +45,12 @@ const groups = [
     label: "Torneios",
     items: [
       { title: "Torneios", url: "/athlete/torneios", icon: Trophy },
-      { title: "Meus jogos", url: "/athlete/jogos", icon: Swords },
     ],
   },
   {
-    label: "Ranking & Histórico",
+    label: "Ranking",
     items: [
       { title: "Ranking", url: "/athlete/ranking", icon: Medal },
-      { title: "Histórico", url: "/athlete/historico", icon: History },
     ],
   },
   {

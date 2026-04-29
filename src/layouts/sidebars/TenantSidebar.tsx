@@ -31,7 +31,6 @@ const groups = [
     items: [
       { title: "Arenas", url: "/tenant/arenas", icon: Building2 },
       { title: "Organizadores", url: "/tenant/membros", icon: Users },
-      { title: "Empresas", url: "/tenant/empresas", icon: Store },
     ],
   },
   {
@@ -39,12 +38,6 @@ const groups = [
     items: [
       { title: "Financeiro", url: "/tenant/financeiro", icon: DollarSign },
       { title: "Conta de pagamento", url: "/tenant/pagamento", icon: CreditCard },
-    ],
-  },
-  {
-    label: "Operações",
-    items: [
-      { title: "Eventos", url: "/tenant/dashboard#operacoes", icon: Activity },
     ],
   },
   {
@@ -57,7 +50,6 @@ const groups = [
   {
     label: "Configurações",
     items: [
-      { title: "Branding", url: "/tenant/branding", icon: Palette },
       { title: "Domínios", url: "/tenant/dominios", icon: Globe },
     ],
   },
