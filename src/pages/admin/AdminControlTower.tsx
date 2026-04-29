@@ -7,6 +7,8 @@ import { Gauge, Zap, TrendingUp, Clock, RefreshCw, AlertTriangle, Sparkles } fro
 import { fetchAllTenantsUsage, TIER_LABELS, formatTimeSaved, type UsageSummary, type AutonomyTier } from "@/lib/autonomyTier";
 import { supabase } from "@/integrations/supabase/client";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
+import { GrowthDashboardPanel } from "@/components/growth/GrowthDashboardPanel";
+import { BudgetEditor } from "@/components/growth/BudgetEditor";
 import { toast } from "sonner";
 
 const tierColor: Record<AutonomyTier, string> = {
