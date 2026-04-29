@@ -48,6 +48,12 @@ const TRIGGER_TO_CATEGORY: Record<string, string> = {
   enrollment_created: "operations",
   enrollment_paid: "operations",
   match_result: "operations",
+  // Phase G — Autonomous Growth Engine
+  tournament_low_enrollment: "marketing",
+  inactive_athlete: "retention",
+  near_rank_up: "retention",
+  idle_court_slot: "retention",
+  low_message_performance: "operations",
 };
 
 function safeJson(b: unknown, status = 200) {
