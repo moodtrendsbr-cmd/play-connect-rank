@@ -2508,6 +2508,9 @@ export type Database = {
           athlete_name: string | null
           athlete_whatsapp: string | null
           checked_in_at: string | null
+          checked_in_by: string | null
+          checkin_method: string | null
+          checkin_token: string | null
           created_at: string
           expires_at: string | null
           id: string
@@ -2526,6 +2529,9 @@ export type Database = {
           athlete_name?: string | null
           athlete_whatsapp?: string | null
           checked_in_at?: string | null
+          checked_in_by?: string | null
+          checkin_method?: string | null
+          checkin_token?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string
@@ -2544,6 +2550,9 @@ export type Database = {
           athlete_name?: string | null
           athlete_whatsapp?: string | null
           checked_in_at?: string | null
+          checked_in_by?: string | null
+          checkin_method?: string | null
+          checkin_token?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string
@@ -6574,6 +6583,11 @@ export type Database = {
         Returns: string
       }
       current_tenant_id: { Args: never; Returns: string }
+      enroll_athlete_in_tournament: {
+        Args: { _modality_id?: string; _tournament_id: string }
+        Returns: Json
+      }
+      enrollment_checkin_validate: { Args: { _token: string }; Returns: Json }
       expire_pending_enrollments: { Args: never; Returns: number }
       expire_stale_sessions: {
         Args: { _resume_window_minutes?: number }
@@ -6634,8 +6648,13 @@ export type Database = {
         Args: { _athlete_id: string; _modality?: string }
         Returns: Json
       }
+      get_my_next_match: { Args: { _user_id?: string }; Returns: Json }
       get_revenue_today: { Args: { _arena_id: string }; Returns: Json }
       get_tournament_standings: {
+        Args: { _tournament_id: string }
+        Returns: Json
+      }
+      get_tournament_status_summary: {
         Args: { _tournament_id: string }
         Returns: Json
       }
@@ -6854,8 +6873,13 @@ export type Database = {
           tier: string
         }[]
       }
+      orkym_generate_low_enrollment_triggers: { Args: never; Returns: number }
       orkym_generate_optimization_triggers: { Args: never; Returns: number }
       orkym_generate_periodic_triggers: { Args: never; Returns: Json }
+      orkym_generate_relevant_tournament_triggers: {
+        Args: never
+        Returns: number
+      }
       orkym_get_tenant_tier: {
         Args: { _tenant: string }
         Returns: {
@@ -6994,6 +7018,10 @@ export type Database = {
         Args: { _hash: string; _session_id: string; _snapshot: Json }
         Returns: undefined
       }
+      register_match_score: {
+        Args: { _match_id: string; _score_a: number; _score_b: number }
+        Returns: Json
+      }
       release_session_lock: {
         Args: { _request_id: string; _session_id: string }
         Returns: undefined
@@ -7035,6 +7063,10 @@ export type Database = {
       search_global: { Args: { _term: string }; Returns: Json }
       set_current_tenant: { Args: { _tenant_id: string }; Returns: undefined }
       set_tenant_from_user: { Args: { _user_id: string }; Returns: string }
+      sortear_grupos: {
+        Args: { _modality_id: string; _num_groups: number }
+        Returns: Json
+      }
       update_session_context: {
         Args: { _session_id: string; _ttl_minutes?: number; _values: Json }
         Returns: undefined
