@@ -177,5 +177,6 @@ Deno.serve(async (req) => {
     memory_extract: memoryExtract,
     proactive_generated: proactiveGen,
     proactive_processed: proactiveProcess,
+    optimization_generated: optimizationGen,
   }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
