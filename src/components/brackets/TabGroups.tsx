@@ -250,6 +250,7 @@ const TabGroups = ({ modalityId, canManage = false }: TabGroupsProps) => {
           </div>
         );
       })}
+      </div>
     </div>
   );
 };
