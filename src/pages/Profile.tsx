@@ -17,6 +17,7 @@ import { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
 import PostGrid from "@/components/profile/PostGrid";
 import TournamentMemories from "@/components/profile/TournamentMemories";
+import { SocialPrivacyToggle } from "@/components/social/SocialPrivacyToggle";
 import { WaIdentityPanel } from "@/components/conversational/WaIdentityPanel";
 
 const Profile = () => {
