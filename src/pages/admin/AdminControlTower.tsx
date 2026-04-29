@@ -254,6 +254,8 @@ const AdminControlTower = () => {
         </CardHeader>
         <CardContent>
           <RevenueDashboardPanel scope={{ type: "admin" }} />
+          <GrowthDashboardPanel scope={{ type: "admin" }} />
+          <BudgetEditor scope={{ type: "global" }} title="Orçamento global de growth" />
         </CardContent>
       </Card>
     </div>
