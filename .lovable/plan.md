@@ -1,233 +1,157 @@
+## Phase 12.9 — Proactive ORKYM Operations
 
-# Phase 12.8 — Memory + Personalization Layer
+The MoodPlay stops being purely reactive. Operational events (enrollments, subscriptions, bookings, attendance, marketplace, campaigns, finance) feed a triggers queue. The cron processes the queue, checks eligibility + rate limits + cooldowns, asks ORKYM whether/what to send, then dispatches outbound WhatsApp via the ORKYM gateway. All decisions stay in ORKYM; MoodPlay only orchestrates.
 
-**Princípio:** ORKYM é o cérebro. MoodPlay apenas **armazena, extrai deterministicamente e expõe** memória operacional estruturada. Zero IA local. Zero embeddings. Zero scoring complexo.
+### Architecture (data flow)
 
-## Arquitetura
-
-Tabela única genérica `conversational_memory` (não fragmentar por perfil — perfil vira coluna). Extração determinística via SQL (triggers + função periódica). API única para ORKYM consumir. Injeção opcional nos edge functions existentes.
-
----
-
-## 1. Schema (1 migração)
-
-### `conversational_memory`
 ```text
-id uuid pk
-tenant_id uuid not null              -- isolamento obrigatório
-arena_id uuid null                   -- escopo opcional
-user_id uuid null                    -- escopo opcional (atleta/aluno)
-profile_type text not null           -- athlete|arena|organizer|company|tenant
-entity_type text not null            -- 'user'|'arena'|'organizer'|'company'|'tenant'
-entity_id uuid not null              -- a chave do dono da memória
-memory_type text not null            -- 'preference'|'pattern'|'history'|'behavior'|'insight'
-key text not null                    -- 'preferred_sport', 'preferred_time', 'top_product'…
-value jsonb not null                 -- {value, label?, count?, samples?}
-confidence numeric(3,2) not null default 0.50  -- 0.00..1.00
-source text not null                 -- 'enrollments'|'bookings'|'commands'|'orders'|'events'|'manual'
-sample_size int not null default 1
-last_seen_at timestamptz default now()
-expires_at timestamptz null          -- null = sem expiração
-created_at timestamptz default now()
-updated_at timestamptz default now()
-unique (entity_type, entity_id, key)
+operational tables (enrollments, bookings, subscriptions, ...)
+        │  AFTER INSERT/UPDATE triggers
+        ▼
+public.orkym_triggers_queue  (pending)
+        │  orkym-cron-tick  (priority high → medium → low)
+        ▼
+eligibility + rate-limit + cooldown + dedup
+        │  pass
+        ▼
+POST orkym-invoke  domain=proactive action=decide
+        │  { trigger, memory_context, profile_type, scope }
+        ▼
+ORKYM responds: { should_send, message, action?, priority }
+        │  should_send = true
+        ▼
+resolve_whatsapp_instance → wa-send-message (NEW)
+        │
+        ▼
+whatsapp_messages + conversational_commands (direction=outbound, initiated_by=orkym)
+        │
+        ▼
+feedback events on delivery / reply / conversion
 ```
 
-Índices: `(tenant_id, profile_type)`, `(entity_type, entity_id)`, `(arena_id, key)`, `(expires_at)` parcial WHERE not null.
+### 1. Database (one migration)
 
-### `conversational_memory_events` (auditoria leve)
-```text
-id, tenant_id, memory_id (nullable), event_type ('created'|'updated'|'expired'|'used'),
-context jsonb, created_at
-```
+**`public.orkym_triggers_queue`**
+- `id uuid pk`, `tenant_id uuid not null`, `arena_id uuid null`, `user_id uuid null`, `profile_type text` (`athlete|arena|organizer|company|tenant`)
+- `trigger_type text not null` (e.g. `subscription_due`, `attendance_drop`, `idle_slot`, `low_enrollment`, `low_campaign_performance`, `revenue_drop`)
+- `entity_type text`, `entity_id uuid`, `payload jsonb default '{}'`
+- `priority text check in (high, medium, low) default 'medium'`
+- `status text check in (pending, claimed, processed, skipped, failed) default 'pending'`
+- `dedup_key text` (e.g. `subscription_due|<sub_id>|<period>`) — unique partial index `WHERE status IN ('pending','claimed','processed')`
+- `attempts int default 0`, `last_error text`, `scheduled_for timestamptz default now()`
+- `created_at`, `claimed_at`, `processed_at`
+- Indexes: `(status, priority, scheduled_for)`, `(tenant_id, created_at desc)`, `(user_id, trigger_type, created_at desc)`
+- RLS: tenant admin / arena owner / super admin read-only; service role writes.
 
-### RLS
-- `conversational_memory`: SELECT permitido a admin do tenant, dono do escopo (arena owner, company owner, organizer, próprio user). Sem INSERT/UPDATE direto pelo client — só funções `SECURITY DEFINER`.
-- `conversational_memory_events`: SELECT só admin/owner; INSERT só via funções.
+**`public.orkym_trigger_feedback`** (lightweight)
+- `id`, `trigger_id fk`, `event text` (`message_sent|delivered|read|responded|ignored|converted`), `correlation_id`, `metadata jsonb`, `created_at`.
 
----
+**`public.orkym_proactive_cooldowns`**
+- `(scope_type, scope_id, trigger_type)` PK with `last_sent_at`, `count_24h`. Used for cooldown lookups.
 
-## 2. Extração determinística (SQL puro)
+**RPCs**
+- `orkym_trigger_enqueue(p_tenant, p_arena, p_user, p_profile_type, p_trigger_type, p_entity_type, p_entity_id, p_payload, p_priority, p_dedup_key, p_scheduled_for)` — security definer, conflict-do-nothing on `dedup_key`.
+- `orkym_trigger_claim_batch(_limit int)` — picks N pending rows ordered `priority,scheduled_for`, marks `claimed`.
+- `orkym_trigger_complete(_id, _status, _error)`.
+- `orkym_proactive_check_eligibility(_user_id, _tenant_id, _category, _trigger_type)` returns `{ eligible boolean, reason text }` — checks `orkym_proactive_eligibility.opted_in`, daily user cap (configurable, default 3/day), tenant cap (default 200/day from `whatsapp_messages` count where `initiated_by='orkym'`), per-trigger cooldown (default 24h).
+- `orkym_proactive_record_send(...)` — updates `orkym_proactive_cooldowns`.
 
-### RPCs SECURITY DEFINER
-- `memory_upsert(_entity_type, _entity_id, _tenant, _arena, _user, _profile_type, _memory_type, _key, _value, _confidence, _source, _sample_size, _ttl_days)` — upsert com merge de `sample_size`/`last_seen_at` e re-cálculo de confidence (`min(0.99, 0.3 + sample_size*0.05)`).
-- `memory_extract_athlete(_user_id)` — varre `enrollments`, `bookings`, `athlete_activities` dos últimos 180d e calcula:
-  - `preferred_sport` (modalidade mais frequente, mín. 3 ocorrências)
-  - `preferred_time_window` (faixa horária mais usada em bookings)
-  - `preferred_arena` (arena com mais bookings/enrollments)
-  - `level_category` (último `category` mais usado)
-  - `enrollment_pattern` (`'last_minute'` | `'early_bird'` baseado em delta médio)
-- `memory_extract_arena(_arena_id)` — varre 90d:
-  - `idle_slot_pattern` (dia/hora com ocupação <30%)
-  - `recurring_students` (top 10 alunos ativos)
-  - `chronic_overdue_students` (>= 2 ciclos overdue)
-  - `top_instructor` (mais aulas atendidas)
-  - `low_occupancy_classes`
-- `memory_extract_organizer(_organizer_user_id)`:
-  - `frequent_tournament_type`, `frequent_categories`, `preferred_arenas`
-- `memory_extract_company(_company_id)`:
-  - `top_products` (top 5 por unidades), `best_campaign_type`
-- `memory_extract_tenant(_tenant_id)`:
-  - `top_arenas`, `recurring_issues` (de `arena_operational_events`), `orkym_usage_pattern`
-- `memory_extract_all()` — orquestrador que itera entidades ativas (atletas com atividade últimos 60d, arenas ativas, etc.) e chama os extractors. Limita batch (ex: 200 entidades por chamada).
+**Triggers (deterministic enqueue)**
+- `arena_student_subscriptions`: AFTER UPDATE/INSERT — when `next_due_at` within 5 days and `status='active'` enqueue `subscription_due` (priority=high if overdue).
+- `arena_attendance`: AFTER INSERT `status='absent'` — count last 4 weeks; if ≥ 3 absences enqueue `attendance_drop` (priority=medium).
+- `bookings`: AFTER INSERT — recompute idle slot pattern via existing memory; nightly cron job alternative (we'll keep it cron-only to avoid noise).
+- `enrollments`: AFTER INSERT — count tournament fill rate; if < 30 % and start_date < 7 days → enqueue `low_enrollment` for organizer.
+- `marketplace_orders`: AFTER UPDATE `status='paid'` — enqueue `top_product` for company (priority=low).
+- `ad_campaigns`: nightly cron only (no row-level signal yet).
+- `financial_transactions`: AFTER INSERT for tenant revenue drop — done in cron, not trigger, to compare deltas.
 
-### Triggers leves (incrementais)
-- `trg_memory_from_booking` AFTER INSERT em `bookings` (status confirmed) → bump `preferred_time_window` + `preferred_arena` do user.
-- `trg_memory_from_enrollment` AFTER INSERT em `enrollments` → bump `preferred_sport` (modalidade) do atleta.
-- `trg_memory_from_order` AFTER INSERT em `marketplace_orders` (status paid) → bump `top_products` da company.
+The cron-only triggers (`idle_slot`, `low_campaign_performance`, `revenue_drop`, `relevant_tournament`) are produced by a new SQL function `orkym_generate_periodic_triggers()` invoked from `orkym-cron-tick`.
 
-Triggers chamam `memory_upsert` com `sample_size=1`. Confidence cresce naturalmente.
+### 2. Edge functions
 
-### Decay
-- Função `memory_apply_decay()` chamada pelo `orkym-cron-tick`:
-  - Marca `expires_at = now()` para memórias com `last_seen_at < now() - interval '180 days'`.
-  - Insere evento `expired`.
-  - Decrementa confidence em 0.05 quando `last_seen_at` > 60d (sem expirar ainda).
+**NEW `supabase/functions/wa-send-message/index.ts`**
+- `verify_jwt = false`, service-token internal use only (asserted via `x-internal-token` matching `ORKYM_INTERNAL_TOKEN`).
+- Input: `{ instance_id?, wa_phone, body, template_name?, template_vars?, tenant_id, arena_id?, user_id?, category, correlation_id, idempotency_key, command_id? }`.
+- Resolves instance via `resolve_whatsapp_instance` if missing.
+- Posts to ORKYM `/whatsapp/send` (existing ORKYM endpoint pattern, HMAC-signed using `ORKYM_HMAC_SECRET` like `orkym-whatsapp-connection`).
+- Inserts `whatsapp_messages` (`direction='outbound', initiated_by='orkym'`) and updates with `external_message_id` + `delivery_status`.
+- On success returns `{ ok, message_id, external_message_id }`.
 
----
+**NEW `supabase/functions/orkym-proactive-process/index.ts`**
+- Internal (service-token guarded). Params: `{ limit?: 100 }`.
+- Calls `orkym_trigger_claim_batch`.
+- For each trigger:
+  1. Resolve scope (`tenant_id`, `arena_id`, `user_id`).
+  2. Fetch `memory_context` via `getMemoryContext` shared helper.
+  3. Call `orkym_proactive_check_eligibility`. If not eligible → `complete(skipped, reason)` + feedback `ignored`.
+  4. POST to `orkym-invoke` with `domain='proactive'`, `action='decide'`, payload `{ trigger, memory_context, profile_type, tenant_id, arena_id, user_id }`.
+  5. If `should_send`:
+     - Insert outbound `conversational_commands` (`direction='outbound', initiated_by='orkym', status='dispatched'`, `linked_entity_type=trigger`).
+     - Call `wa-send-message` with `command_id`, `category` (mapped from trigger), `idempotency_key = dedup_key`.
+     - Record `orkym_proactive_record_send` and feedback `message_sent`.
+     - `complete(processed)`.
+  6. Else `complete(skipped, 'orkym_no_send')`.
+- Robust try/catch per trigger; failures → `complete(failed, err)` and `attempts++`.
 
-## 3. Edge function `moodplay-memory-context`
+**EDIT `supabase/functions/orkym-cron-tick/index.ts`**
+- After existing memory work add:
+  - `await admin.rpc('orkym_generate_periodic_triggers')` (inside try/catch).
+  - `fetch(orkym-proactive-process, { limit: 100 })`.
 
-Path: `supabase/functions/moodplay-memory-context/index.ts` (`verify_jwt = false`, HMAC obrigatório igual a `moodplay-execute-action`).
+**EDIT `supabase/functions/wa-bridge/index.ts`** (feedback loop on inbound)
+- When inbound message arrives and there's a recent outbound `conversational_commands` to the same phone within 24 h with `linked_entity_type='trigger'`, insert `orkym_trigger_feedback (event='responded')`. Already-existing multi-turn (12.7) and memory (12.8) wiring continues.
+- Also when message-status webhooks (already handled) update `delivery_status`, mirror into feedback (`delivered`, `read`).
 
-**Request**:
-```json
-{
-  "tenant_id": "uuid",
-  "arena_id": "uuid?",
-  "user_id": "uuid?",
-  "company_id": "uuid?",
-  "organizer_user_id": "uuid?",
-  "profile_type": "athlete|arena|organizer|company|tenant",
-  "context": "booking|billing|tournament|marketplace|growth|general",
-  "max_items": 20
-}
-```
+**EDIT `supabase/config.toml`** to register `wa-send-message` and `orkym-proactive-process` with `verify_jwt = false`.
 
-**Lógica**:
-1. Verifica HMAC + timestamp (reusa helpers de `moodplay-execute-action`).
-2. Resolve `entity_type`/`entity_id` pelo `profile_type`.
-3. Filtra `conversational_memory` por entity + tenant + (opcional) `key` relevantes para `context`:
-   - `booking` → time_window, arena, sport
-   - `billing` → overdue patterns, recurring_students
-   - `tournament` → preferred_sport, level_category, frequent_categories
-   - `marketplace` → top_products, best_campaign
-   - `growth` → tenant/arena patterns
-   - `general` → tudo, ordenado por confidence
-4. Ordena por `confidence DESC, last_seen_at DESC`, limita `max_items`.
-5. Gera `summary` determinístico (template string em PT-BR concatenando top 3 chaves — sem LLM).
-6. Registra `memory.used` em `conversational_memory_events`.
+### 3. Frontend
 
-**Response**:
-```json
-{
-  "ok": true,
-  "memory_context": {
-    "entity_type": "user",
-    "entity_id": "...",
-    "memories": [
-      { "key": "preferred_sport", "value": {"value":"beach_tennis","count":7},
-        "confidence": 0.78, "source": "enrollments",
-        "last_seen_at": "..." }
-    ],
-    "summary": "Atleta costuma jogar beach tennis à noite na Arena Praia Grande."
-  }
-}
-```
+Light, observability-only (no new flows for end-users beyond opt-in already shipped):
 
-7. Falhas → `{ok:true, memory_context:null, degraded:true}` (nunca quebra ORKYM).
+- **NEW** `src/components/orkym/ProactiveTriggersPanel.tsx` — table of recent triggers (status, priority, trigger_type, entity, sent?). Visible in Tenant + Arena dashboards.
+- **NEW** `src/hooks/useOrkymTriggers.ts` — fetches `orkym_triggers_queue` + feedback for current scope.
+- **EDIT** existing tenant/arena dashboards to mount the panel under the existing ORKYM section.
+- No new auth flows; opt-in already lives in `orkym_proactive_eligibility` and the existing settings UI.
 
----
+### 4. Memory & rules
 
-## 4. Injeção nos fluxos existentes
+- Update `mem/index.md` Core: add line "Proactive ops: triggers queued in `orkym_triggers_queue`; ORKYM decides content; MoodPlay enforces eligibility/cooldown; outbound only via `wa-send-message`."
+- Add `mem/features/proactive-ops.md` describing trigger types, priorities, default caps (3 msg/user/day, 24 h cooldown/trigger_type, 200/tenant/day), feedback events, and the strict "no AI in MoodPlay" boundary.
 
-Sem reescrever lógica. Apenas anexar campo opcional `memory_context` na resposta:
+### 5. Rate-limit defaults
 
-- **`moodplay-execute-action`**: depois de resolver tenant/arena/user, chamar internamente `getMemoryContext()` (helper compartilhado em `_shared/memory.ts` que faz query direta — sem HTTP). Anexar `memory_context` ao response payload. Custo: 1 query.
-- **`moodplay-session-step`**: idem ao iniciar/avançar sessão; injeta `memory_context` no snapshot da sessão.
-- **`wa-bridge`**: ao resolver identidade, anexar `memory_context` no payload encaminhado para ORKYM.
+- Per user/day: 3 (configurable in `orkym_proactive_eligibility.metadata.daily_cap`).
+- Per tenant/day: 200.
+- Per `(scope, trigger_type)` cooldown: 24 h default; `subscription_due` overdue=4 h, `idle_slot`=72 h, `low_enrollment`=48 h.
+- All defaults centralized in a SQL function `orkym_trigger_default_cooldown(_trigger_type)`.
 
-ORKYM consome ou ignora — MoodPlay não muda seu comportamento.
+### 6. Feedback loop fields
 
-Helper `_shared/memory.ts`:
-```ts
-export async function getMemoryContext(admin, params): Promise<MemoryContext|null>
-```
+`orkym_trigger_feedback.event` ∈ `message_sent | delivered | read | responded | ignored | converted`.
+- `delivered`/`read` mirrored from `whatsapp_messages` status updates.
+- `responded` set by wa-bridge when a related inbound arrives.
+- `converted` set by domain hooks (e.g. `enrollments` insert with metadata `source='orkym_proactive'`, marketplace order with `metadata.orkym_trigger_id`). We populate when present; other domains can be wired later.
 
----
+### 7. Strict boundaries (do NOT)
 
-## 5. Governança
+- No local AI/LLM in MoodPlay. Decision text always from ORKYM.
+- No outbound WhatsApp without ORKYM `should_send=true`.
+- No bypassing eligibility/cooldown.
+- No new schema in `auth/storage/realtime/supabase_functions/vault`.
+- No raw SQL execution from edge functions.
 
-- `confidence` recalculado a cada upsert: `min(0.99, 0.3 + log(sample_size+1)*0.15)`.
-- `expires_at` opcional via `_ttl_days` no upsert.
-- `memory_apply_decay()` no cron (já agendado em `orkym-cron-tick`).
-- Eventos `created`/`updated`/`expired`/`used` em `conversational_memory_events`.
-- Cap por entidade: máx 50 memórias ativas (extractor descarta as de menor confidence).
+### Deliverables checklist
 
----
+- [ ] Migration: `orkym_triggers_queue`, `orkym_trigger_feedback`, `orkym_proactive_cooldowns`, RPCs, table triggers, `orkym_generate_periodic_triggers`, `orkym_proactive_check_eligibility`.
+- [ ] Edge: `wa-send-message`, `orkym-proactive-process`.
+- [ ] Edits: `orkym-cron-tick`, `wa-bridge`, `supabase/config.toml`.
+- [ ] Frontend: `useOrkymTriggers`, `ProactiveTriggersPanel`, dashboard mounts.
+- [ ] Memory: `mem/index.md` core line + `mem/features/proactive-ops.md`.
 
-## 6. UI mínima de transparência
+### Acceptance
 
-Componente `src/components/memory/MemoryTransparencyCard.tsx` (lista chave/valor/confidence/última atualização).
-
-Aplicar em:
-- `src/pages/Profile.tsx` (atleta) — seção "Preferências percebidas".
-- `src/pages/arena-dashboard/ArenaDashboard.tsx` — card "Padrões da arena".
-- `src/pages/organizer/OrganizerDashboard.tsx` — card "Padrões dos seus eventos".
-- `src/pages/company/CompanyDashboard.tsx` — card "Padrões dos clientes".
-- `src/pages/tenant/TenantDashboard.tsx` — card "Padrões da rede".
-
-Hook `src/hooks/useMemoryContext.ts` que faz SELECT direto em `conversational_memory` (RLS protege). Sem botão de edição (governança automática). Toggle "ocultar" só visual.
-
----
-
-## 7. Arquivos
-
-**Migrações**:
-- `supabase/migrations/<ts>_phase_12_8_memory_layer.sql` — tabelas, RLS, RPCs upsert/extract/decay, triggers.
-
-**Edge functions**:
-- `supabase/functions/moodplay-memory-context/index.ts`
-- `supabase/functions/_shared/memory.ts` (helper para injeção)
-- editar: `moodplay-execute-action/index.ts`, `moodplay-session-step/index.ts`, `wa-bridge/index.ts`, `orkym-cron-tick/index.ts` (chamar `memory_apply_decay` + `memory_extract_all` em cadence).
-
-**Config**:
-- `supabase/config.toml`: `[functions.moodplay-memory-context] verify_jwt = false`.
-
-**Frontend**:
-- `src/components/memory/MemoryTransparencyCard.tsx`
-- `src/hooks/useMemoryContext.ts`
-- editar 5 dashboards + Profile (1 import + 1 card cada).
-
-**Testes**:
-- `supabase/functions/moodplay-memory-context/integration_test.ts` — HMAC, escopo, isolamento entre tenants, degraded mode.
-
-**Memória do projeto**:
-- `mem/features/memory-personalization.md` (novo)
-- atualizar `mem/integration/orkym-gateway-architecture.md` (linha 12.8)
-- atualizar `mem/index.md` Core: "Memória operacional em `conversational_memory`. Extração determinística. ORKYM consome via `moodplay-memory-context`."
-
----
-
-## 8. NÃO faremos
-- Sem embeddings, sem vector search, sem LLM.
-- Sem nova tabela por perfil (uma única `conversational_memory`).
-- Sem armazenar conteúdo bruto de mensagens (só sinais agregados em `value` jsonb).
-- Sem alterar lógica de `orkym-handlers.ts`.
-- Sem expor memória cross-tenant.
-- Sem permitir client-side INSERT/UPDATE direto.
-
----
-
-## 9. Critério de sucesso (verificável)
-- [ ] Tabela + RLS + RPCs criadas, migração roda limpa.
-- [ ] Triggers populam memória após booking/enrollment/order.
-- [ ] `memory_extract_all` roda no cron sem erro.
-- [ ] `moodplay-memory-context` retorna `memory_context` correto por escopo, com HMAC válido.
-- [ ] `moodplay-execute-action` anexa `memory_context` no response sem regredir os 11 testes existentes.
-- [ ] UI mostra preferências em 5 dashboards + Profile.
-- [ ] Isolamento por tenant validado em teste integration.
-- [ ] Decay marca expiração corretamente.
-- [ ] Zero código de IA/LLM/embedding adicionado.
-
-Pronto para aprovação. Após aprovado executo: migração → edge function nova → helper compartilhado → injeção nos 3 edge functions → cron → UI → testes → memória.
+- A subscription with `next_due_at` in 3 days enqueues `subscription_due` exactly once per period (dedup_key holds).
+- Cron picks it up, checks eligibility, calls ORKYM, sends WhatsApp if approved, logs `whatsapp_messages` + `conversational_commands` (outbound, initiated_by=orkym), records cooldown.
+- A second event within 24 h is skipped with `reason='cooldown'`.
+- Replying on WhatsApp continues into existing 12.7 multi-turn flow and updates 12.8 memory.
+- Opt-out (`orkym_proactive_eligibility.opted_in=false`) blocks all sends to that user.
