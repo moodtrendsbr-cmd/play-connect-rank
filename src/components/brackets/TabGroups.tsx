@@ -184,7 +184,9 @@ const TabGroups = ({ modalityId, canManage = false }: TabGroupsProps) => {
   const qualifiers = (size: number) => Math.max(2, Math.floor(size / 2));
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div>
+      {drawPanel}
+      <div className="grid gap-4 sm:grid-cols-2">
       {groups.map((group) => {
         const standings = computeStandings(group);
         const cut = qualifiers(standings.length);
