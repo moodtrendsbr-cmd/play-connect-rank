@@ -185,6 +185,12 @@ const TournamentDetail = () => {
             )
           ) : null}
 
+          <Button variant="outline" className="w-full h-12 font-bold mt-3" asChild>
+            <Link to={`/tournaments/${id}/share`}>
+              <Share2 className="mr-2 h-4 w-4" /> Compartilhar / QR
+            </Link>
+          </Button>
+
           {user?.id === tournament.organizer_id && (
             <Button variant="outline" className="w-full h-14 text-lg font-bold mt-3" asChild>
               <Link to={`/tournaments/${id}/manage`}>
