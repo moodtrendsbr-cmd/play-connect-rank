@@ -16,6 +16,7 @@ import ProfileHeader from "@/components/profile/ProfileHeader";
 import { PostData } from "@/components/feed/PostCard";
 import PostSkeleton from "@/components/feed/PostSkeleton";
 import PostGrid from "@/components/profile/PostGrid";
+import TournamentMemories from "@/components/profile/TournamentMemories";
 import { WaIdentityPanel } from "@/components/conversational/WaIdentityPanel";
 
 const Profile = () => {
@@ -322,6 +323,14 @@ const Profile = () => {
             <Button onClick={handleSave} style={{ background: "#2BFF88", color: "#050708" }}>Salvar</Button>
             <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
           </div>
+        </div>
+      )}
+
+      {/* Tournament memories */}
+      {user && (
+        <div>
+          <h2 className="text-lg font-display text-white mb-3">Memórias de torneios</h2>
+          <TournamentMemories athleteId={user.id} />
         </div>
       )}
 
