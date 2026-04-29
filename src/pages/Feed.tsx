@@ -27,6 +27,8 @@ const Feed = () => {
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef(0);
   const mainRef = useRef<HTMLElement>(null);
+  const { items: promoItems } = useFeedUnified(12);
+  const [canInjectPromo, setCanInjectPromo] = useState(true);
 
   // Expose scroll to top for bottom nav
   useEffect(() => {
@@ -35,24 +37,16 @@ const Feed = () => {
     return () => window.removeEventListener("feed-scroll-top", handler);
   }, []);
 
-  // Fetch sponsored posts
+  // Anti-spam guard: hourly cap per user (10 promos/hour)
   useEffect(() => {
-    const fetchSponsored = async () => {
-      const { data } = await supabase
-        .from("sponsored_posts")
-        .select("*, companies(name, logo_url)")
-        .eq("active", true)
-        .lte("active_from", new Date().toISOString())
-        .gte("active_to", new Date().toISOString());
-      setSponsoredPosts(
-        (data || []).map((sp: any) => ({
-          id: sp.id, title: sp.title, content: sp.content, image_url: sp.image_url,
-          company_id: sp.company_id, company_name: sp.companies?.name, company_logo: sp.companies?.logo_url,
-        }))
-      );
-    };
-    fetchSponsored();
-  }, []);
+    if (!user) { setCanInjectPromo(true); return; }
+    (async () => {
+      const { data } = await supabase.rpc("feed_should_inject_promo", {
+        _user_id: user.id, _last_n: 50,
+      } as any);
+      setCanInjectPromo(data !== false);
+    })();
+  }, [user]);
 
   // Debounce search
   useEffect(() => {
