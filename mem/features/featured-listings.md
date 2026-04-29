@@ -39,7 +39,13 @@ type: feature
 2. Cliente abre checkout MP (create-payment) com `source_type='featured'`, `source_id=featured_id`.
 3. Webhook MP grava `financial_transactions.status='paid'` → trigger ativa listing automaticamente.
 
-## Pendências (G-4+)
-- Botões de compra ("Promover destaque") nos dashboards de owner.
-- Aplicar `useFeaturedSet` em Marketplace, Tournaments, Companies para badge + ordenação.
+## G-4 (Integração) — entregue
+- `src/components/featured/PromoteFeaturedDialog.tsx` — diálogo reutilizável que lista `featured_pricing` ativos e chama `purchase_featured` RPC. Próximo passo (não bloqueante): redirecionar para checkout MP com `source_type='featured'`, `source_id=featured_id`.
+- **Marketplace** (`src/pages/Marketplace.tsx`): usa `useFeaturedSet('product')` para ordenar destaques no topo + renderiza `<FeaturedBadge />` no card.
+- **Tournaments** (`src/pages/Tournaments.tsx`): usa `useFeaturedSet('tournament')`, sort por destaque, badge no header do card.
+- **MyCompany** (`src/pages/MyCompany.tsx`): botão "Promover" em cada produto aprovado abre `PromoteFeaturedDialog`.
+
+## Pendências (G-5+)
+- Botões "Promover" nos dashboards de Organizador (torneios), Arena, Sponsor.
+- Conectar `purchase_featured.featured_id` ao fluxo de checkout MP (source_type=featured).
 - Edge function periódica para marcar listings expirados (status→expired quando ends_at < now()) — opcional, view já filtra.
