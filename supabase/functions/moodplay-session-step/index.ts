@@ -178,6 +178,13 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Phase 12.8 — best-effort memory_context for this request
+  currentMemory = await getMemoryContext(admin, {
+    tenant_id, arena_id: arena_id ?? null, user_id,
+    profile_type: profile_type as never,
+    context: "general", max_items: 10,
+  });
+
   // 1. Resolve or create session
   const { data: resolveRes, error: resolveErr } = await admin.rpc(
     "resolve_or_create_session",
