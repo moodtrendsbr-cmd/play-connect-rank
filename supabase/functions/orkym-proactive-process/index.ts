@@ -44,6 +44,10 @@ const TRIGGER_TO_CATEGORY: Record<string, string> = {
   low_campaign_performance: "operations",
   revenue_drop: "operations",
   relevant_tournament: "marketing",
+  // P0 #5 — athlete tournament notifications
+  enrollment_created: "operations",
+  enrollment_paid: "operations",
+  match_result: "operations",
 };
 
 function safeJson(b: unknown, status = 200) {
