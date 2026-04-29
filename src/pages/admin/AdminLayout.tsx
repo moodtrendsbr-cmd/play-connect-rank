@@ -47,6 +47,7 @@ const navGroups: NavGroup[] = [
       { title: "Regras de Split", url: "/admin/split-rules", icon: Percent },
       { title: "Ajustes", url: "/admin/adjustments", icon: ScrollText },
       { title: "Monetização", url: "/admin/monetization", icon: CreditCard },
+      { title: "Destaques pagos", url: "/admin/featured-listings", icon: Sparkles },
       { title: "Planos", url: "/admin/plans", icon: Layers },
     ],
   },
