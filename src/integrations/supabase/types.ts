@@ -2570,6 +2570,13 @@ export type Database = {
             foreignKeyName: "enrollments_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "enrollments_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -2982,6 +2989,13 @@ export type Database = {
             foreignKeyName: "match_conversations_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "match_conversations_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -3072,6 +3086,13 @@ export type Database = {
             foreignKeyName: "match_pairs_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "match_pairs_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -3103,6 +3124,13 @@ export type Database = {
           tournament_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "match_requests_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
+          },
           {
             foreignKeyName: "match_requests_tournament_id_fkey"
             columns: ["tournament_id"]
@@ -3153,6 +3181,13 @@ export type Database = {
           winner_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "match_results_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
+          },
           {
             foreignKeyName: "match_results_tournament_id_fkey"
             columns: ["tournament_id"]
@@ -3559,6 +3594,13 @@ export type Database = {
           withdrawn_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "organizer_balances_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
+          },
           {
             foreignKeyName: "organizer_balances_tournament_id_fkey"
             columns: ["tournament_id"]
@@ -4319,6 +4361,13 @@ export type Database = {
             foreignKeyName: "posts_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "posts_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -5008,6 +5057,13 @@ export type Database = {
             foreignKeyName: "tournament_match_pool_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "tournament_match_pool_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -5082,6 +5138,13 @@ export type Database = {
             foreignKeyName: "tournament_modalities_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "tournament_modalities_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -5130,6 +5193,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies_public"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_partners_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
           },
           {
             foreignKeyName: "tournament_partners_tournament_id_fkey"
@@ -5267,6 +5337,13 @@ export type Database = {
             foreignKeyName: "tournament_sponsorships_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "tournament_sponsorships_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -5278,6 +5355,7 @@ export type Database = {
           address_complement: string | null
           address_number: string | null
           arena: string | null
+          arena_id: string | null
           categories: string[] | null
           category: Database["public"]["Enums"]["tournament_category"]
           city: string
@@ -5313,6 +5391,7 @@ export type Database = {
           address_complement?: string | null
           address_number?: string | null
           arena?: string | null
+          arena_id?: string | null
           categories?: string[] | null
           category?: Database["public"]["Enums"]["tournament_category"]
           city?: string
@@ -5348,6 +5427,7 @@ export type Database = {
           address_complement?: string | null
           address_number?: string | null
           arena?: string | null
+          arena_id?: string | null
           categories?: string[] | null
           category?: Database["public"]["Enums"]["tournament_category"]
           city?: string
@@ -5378,7 +5458,22 @@ export type Database = {
           updated_at?: string
           zip_code?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tournaments_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournaments_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transaction_splits: {
         Row: {
@@ -6380,6 +6475,15 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tournament_enrollment_counts: {
+        Row: {
+          paid_count: number | null
+          pending_count: number | null
+          total_count: number | null
+          tournament_id: string | null
+        }
+        Relationships: []
       }
       v_autonomy_metrics: {
         Row: {
