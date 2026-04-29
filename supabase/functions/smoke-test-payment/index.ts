@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
       await Promise.all([
         admin.from("athlete_activities").select("activity_type, reference_id").eq("athlete_id", u.user.id).order("created_at", { ascending: false }).limit(5),
         admin.from("financial_transactions").select("id, status, total_amount, source_type, source_id, paid_at").eq("source_id", en.id),
-        admin.from("orkym_revenue_attribution").select("id, attribution_type, attribution_confidence, revenue_amount").eq("entity_id", t.id),
+        admin.from("orkym_revenue_attribution").select("id, attribution_type, attribution_confidence, revenue_amount").eq("entity_id", en.id),
         admin.from("orkym_triggers_queue").select("id, trigger_type, status, dedup_key").eq("entity_id", t.id),
       ]);
 
