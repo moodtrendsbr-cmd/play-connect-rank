@@ -6,6 +6,7 @@ import {
   listSupportedIntents,
   sha256Hex,
 } from "../_shared/conversation-flows.ts";
+import { getMemoryContext, type MemoryContext } from "../_shared/memory.ts";
 
 /**
  * MoodPlay Session Step — Phase 12.7 (Hardened)
