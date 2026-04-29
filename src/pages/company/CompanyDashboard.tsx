@@ -438,6 +438,7 @@ const CompanyDashboard = () => {
         <section className="space-y-3">
           <SectionHeader id="revenue" icon={TrendingUp} title="Vendas via WhatsApp" subtitle="Receita atribuída à ORKYM · 30 dias" />
           <RevenueDashboardPanel scope={{ type: "company", id: company.id }} />
+          <GrowthDashboardPanel scope={{ type: "company", id: company.id }} />
         </section>
       )}
     </div>
