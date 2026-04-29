@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Search, Store, ShoppingBag, Star } from "lucide-react";
 import AdSlot from "@/components/ads/AdSlot";
+import { useFeaturedSet } from "@/hooks/useFeaturedSet";
+import FeaturedBadge from "@/components/featured/FeaturedBadge";
 
 const CATEGORIES = [
   { label: "Todos", value: "" },
