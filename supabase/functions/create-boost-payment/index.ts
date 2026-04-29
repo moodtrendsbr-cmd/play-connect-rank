@@ -97,14 +97,18 @@ serve(async (req) => {
       source_type: "boost",
       source_id: campaign_id,
       tenant_id: campaign.tenant_id,
-      company_id: campaign.company_id,
-      payer_user_id: userId,
-      amount,
+      total_amount: amount,
       currency: "BRL",
-      provider: "mercadopago",
-      provider_payment_id: String(mp.id),
+      payment_provider: "mercadopago",
+      payment_reference: String(mp.id),
       status: mp.status === "approved" ? "paid" : "pending",
-      metadata: { kind: campaign.kind, boost_level: campaign.boost_level },
+      paid_at: mp.status === "approved" ? new Date().toISOString() : null,
+      metadata: {
+        kind: campaign.kind,
+        boost_level: campaign.boost_level,
+        company_id: campaign.company_id,
+        payer_user_id: userId,
+      },
     });
 
     const result: any = {
