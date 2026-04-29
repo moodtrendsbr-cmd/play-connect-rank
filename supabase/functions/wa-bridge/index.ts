@@ -231,6 +231,20 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Best-effort: link verified WhatsApp identity to social profile
+  try {
+    await supa.rpc("social_identity_upsert", {
+      _phone: phone,
+      _name: null,
+      _source: "whatsapp",
+      _tenant_id: ident.tenant_id ?? null,
+      _arena_id: ident.default_arena_id ?? null,
+      _user_id: ident.user_id ?? null,
+      _wa_identity_id: ident.id ?? null,
+      _avatar_url: null,
+    });
+  } catch { /* best-effort */ }
+
   // 2. Resolve QR token (if # in text or explicit qr_token)
   let qrIntent: string | null = null;
   let qrPayload: any = {};
