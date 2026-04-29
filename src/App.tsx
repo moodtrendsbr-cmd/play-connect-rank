@@ -25,6 +25,7 @@ import Messages from "./pages/Messages";
 import ChatView from "./pages/ChatView";
 import NotFound from "./pages/NotFound";
 import UserProfile from "./pages/UserProfile";
+import SocialProfile from "./pages/SocialProfile";
 import TournamentMatch from "./pages/TournamentMatch";
 import MatchRequests from "./pages/MatchRequests";
 import MatchPair from "./pages/MatchPair";
