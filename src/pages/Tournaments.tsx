@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Search, Trophy, MapPin, Calendar } from "lucide-react";
+import { useFeaturedSet } from "@/hooks/useFeaturedSet";
+import FeaturedBadge from "@/components/featured/FeaturedBadge";
 
 type StatusFilter = "all" | "active" | "upcoming" | "finished";
 
