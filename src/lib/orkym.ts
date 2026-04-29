@@ -51,7 +51,15 @@ export type OrkymActionType =
   | "propose_promotion"
   | "schedule_operational_review"
   | "open_communication_thread"
-  | "recovery_campaign_draft";
+  | "recovery_campaign_draft"
+  // Phase G — Autonomous Growth Engine
+  | "tournament_boost"
+  | "send_proactive_message"
+  | "create_campaign"
+  | "recommend_product"
+  | "reactivation_message"
+  | "fill_idle_slots"
+  | "upsell_plan";
 
 export type OrkymActionStatus =
   | "proposed" | "approved" | "rejected"
