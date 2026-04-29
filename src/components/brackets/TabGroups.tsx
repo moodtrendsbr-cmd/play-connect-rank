@@ -25,12 +25,14 @@ interface Standing {
   points: number;
 }
 
-const TabGroups = ({ modalityId }: TabGroupsProps) => {
+const TabGroups = ({ modalityId, canManage = false }: TabGroupsProps) => {
   const [groups, setGroups] = useState<any[]>([]);
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [drawing, setDrawing] = useState(false);
+  const [numGroupsInput, setNumGroupsInput] = useState("2");
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     const fetch = async () => {
       setLoading(true);
       const { data: groupsData } = await supabase
