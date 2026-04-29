@@ -165,9 +165,9 @@ const Marketplace = () => {
                 className="rounded-lg overflow-hidden transition-opacity hover:opacity-80 relative"
                 style={{ background: "#0B0F12" }}
               >
-                {p.featured && (
-                  <span className="absolute top-2 left-2 z-10 flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#2BFF88", color: "#050708" }}>
-                    <Star className="h-3 w-3" /> Destaque
+                {(p.featured || featuredProducts.has(p.id)) && (
+                  <span className="absolute top-2 left-2 z-10">
+                    <FeaturedBadge entityType="product" entityId={p.id} />
                   </span>
                 )}
                 {p.image_urls?.[0] ? (
