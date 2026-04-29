@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { CheckCircle2, Clock, UserCheck } from "lucide-react";
+import { CheckCircle2, Clock, UserCheck, QrCode } from "lucide-react";
+import { Link } from "react-router-dom";
 import { format } from "date-fns";
 
 interface Props {
@@ -72,14 +73,21 @@ const TabCheckin = ({ tournamentId }: Props) => {
   return (
     <div className="space-y-4">
       <Card className="bg-card border-border">
-        <CardContent className="p-4 flex items-center justify-between">
+        <CardContent className="p-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground">Presença confirmada</p>
             <p className="text-2xl font-bold text-foreground">
               {checkedIn} <span className="text-sm text-muted-foreground">/ {enrollments.length}</span>
             </p>
           </div>
-          <CheckCircle2 className="h-8 w-8 text-primary" />
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant="outline" className="gap-1">
+              <Link to={`/tournaments/${tournamentId}/checkin/scan`}>
+                <QrCode className="h-4 w-4" /> Scan QR
+              </Link>
+            </Button>
+            <CheckCircle2 className="h-8 w-8 text-primary" />
+          </div>
         </CardContent>
       </Card>
 
