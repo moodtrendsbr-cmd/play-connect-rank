@@ -13,7 +13,8 @@ import { ArrowLeft, Plus, Store, Package, CreditCard, Crown, Zap, X, Image, Vide
 import { Link, useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PromoteFeaturedDialog from "@/components/featured/PromoteFeaturedDialog";
-import { Sparkles } from "lucide-react";
+import PromoteCampaignDialog from "@/components/featured/PromoteCampaignDialog";
+import { Sparkles, Rocket } from "lucide-react";
 
 const MyCompany = () => {
   const { user } = useAuth();
@@ -155,9 +156,24 @@ const MyCompany = () => {
 
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-display text-foreground">{company.name}</h1>
-        <span className="text-xs px-3 py-1 rounded-full font-medium" style={{ background: `${st.color}20`, color: st.color }}>
-          {st.text}
-        </span>
+        <div className="flex items-center gap-2">
+          {company.status === "approved" && (
+            <PromoteCampaignDialog
+              kind="company_boost"
+              targetType="company"
+              targetId={company.id}
+              companyId={company.id}
+              trigger={
+                <Button size="sm" variant="outline" className="h-7 text-xs">
+                  <Rocket className="h-3 w-3 mr-1" /> Impulsionar
+                </Button>
+              }
+            />
+          )}
+          <span className="text-xs px-3 py-1 rounded-full font-medium" style={{ background: `${st.color}20`, color: st.color }}>
+            {st.text}
+          </span>
+        </div>
       </div>
 
       {/* Balance Section */}
@@ -299,14 +315,27 @@ const MyCompany = () => {
                 {p.status === "approved" ? "Aprovado" : p.status === "rejected" ? "Rejeitado" : "Pendente"}
               </span>
               {p.status === "approved" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs"
-                  onClick={() => setPromoteProduct(p)}
-                >
-                  <Sparkles className="h-3 w-3 mr-1" /> Promover
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => setPromoteProduct(p)}
+                  >
+                    <Sparkles className="h-3 w-3 mr-1" /> Destaque
+                  </Button>
+                  <PromoteCampaignDialog
+                    kind="product_boost"
+                    targetType="product"
+                    targetId={p.id}
+                    companyId={company.id}
+                    trigger={
+                      <Button size="sm" variant="outline" className="h-7 text-xs">
+                        <Rocket className="h-3 w-3 mr-1" /> Boost
+                      </Button>
+                    }
+                  />
+                </>
               )}
             </div>
           ))}
