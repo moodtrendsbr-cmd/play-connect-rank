@@ -7,8 +7,11 @@ import PostSkeleton from "@/components/feed/PostSkeleton";
 import ClipsBar from "@/components/feed/ClipsBar";
 import FriendSuggestions from "@/components/feed/FriendSuggestions";
 import SponsoredPostCard from "@/components/feed/SponsoredPostCard";
+import BoostedTournamentCard from "@/components/feed/BoostedTournamentCard";
+import BoostedProductCard from "@/components/feed/BoostedProductCard";
 import AdSlot from "@/components/ads/AdSlot";
 import { SocialActivityFeed } from "@/components/social/SocialActivityFeed";
+import { useFeedUnified, type UnifiedFeedItem } from "@/hooks/useFeedUnified";
 
 const PAGE_SIZE = 20;
 
