@@ -6613,6 +6613,20 @@ export type Database = {
         }
         Relationships: []
       }
+      athlete_points_summary: {
+        Row: {
+          athlete_id: string | null
+          current_streak: number | null
+          current_xp: number | null
+          last_activity_date: string | null
+          level: number | null
+          longest_streak: number | null
+          monthly_points: number | null
+          total_points: number | null
+          weekly_points: number | null
+        }
+        Relationships: []
+      }
       athletes_public: {
         Row: {
           attendances: number | null
@@ -6854,6 +6868,45 @@ export type Database = {
           team?: string | null
           titles?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      ranking_by_arena: {
+        Row: {
+          arena_id: string | null
+          athlete_id: string | null
+          position: number | null
+          total_points: number | null
+        }
+        Relationships: []
+      }
+      ranking_by_modality: {
+        Row: {
+          athlete_id: string | null
+          modality_id: string | null
+          position: number | null
+          total_points: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modality_matches_modality_id_fkey"
+            columns: ["modality_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_modalities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ranking_global: {
+        Row: {
+          athlete_id: string | null
+          avatar_url: string | null
+          city: string | null
+          full_name: string | null
+          level: number | null
+          position: number | null
+          state: string | null
+          total_points: number | null
         }
         Relationships: []
       }
@@ -7273,6 +7326,7 @@ export type Database = {
         Args: { _athlete_id: string; _period_days?: number }
         Returns: Json
       }
+      get_athlete_progress: { Args: { _profile_id: string }; Returns: Json }
       get_athlete_ranking: {
         Args: { _athlete_id: string; _modality?: string }
         Returns: Json
