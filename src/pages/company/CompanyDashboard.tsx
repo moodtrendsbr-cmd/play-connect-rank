@@ -14,6 +14,7 @@ import { OperationModeBanner } from "@/components/conversational/OperationModeBa
 import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
 import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
+import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 
 // ---------- Local helpers (not exported) ----------
 const SectionHeader = ({ id, icon: Icon, title, subtitle, action }: any) => (
