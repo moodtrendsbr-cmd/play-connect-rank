@@ -1,22 +1,48 @@
 ---
 name: gamification-foundations
-description: Phase G-0 cleanup — RPCs de ranking/performance corrigidas para modality_matches, dedup helper para social_events
+description: Phase G-0 + G-1 — RPCs ranking/performance, dedup helper, XP ledger, badges, streaks unificadas
 type: feature
 ---
 
-**Phase G-0 (cleanup) entregue.** Base para futuras fases de XP/badges/streaks.
+## G-0 (cleanup) — entregue
 
 **RPCs corrigidas (SECURITY DEFINER, search_path=public):**
-- `get_athlete_ranking(_athlete_id, _modality?)` — calcula ranking real via `modality_matches` + `modality_entry_members` + `tournament_modalities`. Pontos = wins × 10. Position = ROW_NUMBER por (modality_name, category) ORDER BY wins DESC, played DESC. Não lê mais a tabela inexistente `athlete_rankings`.
-- `get_athlete_performance(_athlete_id, _period_days=30)` — calcula total_matches/wins/losses/win_rate via `modality_entry_members` → `modality_matches`. Não lê mais a tabela errada `matches`. Filtro temporal usa `COALESCE(scheduled_at, created_at)`.
+- `get_athlete_ranking(_athlete_id, _modality?)` — calcula via `modality_matches` + `modality_entry_members`. Wins×10. Position por (modality, category) ORDER BY wins DESC, played DESC.
+- `get_athlete_performance(_athlete_id, _period_days=30)` — total_matches/wins/losses/win_rate via `modality_entry_members → modality_matches`. Filtro `COALESCE(scheduled_at, created_at)`.
 
-Ambas retornam `{success: true, ...}` mesmo em erro (fallback gracioso para ORKYM).
+**Dedup feed social:**
+- Índice `idx_social_events_dedup (profile_id, event_type, entity_id, created_at DESC)`.
+- RPC `social_event_should_emit(_profile, _type, _entity, _window=6h)` — true se NÃO há duplicata.
 
-**Dedup de feed social:**
-- Índice `idx_social_events_dedup` em `(profile_id, event_type, entity_id, created_at DESC)`.
-- RPC `social_event_should_emit(_profile_id, _event_type, _entity_id, _window=6h)` retorna `true` se NÃO há duplicata no janelamento. Triggers de projeção em `social_events` devem chamá-la antes de INSERT para evitar spam (ex: múltiplos check-ins seguidos).
+## G-1 (XP, Badges, Streaks) — entregue
 
-**Pendências G-1:**
-- matview `athlete_stats` canônica (substitui agregação atual em `athletes_public` para casos de alto volume).
-- Aplicar `social_event_should_emit` nos triggers `trg_social_from_*` existentes (próxima fase).
-- Substituir `Ranking.tsx` client-side por chamada à RPC paginada.
+**Tabelas:**
+- `athlete_xp(athlete_id PK, current_xp, lifetime_xp, level, updated_at)` — level = floor(sqrt(lifetime/100))+1.
+- `xp_events(id, athlete_id, source, source_id, delta, reason, created_at)` UNIQUE(athlete_id, source, source_id) — idempotência.
+- `badges_catalog(code PK, name, description, icon, category, criteria jsonb, xp_reward, active)` — global, RLS public read where active.
+- `athlete_badges(id, athlete_id, badge_code FK, earned_at)` UNIQUE(athlete_id, badge_code) — RLS public read.
+- `athlete_streaks(athlete_id PK, current_streak, longest_streak, last_activity_date, updated_at)` — unificada (qualquer atividade conta).
+
+**Fórmulas XP fixas globais:**
+- match_win=50, match_played=10, attendance=10, enrollment=20, post=5.
+
+**Funções SECURITY DEFINER (EXECUTE: authenticated + service_role):**
+- `award_xp(_athlete, _source, _source_id, _delta, _reason)` — INSERT idempotente em xp_events + upsert em athlete_xp + recalcula level.
+- `update_streak(_athlete, _date)` — janela diária; gap >1 reseta para 1.
+- `evaluate_badges(_athlete)` — agrega wins/matches/attendances/posts/enrollments/streak; concede badges elegíveis (criteria keys: min_wins, min_matches, min_attendances, min_posts, min_enrollments, min_streak); concede xp_reward via award_xp (source='badge').
+
+**Triggers AFTER INSERT/UPDATE (chamam award_xp + update_streak + evaluate_badges):**
+- `trg_xp_from_match` em modality_matches (status→completed) — XP por participante (winner=50, others=10).
+- `trg_xp_from_attendance` em arena_attendance (status→present).
+- `trg_xp_from_enrollment` em enrollments.
+- `trg_xp_from_post` em posts.
+
+**Catálogo seed (8 badges):**
+first_win, veteran_10_matches, champion_10_wins, dedicated_athlete, marathoner, social_butterfly, tournament_rookie, streak_7_days.
+
+## Pendências (G-2+)
+- UI: barra de XP/level no perfil, grade de badges, contador de streak.
+- Aplicar `social_event_should_emit` nos triggers `trg_social_from_*` existentes.
+- Substituir `Ranking.tsx` client-side por chamada paginada à RPC.
+- Matview `athlete_stats` canônica (volume alto).
+- Featured listings (auto-aprovação + kill-switch admin).
