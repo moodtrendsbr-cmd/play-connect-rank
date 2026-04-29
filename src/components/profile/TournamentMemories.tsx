@@ -15,7 +15,6 @@ type Memory = {
   state: string | null;
   start_date: string | null;
   end_date: string | null;
-  cover_image: string | null;
 };
 
 const TournamentMemories = ({ athleteId }: TournamentMemoriesProps) => {
@@ -43,7 +42,7 @@ const TournamentMemories = ({ athleteId }: TournamentMemoriesProps) => {
 
       const { data: tdata } = await supabase
         .from("tournaments")
-        .select("id, name, city, state, start_date, end_date, cover_image")
+        .select("id, name, city, state, start_date, end_date")
         .in("id", ids)
         .lt("end_date", today)
         .order("end_date", { ascending: false })
@@ -80,9 +79,6 @@ const TournamentMemories = ({ athleteId }: TournamentMemoriesProps) => {
             className="snap-start flex-shrink-0 w-56 rounded-xl border border-border bg-card overflow-hidden transition-all hover:border-primary/40 hover:shadow-[0_0_14px_hsl(110_100%_55%/0.12)]"
           >
             <div className="h-20 relative bg-gradient-to-br from-primary/15 to-muted">
-              {t.cover_image && (
-                <img src={t.cover_image} alt="" className="h-full w-full object-cover" loading="lazy" />
-              )}
               <div className="absolute top-2 right-2 rounded-full bg-background/80 backdrop-blur px-2 py-0.5 text-[10px] font-display tracking-wide text-primary">
                 {year}
               </div>
