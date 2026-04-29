@@ -132,11 +132,34 @@ const TabGroups = ({ modalityId, canManage = false }: TabGroupsProps) => {
     );
   }
 
+  const drawPanel = canManage ? (
+    <div className="rounded-lg border border-border bg-card/50 p-3 mb-4 flex flex-wrap items-center gap-2">
+      <Shuffle className="h-4 w-4 text-primary" />
+      <span className="text-sm text-foreground">Sortear automaticamente em</span>
+      <Input
+        type="number"
+        min={1}
+        max={32}
+        value={numGroupsInput}
+        onChange={(e) => setNumGroupsInput(e.target.value)}
+        className="w-20 h-8"
+      />
+      <span className="text-sm text-muted-foreground">grupos</span>
+      <Button size="sm" onClick={handleSortear} disabled={drawing} className="ml-auto">
+        {drawing ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Shuffle className="h-3.5 w-3.5 mr-1" />}
+        Sortear
+      </Button>
+    </div>
+  ) : null;
+
   if (groups.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <Layers className="h-10 w-10 mx-auto mb-3 opacity-40" />
-        <p>Nenhum grupo definido para esta modalidade.</p>
+      <div>
+        {drawPanel}
+        <div className="text-center py-12 text-muted-foreground">
+          <Layers className="h-10 w-10 mx-auto mb-3 opacity-40" />
+          <p>Nenhum grupo definido para esta modalidade.</p>
+        </div>
       </div>
     );
   }
