@@ -2695,6 +2695,113 @@ export type Database = {
           },
         ]
       }
+      featured_kill_switch: {
+        Row: {
+          enabled: boolean
+          entity_type: string
+          reason: string | null
+          toggled_at: string
+          toggled_by: string | null
+        }
+        Insert: {
+          enabled?: boolean
+          entity_type: string
+          reason?: string | null
+          toggled_at?: string
+          toggled_by?: string | null
+        }
+        Update: {
+          enabled?: boolean
+          entity_type?: string
+          reason?: string | null
+          toggled_at?: string
+          toggled_by?: string | null
+        }
+        Relationships: []
+      }
+      featured_listings: {
+        Row: {
+          created_at: string
+          created_by: string
+          ends_at: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          paid_amount: number
+          payment_transaction_id: string | null
+          starts_at: string | null
+          status: string
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          ends_at?: string | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          paid_amount?: number
+          payment_transaction_id?: string | null
+          starts_at?: string | null
+          status?: string
+          tier: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          ends_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          paid_amount?: number
+          payment_transaction_id?: string | null
+          starts_at?: string | null
+          status?: string
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "featured_listings_tier_fkey"
+            columns: ["tier"]
+            isOneToOne: false
+            referencedRelation: "featured_pricing"
+            referencedColumns: ["tier"]
+          },
+        ]
+      }
+      featured_pricing: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          display_name: string
+          duration_days: number
+          price_brl: number
+          tier: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          display_name: string
+          duration_days: number
+          price_brl: number
+          tier: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          duration_days?: number
+          price_brl?: number
+          tier?: string
+        }
+        Relationships: []
+      }
       financial_adjustments: {
         Row: {
           adjustment_type: string
@@ -6623,6 +6730,28 @@ export type Database = {
         }
         Relationships: []
       }
+      featured_active_v: {
+        Row: {
+          created_by: string | null
+          display_name: string | null
+          ends_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string | null
+          price_brl: number | null
+          starts_at: string | null
+          tier: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "featured_listings_tier_fkey"
+            columns: ["tier"]
+            isOneToOne: false
+            referencedRelation: "featured_pricing"
+            referencedColumns: ["tier"]
+          },
+        ]
+      }
       marketplace_public: {
         Row: {
           city: string | null
@@ -6979,6 +7108,10 @@ export type Database = {
       ad_record_event: {
         Args: { _campaign_id: string; _event_type: string; _slot_id: string }
         Returns: string
+      }
+      admin_kill_featured_listing: {
+        Args: { _featured_id: string; _reason?: string }
+        Returns: Json
       }
       arena_archive_old_events: {
         Args: { _arena_id: string; _older_than_days?: number }
@@ -7514,6 +7647,10 @@ export type Database = {
         Args: { _hash: string; _session_id: string; _snapshot: Json }
         Returns: undefined
       }
+      purchase_featured: {
+        Args: { _entity_id: string; _entity_type: string; _tier: string }
+        Returns: Json
+      }
       register_match_score: {
         Args: { _match_id: string; _score_a: number; _score_b: number }
         Returns: Json
@@ -7598,6 +7735,10 @@ export type Database = {
       }
       sortear_grupos: {
         Args: { _modality_id: string; _num_groups: number }
+        Returns: Json
+      }
+      toggle_featured_kill_switch: {
+        Args: { _enabled: boolean; _entity_type: string; _reason?: string }
         Returns: Json
       }
       unaccent_safe: { Args: { _s: string }; Returns: string }
