@@ -143,10 +143,16 @@ Deno.serve(async (req) => {
   // Phase 12.9 — proactive ops: generate periodic triggers, then process queue
   let proactiveGen: unknown = null;
   let proactiveProcess: unknown = null;
+  let optimizationGen: unknown = null;
   try {
     const { data: g } = await admin.rpc("orkym_generate_periodic_triggers");
     proactiveGen = g;
   } catch (e) { console.error("orkym_generate_periodic_triggers failed", e); }
+  // Phase 13 — conversational revenue: emit optimization signals
+  try {
+    const { data: o } = await admin.rpc("orkym_generate_optimization_triggers");
+    optimizationGen = o;
+  } catch (e) { console.error("orkym_generate_optimization_triggers failed", e); }
   try {
     const internalToken = Deno.env.get("ORKYM_INTERNAL_TOKEN") || "";
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/orkym-proactive-process`, {
