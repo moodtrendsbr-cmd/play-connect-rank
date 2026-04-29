@@ -25,12 +25,13 @@ Native, contextual, anti-spam monetization layered on existing infrastructure. *
   - level 2 → R$ 49 / 7 days (Boost Premium)
   - level 3 → R$ 129 / 15 days (Boost Spotlight)
 
-## Purchase flow (M-4)
-1. Owner clicks **Impulsionar** → `PromoteCampaignDialog` opens.
-2. Dialog calls `purchase_boost(_kind, _target_type, _target_id, _boost_level, _company_id?)` → returns `campaign_id`, `price_brl`, `duration_days`. Campaign starts `status='pending'`.
-3. Client opens MP checkout with `source_type='boost'`, `source_id=campaign_id`.
-4. Webhook flips `financial_transactions.status='paid'` → trigger `trg_boost_activate_on_paid` activates the campaign automatically (start=now, end=now+duration).
-5. `transaction_splits` and `orkym_revenue_attribution` rows are written by existing paid-trigger pipeline (no change).
+## Purchase flow (M-4) — IMPLEMENTED
+1. Owner clicks **Impulsionar** in `OrganizerDashboard` (tournaments) or `MyCompany` (company header / per-product).
+2. `PromoteCampaignDialog` (3 steps: tier → payer → PIX) calls `purchase_boost(_kind, _target_type, _target_id, _boost_level, _company_id?)` → creates `ad_campaigns` row with `status='pending'`.
+3. Dialog invokes edge function `create-boost-payment` (PIX via Mercado Pago, **no split** — boost is 100% MoodPlay revenue). It inserts `financial_transactions` (`source_type='boost'`, `source_id=campaign_id`, `total_amount`, `payment_provider='mercadopago'`, `payment_reference=mp_id`).
+4. `mercadopago-webhook` parses `external_reference={source_type:'boost', campaign_id}` and flips the financial_transactions row to `paid` → `trg_boost_activate_on_paid` activates the campaign automatically (start=now, end=now+duration).
+5. `source_type='boost'` is allowed by the financial_transactions CHECK constraint (added in migration `20260429194602`).
+6. RLS: company owners can read their own boost transactions; admins read all.
 
 ## Feed integration (M-2, M-3)
 - View `feed_unified_v` (security_invoker) UNIONs:
