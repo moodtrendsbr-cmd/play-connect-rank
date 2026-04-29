@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import CreateTournament from "./pages/CreateTournament";
 import Tournaments from "./pages/Tournaments";
 import TournamentDetail from "./pages/TournamentDetail";
+import TournamentShare from "./pages/TournamentShare";
 import ManageTournament from "./pages/ManageTournament";
 import Brackets from "./pages/Brackets";
 import Results from "./pages/Results";
@@ -162,6 +163,7 @@ const App = () => (
               <Route path="/ranking" element={<Ranking />} />
               <Route path="/tournaments" element={<Tournaments />} />
               <Route path="/tournaments/:id" element={<TournamentDetail />} />
+              <Route path="/tournaments/:id/share" element={<TournamentShare />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/profile/:userId" element={<UserProfile />} />
               <Route path="/payment/:id" element={<Payment />} />
