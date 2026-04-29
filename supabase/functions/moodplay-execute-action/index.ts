@@ -380,10 +380,39 @@ Deno.serve(async (req) => {
         if (error) throw error;
         result = { class_id: data.id };
         linkedType = "arena_class"; linkedId = data.id;
+      } else if (action_type === "register_match_score") {
+        const { data, error } = await admin.rpc("register_match_score", {
+          _match_id: payload.match_id,
+          _score_a: payload.score_a,
+          _score_b: payload.score_b,
+        });
+        if (error) throw error;
+        result = data;
+        linkedType = "modality_match"; linkedId = payload.match_id;
+      } else if (action_type === "enroll_in_tournament") {
+        const { data, error } = await admin.rpc("enroll_athlete_in_tournament", {
+          _tournament_id: payload.tournament_id,
+          _modality_id: payload.modality_id ?? null,
+        });
+        if (error) throw error;
+        result = data;
+        linkedType = "enrollment"; linkedId = (data as any)?.enrollment_id ?? null;
+      } else if (action_type === "validate_tournament_checkin") {
+        const { data, error } = await admin.rpc("enrollment_checkin_validate", {
+          _token: payload.token,
+        });
+        if (error) throw error;
+        result = data;
+        linkedType = "enrollment"; linkedId = (data as any)?.enrollment_id ?? null;
+      } else if (action_type === "sortear_grupos") {
+        const { data, error } = await admin.rpc("sortear_grupos", {
+          _modality_id: payload.modality_id,
+          _num_groups: payload.num_groups,
+        });
+        if (error) throw error;
+        result = data;
+        linkedType = "tournament_modality"; linkedId = payload.modality_id;
       }
-    } catch (e: any) {
-      err = e?.message ?? String(e);
-    }
 
     const summary = err
       ? `Falhou: ${err}`
