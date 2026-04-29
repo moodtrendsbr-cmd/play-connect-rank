@@ -89,6 +89,56 @@ const TournamentDetail = () => {
     setMeta('meta[property="og:url"]', "content", `${window.location.origin}/tournaments/${tournament.id}`);
     setMeta('meta[name="twitter:title"]', "content", title);
     setMeta('meta[name="twitter:description"]', "content", desc);
+
+    // JSON-LD SportsEvent (P3 SEO)
+    const ldId = "tournament-jsonld";
+    let script = document.getElementById(ldId) as HTMLScriptElement | null;
+    if (!script) {
+      script = document.createElement("script");
+      script.type = "application/ld+json";
+      script.id = ldId;
+      document.head.appendChild(script);
+    }
+    const ld: any = {
+      "@context": "https://schema.org",
+      "@type": "SportsEvent",
+      name: tournament.name,
+      startDate: tournament.start_date,
+      endDate: tournament.end_date,
+      eventStatus: new Date(tournament.end_date) < new Date()
+        ? "https://schema.org/EventCompleted"
+        : "https://schema.org/EventScheduled",
+      eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+      url: `${window.location.origin}/tournaments/${tournament.id}`,
+      description: desc,
+      location: {
+        "@type": "Place",
+        name: tournament.arena || `${tournament.city || ""}/${tournament.state || ""}`,
+        address: {
+          "@type": "PostalAddress",
+          addressLocality: tournament.city || undefined,
+          addressRegion: tournament.state || undefined,
+          addressCountry: "BR",
+        },
+      },
+      offers: tournament.entry_fee != null ? {
+        "@type": "Offer",
+        price: Number(tournament.entry_fee).toFixed(2),
+        priceCurrency: "BRL",
+        availability: "https://schema.org/InStock",
+        url: `${window.location.origin}/tournaments/${tournament.id}`,
+      } : undefined,
+      organizer: tournament.organizer_id ? {
+        "@type": "Organization",
+        name: "MoodPlay",
+      } : undefined,
+    };
+    script.text = JSON.stringify(ld);
+
+    return () => {
+      const el = document.getElementById(ldId);
+      if (el) el.remove();
+    };
   }, [tournament]);
 
   const handleEnroll = () => {
