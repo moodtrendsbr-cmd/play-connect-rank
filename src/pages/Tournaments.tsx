@@ -163,6 +163,11 @@ const Tournaments = () => {
                         {statusInfo.label}
                       </Badge>
                     </div>
+                    {featuredTournaments.has(t.id) && (
+                      <div className="mt-1">
+                        <FeaturedBadge entityType="tournament" entityId={t.id} />
+                      </div>
+                    )}
                     {t.arena && (
                       <p className="text-sm text-muted-foreground">🏟️ {t.arena}</p>
                     )}
