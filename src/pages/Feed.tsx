@@ -280,15 +280,39 @@ const Feed = () => {
             <p className="text-sm mt-1 text-muted-foreground">Seja o primeiro a publicar!</p>
           </div>
         ) : (
-          posts.map((post, index) => (
-            <div key={post.id}>
-              {index === 3 && <FriendSuggestions />}
-              {index > 0 && index % 5 === 0 && sponsoredPosts.length > 0 && (
-                <SponsoredPostCard post={sponsoredPosts[Math.floor(index / 5 - 1) % sponsoredPosts.length]} />
-              )}
-              <PostCard post={post} userId={user?.id} onLike={handleLike} onSave={handleSave} onRefresh={handleRefresh} />
-            </div>
-          ))
+          posts.map((post, index) => {
+            // Anti-spam: at most one promo every 5 organic items, and respect hourly cap
+            const promoSlotIdx = index > 0 && index % 5 === 0 ? Math.floor(index / 5) - 1 : -1;
+            const promo: UnifiedFeedItem | null =
+              canInjectPromo && promoSlotIdx >= 0 && promoItems.length > 0
+                ? promoItems[promoSlotIdx % promoItems.length]
+                : null;
+            return (
+              <div key={post.id}>
+                {index === 3 && <FriendSuggestions />}
+                {promo && promo.item_type === "tournament_boost" && (
+                  <BoostedTournamentCard item={promo} />
+                )}
+                {promo && promo.item_type === "product_boost" && (
+                  <BoostedProductCard item={promo} />
+                )}
+                {promo && (promo.item_type === "company_boost" || promo.item_type === "sponsored_post") && (
+                  <SponsoredPostCard
+                    post={{
+                      id: promo.item_key,
+                      title: promo.payload?.title ?? "",
+                      content: promo.payload?.content ?? promo.payload?.cta_label ?? "",
+                      image_url: promo.payload?.image_url ?? null,
+                      company_id: promo.company_id ?? "",
+                      company_name: promo.company_name ?? undefined,
+                      company_logo: promo.company_logo ?? undefined,
+                    }}
+                  />
+                )}
+                <PostCard post={post} userId={user?.id} onLike={handleLike} onSave={handleSave} onRefresh={handleRefresh} />
+              </div>
+            );
+          })
         )}
         {loadingMore && <PostSkeleton />}
         <div ref={loadMoreRef} className="h-4" />
