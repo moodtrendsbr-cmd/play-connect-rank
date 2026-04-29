@@ -22,6 +22,7 @@ const MyCompany = () => {
   const [plan, setPlan] = useState<any>(null);
   const [allPlans, setAllPlans] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [promoteProduct, setPromoteProduct] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddProduct, setShowAddProduct] = useState(false);
