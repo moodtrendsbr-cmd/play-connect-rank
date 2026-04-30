@@ -16,6 +16,7 @@ const corsHeaders = {
 const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const INTERNAL_TOKEN = Deno.env.get("ORKYM_INTERNAL_TOKEN") || "";
 
 function safeJson(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -139,33 +140,55 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return safeJson({ ok: false, error: "Unauthorized" }, 401);
-    }
-    const userClient = createClient(SUPA_URL, ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimErr } = await userClient.auth.getClaims(token);
-    if (claimErr || !claims?.claims) {
-      return safeJson({ ok: false, error: "Unauthorized" }, 401);
-    }
-    const userId = claims.claims.sub as string;
+    // Internal-service path: trusted callers (wa-bridge, cron) skip user-scope
+    // resolution and provide tenant_id/arena_id directly. Authorized via
+    // service role JWT + matching ORKYM_INTERNAL_TOKEN header.
+    const authHeader = req.headers.get("Authorization") || "";
+    const internalToken = req.headers.get("x-internal-token") || "";
+    const isInternal =
+      authHeader === `Bearer ${SERVICE_KEY}` &&
+      INTERNAL_TOKEN.length > 0 &&
+      internalToken === INTERNAL_TOKEN;
 
     let body: any = {};
     try { body = await req.json(); } catch { /* allow empty */ }
-    const scope = body?.scope as ScopeIn | undefined;
     const rec = body?.recommendation as RecommendationIn | undefined;
-    if (!scope?.type || !rec?.action_type) {
-      return safeJson({ ok: false, error: "scope_and_action_type_required" }, 400);
+    if (!rec?.action_type) {
+      return safeJson({ ok: false, error: "action_type_required" }, 400);
     }
 
     const admin = createClient(SUPA_URL, SERVICE_KEY);
 
-    const resolved = await resolveScope(admin, userId, scope);
-    if (!resolved) return safeJson({ ok: false, error: "forbidden" }, 403);
-    const { tenant_id, arena_id } = resolved;
+    let tenant_id: string;
+    let arena_id: string | null = null;
+
+    if (isInternal) {
+      const tid = body?.tenant_id as string | undefined;
+      if (!tid) return safeJson({ ok: false, error: "tenant_id_required" }, 400);
+      tenant_id = tid;
+      arena_id = (body?.arena_id as string | null) ?? null;
+    } else {
+      if (!authHeader.startsWith("Bearer ")) {
+        return safeJson({ ok: false, error: "Unauthorized" }, 401);
+      }
+      const userClient = createClient(SUPA_URL, ANON_KEY, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claims, error: claimErr } = await userClient.auth.getClaims(token);
+      if (claimErr || !claims?.claims) {
+        return safeJson({ ok: false, error: "Unauthorized" }, 401);
+      }
+      const userId = claims.claims.sub as string;
+      const scope = body?.scope as ScopeIn | undefined;
+      if (!scope?.type) {
+        return safeJson({ ok: false, error: "scope_required" }, 400);
+      }
+      const resolved = await resolveScope(admin, userId, scope);
+      if (!resolved) return safeJson({ ok: false, error: "forbidden" }, 403);
+      tenant_id = resolved.tenant_id;
+      arena_id = resolved.arena_id;
+    }
 
     // 1) Kill switch
     if (await killSwitchActive(admin, tenant_id, arena_id, rec.action_type)) {

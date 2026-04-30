@@ -2,6 +2,13 @@
 // verify_jwt = false (public webhook validated via HMAC OR mock mode)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { getMemoryContext } from "../_shared/memory.ts";
+import {
+  blockedReply,
+  confirmationFor,
+  declinedReply,
+  isAffirmative,
+  isNegative,
+} from "../_shared/confirmation-templates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +19,7 @@ const corsHeaders = {
 const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const WA_SECRET = Deno.env.get("WA_WEBHOOK_SECRET") || "";
+const INTERNAL_TOKEN = Deno.env.get("ORKYM_INTERNAL_TOKEN") || "";
 
 const PROFILE_TO_DOMAIN: Record<string, string> = {
   arena: "arena_operations",
@@ -347,6 +355,170 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     console.warn("proactive_feedback_responded_failed", e);
+  }
+
+  // 4c. Phase H WA loop — short affirmative/negative reply to a recent
+  // proactive message resolves its embedded pending_action without ORKYM.
+  // Window: 6h. Status flip prevents re-execution.
+  try {
+    const affirmative = isAffirmative(text);
+    const negative = !affirmative && isNegative(text);
+    if ((affirmative || negative) && ident.user_id && !qrIntent) {
+      const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+      const { data: recentRows } = await supa
+        .from("conversational_commands")
+        .select("id, parsed_intent, linked_entity_id, tenant_id, arena_id, status")
+        .eq("direction", "outbound")
+        .eq("initiated_by", "orkym")
+        .eq("user_id", ident.user_id)
+        .gte("created_at", since)
+        .neq("status", "pending_action_consumed")
+        .order("created_at", { ascending: false })
+        .limit(5);
+      const candidate = (recentRows ?? []).find((r: any) => r?.parsed_intent?.pending_action);
+      const pa = candidate?.parsed_intent?.pending_action as
+        | undefined
+        | {
+            action_type: string;
+            entity_type: string | null;
+            entity_id: string | null;
+            payload: Record<string, unknown>;
+            scope: { type: string; id: string };
+            expires_at?: string;
+          };
+
+      if (candidate && pa) {
+        const expired = pa.expires_at ? new Date(pa.expires_at).getTime() < Date.now() : false;
+        if (!expired) {
+          // Mark outbound consumed first to prevent double-execute on retries.
+          await supa
+            .from("conversational_commands")
+            .update({ status: "pending_action_consumed" })
+            .eq("id", candidate.id);
+
+          if (negative) {
+            const responseText = declinedReply();
+            if (candidate.linked_entity_id) {
+              await supa.from("orkym_trigger_feedback").insert({
+                trigger_id: candidate.linked_entity_id,
+                event: "declined",
+                metadata: { inbound_command_id: commandId },
+              });
+            }
+            if (candidate.arena_id) {
+              await supa.from("arena_operational_events").insert({
+                tenant_id: candidate.tenant_id,
+                arena_id: candidate.arena_id,
+                entity_type: "proactive_action",
+                entity_id: candidate.linked_entity_id,
+                event_type: "proactive_action.declined",
+                payload: { action_type: pa.action_type },
+                source: "system",
+              });
+            }
+            await supa
+              .from("conversational_commands")
+              .update({
+                status: "executed",
+                response_text: responseText,
+                completed_at: new Date().toISOString(),
+                parsed_intent: {
+                  resolved_pending_action: { action_type: pa.action_type, decision: "declined" },
+                },
+              })
+              .eq("id", commandId);
+            return new Response(
+              JSON.stringify({ ok: true, command_id: commandId, response: responseText, status: "executed" }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+
+          // Affirmative → execute via control-tower-execute (internal mode)
+          let execStatus: string = "blocked";
+          let execReason: string | null = null;
+          try {
+            const r = await fetch(`${SUPA_URL}/functions/v1/control-tower-execute`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${SERVICE_KEY}`,
+                "x-internal-token": INTERNAL_TOKEN,
+              },
+              body: JSON.stringify({
+                tenant_id: candidate.tenant_id,
+                arena_id: candidate.arena_id,
+                recommendation: {
+                  action_type: pa.action_type,
+                  entity_type: pa.entity_type,
+                  entity_id: pa.entity_id,
+                  payload: pa.payload || {},
+                  title: "Ação proativa aprovada via WhatsApp",
+                },
+              }),
+              signal: AbortSignal.timeout(15000),
+            });
+            const j = await r.json().catch(() => ({}));
+            execStatus = j?.status || (j?.ok ? "executed" : "blocked");
+            execReason = j?.reason ?? null;
+          } catch (e) {
+            execStatus = "blocked";
+            execReason = `error:${(e as Error).message}`;
+          }
+
+          const responseText =
+            execStatus === "executed" ? confirmationFor(pa.action_type) : blockedReply();
+
+          if (candidate.linked_entity_id) {
+            await supa.from("orkym_trigger_feedback").insert({
+              trigger_id: candidate.linked_entity_id,
+              event: execStatus === "executed" ? "accepted" : "blocked",
+              metadata: {
+                inbound_command_id: commandId,
+                action_type: pa.action_type,
+                reason: execReason,
+              },
+            });
+          }
+          if (candidate.arena_id) {
+            await supa.from("arena_operational_events").insert({
+              tenant_id: candidate.tenant_id,
+              arena_id: candidate.arena_id,
+              entity_type: "proactive_action",
+              entity_id: candidate.linked_entity_id,
+              event_type:
+                execStatus === "executed"
+                  ? "proactive_action.executed"
+                  : "proactive_action.blocked",
+              payload: { action_type: pa.action_type, reason: execReason },
+              source: "system",
+            });
+          }
+
+          await supa
+            .from("conversational_commands")
+            .update({
+              status: "executed",
+              response_text: responseText,
+              completed_at: new Date().toISOString(),
+              parsed_intent: {
+                resolved_pending_action: {
+                  action_type: pa.action_type,
+                  decision: execStatus,
+                  reason: execReason,
+                },
+              },
+            })
+            .eq("id", commandId);
+
+          return new Response(
+            JSON.stringify({ ok: true, command_id: commandId, response: responseText, status: "executed" }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("pending_action_resolution_failed", e);
   }
 
   // 5. Special-case: QR check-in goes straight to RPC (no ORKYM needed)
