@@ -128,7 +128,7 @@ const ArenaDashboard = () => {
   }
 
   const nextTask = tasks[0];
-  const waConnected = wa.status === "connected";
+  const waConnected = wa.connected || wa.status === "active";
 
   return (
     <div className="space-y-8">
