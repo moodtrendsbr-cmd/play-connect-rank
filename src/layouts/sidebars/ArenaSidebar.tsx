@@ -11,9 +11,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
-  LayoutDashboard, QrCode, BookOpen,
+  LayoutDashboard, QrCode as QrCodeIcon, BookOpen,
   Grid3x3, CalendarDays, GraduationCap, ClipboardList, Users, UserCog, AlertCircle,
-  Trophy, DollarSign, Handshake, MessageCircle,
+  Trophy, DollarSign, Handshake, MessageCircle, Package, UserCheck, ShieldCheck,
 } from "lucide-react";
 
 const groups = [
@@ -26,7 +26,7 @@ const groups = [
   {
     label: "Hoje",
     items: [
-      { title: "Check-in", url: "/arena/checkin", icon: QrCode },
+      { title: "Check-in", url: "/arena/checkin", icon: QrCodeIcon },
       { title: "Reservas", url: "/arena/dashboard/reservas", icon: BookOpen },
     ],
   },
@@ -36,10 +36,16 @@ const groups = [
       { title: "Quadras", url: "/arena/dashboard/quadras", icon: Grid3x3 },
       { title: "Horários", url: "/arena/dashboard/horarios", icon: CalendarDays },
       { title: "Aulas", url: "/arena/dashboard/aulas", icon: GraduationCap },
-      { title: "Matrículas", url: "/arena/dashboard/matriculas", icon: ClipboardList },
-      { title: "Alunos", url: "/arena/dashboard/alunos", icon: Users },
-      { title: "Professores", url: "/arena/dashboard/professores", icon: UserCog },
       { title: "Ocorrências", url: "/arena/dashboard/ocorrencias", icon: AlertCircle },
+    ],
+  },
+  {
+    label: "Clientes",
+    items: [
+      { title: "Alunos", url: "/arena/dashboard/alunos", icon: Users },
+      { title: "Matrículas", url: "/arena/dashboard/matriculas", icon: ClipboardList },
+      { title: "Professores", url: "/arena/dashboard/professores", icon: UserCog },
+      { title: "Equipe", url: "/arena/dashboard/equipe", icon: ShieldCheck },
     ],
   },
   {
@@ -51,13 +57,16 @@ const groups = [
   {
     label: "Receita",
     items: [
-      { title: "Receita", url: "/arena/dashboard/financeiro", icon: DollarSign },
+      { title: "Financeiro", url: "/arena/dashboard/financeiro", icon: DollarSign },
+      { title: "Produtos", url: "/arena/dashboard/produtos", icon: Package },
     ],
   },
   {
     label: "Crescimento",
     items: [
       { title: "Patrocínios", url: "/arena/dashboard/patrocinios", icon: Handshake },
+      { title: "QR físico", url: "/arena/dashboard/qr", icon: QrCodeIcon },
+      { title: "Perfil da arena", url: "/arena/dashboard/perfil", icon: UserCheck },
     ],
   },
   {

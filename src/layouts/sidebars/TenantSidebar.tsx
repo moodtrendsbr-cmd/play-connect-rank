@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   Gauge, Building2, Users, Store, DollarSign, Settings, Trophy, MessageCircle,
+  UserCheck, QrCode, Package, ShieldCheck,
 } from "lucide-react";
 
 const groups = [
@@ -28,6 +29,15 @@ const groups = [
       { title: "Eventos", url: "/tenant/torneios", icon: Trophy },
       { title: "Empresas", url: "/tenant/empresas", icon: Store },
       { title: "Organizadores", url: "/tenant/membros", icon: Users },
+    ],
+  },
+  {
+    label: "Visão da rede",
+    items: [
+      { title: "Perfis das arenas", url: "/tenant/arenas/perfis", icon: UserCheck },
+      { title: "QR físico", url: "/tenant/qr", icon: QrCode },
+      { title: "Produtos", url: "/tenant/produtos", icon: Package },
+      { title: "Equipe", url: "/tenant/equipe", icon: ShieldCheck },
     ],
   },
   {
