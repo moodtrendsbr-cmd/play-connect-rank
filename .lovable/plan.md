@@ -1,138 +1,121 @@
-## Protótipo Navegável: Fluxo Completo de Torneios
 
-Vou criar uma rota interna `/flow-tournament` que funciona como um Figma vivo dentro do MoodPlay. Você navega pelas 18 etapas, troca de perfil (Atleta / Arena / Organizador / Público) e vê cada tela renderizada com dados realistas — tudo respeitando o design system atual (preto #050708, verde neon #2BFF88, Bebas Neue + Inter).
+# Reestruturação dos Dashboards MoodPlay
 
-### O que será entregue
+Foco: simplificar navegação, renomear termos técnicos, esconder ORKYM/IA da UI, consolidar rotas duplicadas. **Nenhuma página é deletada** — apenas removida do menu, renomeada ou redirecionada. Backend, edge functions e DB intocados.
 
-Uma experiência tipo "demo interativa" com três eixos de navegação simultâneos:
+## Princípios
 
-```text
-┌─ EIXO 1: Etapa (1 → 18) ──── stepper horizontal no topo
-├─ EIXO 2: Perfil ──────────── tabs Atleta | Arena | Organizer | Público
-└─ EIXO 3: Estado ──────────── chips: Vazio | Em andamento | Cheio | Finalizado
-```
+- ORKYM, "IA", "Autonomia", "Comandos", "Control Tower", "Bindings", "Split rules", "(legado)" — fora da UI.
+- Renomeações globais: `Control Tower → Visão geral`, `Comandos → Conversas`, `Split rules → Divisão de valores`, `Bindings → Conexão de número`, `Roteamento WhatsApp → Para onde vão as mensagens`, `Ações ORKYM → Sugestões` (ou removido).
+- Rotas antigas continuam acessíveis (não quebra deep links existentes), mas somem do menu.
 
-Cada combinação renderiza um mockup mobile-first dentro de um "frame de celular" no centro da tela, com painel lateral mostrando: nome da tela, o que o usuário vê, ações disponíveis, componentes, dados exibidos.
+---
 
-### Estrutura das 18 etapas
+## Fase 1 — Athlete (bottom nav mobile-first)
 
-**Alta fidelidade (8 telas críticas, mockup completo e interativo):**
-1. Página pública do torneio — hero, contador, modalidades, botão inscrever
-2. Inscrição do atleta — seleção de categoria/dupla, termos, pagamento PIX
-3. Lista de inscritos — grid de duplas, filtros por categoria, status
-4. Check-in — QR code, lista presencial, contador "23/32 confirmados"
-5. Grupos — cards por chave A/B/C/D com 4 duplas cada
-6. Agenda de partidas — timeline por quadra (Q1, Q2, Q3) com horários
-7. Bracket visual — oitavas → quartas → semi → final, linhas conectoras, placares
-8. Feed pós-jogo — V-Clips do torneio, ranking atualizado, posts dos atletas
+**Arquivo:** `src/layouts/AthleteShell.tsx`, `src/layouts/sidebars/AthleteSidebar.tsx`
 
-**Mockup simplificado (10 etapas, cards visuais mas sem interação completa):**
-- Criação do torneio (form steps resumidos)
-- Sorteio (animação de cards)
-- Geração de jogos (lista compacta)
-- Jogos em andamento (placar ao vivo)
-- Registro de resultado (input de games)
-- Avanço de fase (transição visual)
-- Final (destaque de tela cheia)
-- Resultado final (pódio 1º/2º/3º)
-- Ranking atualizado (mudança de posição com setas)
-- Visualização de grupos consolidada
+- Em viewport `< md`: substituir `AthleteSidebar` por uma `AthleteBottomNav` fixa (5 itens): Feed, Torneios, Ranking, Mensagens, Perfil.
+- Em `≥ md`: manter `AthleteSidebar` mas reduzida aos mesmos 5 itens.
+- Remover do menu: `Comandos`, `Dashboard` (atleta entra direto em Feed), `Descobrir` (fundido em Feed via aba/tab interna do `Feed.tsx` se já existir; senão apenas remove o item — rota `/athlete/descobrir` continua viva).
+- Default redirect: `/athlete` → `/athlete/feed` (em vez de `/athlete/dashboard`).
 
-### Visões por perfil
+## Fase 2 — Arena
 
-Cada etapa muda conforme o perfil ativo:
+**Arquivo:** `src/layouts/sidebars/ArenaSidebar.tsx`
 
-| Perfil | Foco principal |
-|---|---|
-| **Atleta** | Inscrição, minha agenda, meu próximo jogo, meu bracket, minha posição |
-| **Arena** | Quadras alocadas, check-in operacional, timeline da arena |
-| **Organizador** | Criação, gestão de chaves, sorteio, registro de resultados, controle |
-| **Público** | Página pública, bracket read-only, ranking, feed social |
+Nova estrutura de grupos:
 
-### Dados simulados realistas
+- **Visão geral** → `/arena/dashboard` (renomeia "Control Tower"; remove "Visão geral" duplicada, "Ações ORKYM", "Autonomia", "Comandos" do menu).
+- **Hoje** → `/arena/checkin` (Check-in) + `/arena/dashboard/reservas` (Reservas de hoje).
+- **Operação** → Quadras, Horários, Aulas, Matrículas, Alunos, Professores, Ocorrências.
+- **Torneios** → `/arena/dashboard/torneios`.
+- **Receita** → único item "Receita" → `/arena/dashboard/financeiro`. A página `ArenaFinance.tsx` ganha **abas internas** (Resumo · Transações · Planos · Assinaturas · Cobranças) consumindo os componentes já existentes (`ArenaTransactions`, `ArenaPlans`, `ArenaSubscriptions`, `ArenaBilling`). Rotas antigas continuam respondendo.
+- **Crescimento** → Patrocínios.
+- **Conversas** → `/arena/dashboard/mensagens-wa` (renomeada de "Comandos/Mensagens").
 
-Mock fixo embutido no protótipo:
+Footer da sidebar: remover `WhatsAppCTA` "Falar com a ORKYM".
 
-```text
-Torneio:    "Beach Tennis Open Floripa — 5ª Etapa"
-Local:      Arena Praia Mole, Florianópolis-SC
-Modalidades: Beach Tennis Mista C / Open / Iniciante
-Datas:      15-16 Nov 2026
-Duplas:     "Larissa Mendes & Camila Ribeiro", "Pedro Santana & Rafael Lima",
-            "Bruno Vasconcelos & Tiago Almeida", "Marina Costa & Júlia Pacheco"...
-Quadras:    Q1 Praia, Q2 Sunset, Q3 Pôr do Sol
-Placares:   6/4 6/2, 7/6(5) 4/6 10/8, etc.
-```
+## Fase 3 — Organizer
 
-Também inclui um cenário paralelo curto de **futevôlei** para mostrar variação de modalidade.
+**Arquivo:** `src/layouts/sidebars/OrganizerSidebar.tsx` + `src/App.tsx`
 
-### Bracket crítico
+- Sidebar: Visão geral, Eventos, Inscritos, Jogos, Financeiro, Conversas.
+- Hoje `eventos`, `inscricoes`, `jogos`, `performance` apontam todos para `OrganizerDashboard` (stub). Plano: manter rotas vivas mas **mostrar apenas "Eventos"** no menu até que páginas reais existam (não criar páginas — só remover stubs do menu).
+- Remover do menu: `Comandos`, `Conexão WhatsApp` (move para um link discreto no header da Visão geral via badge já existente), "Criar evento" (vira botão de ação dentro de Eventos).
+- "Conversas" → `/organizer/dashboard/mensagens-wa`.
 
-O componente de bracket terá renderização fiel: 8 confrontos nas oitavas → 4 nas quartas → 2 nas semis → 1 final, com linhas conectoras em SVG, placares preenchidos, vencedor destacado em verde neon, perdedor em opacidade reduzida. Avatares clicáveis (mock) levam a um drawer com mini perfil.
+## Fase 4 — Company
 
-### Estilo visual
+**Arquivo:** `src/layouts/sidebars/CompanySidebar.tsx` + `src/App.tsx`
 
-- Mobile-first: frame fixo de 390×844 simulando iPhone, com chrome do sistema
-- Cards com `bg-card`, bordas `border-border`, radius `rounded-xl`
-- Highlights em `text-primary` (verde neon) seguindo regra de não pintar tudo
-- Bebas Neue em headings de seção, Inter no corpo
-- Sem termos técnicos, sem mostrar backend, sem mencionar IA/ORKYM
+- Sidebar: Visão geral, Produtos, Pedidos, Campanhas, Patrocínios, Onde apareço, Conversas.
+- Atualmente `/company/produtos`, `/company/pedidos` renderizam `MyCompany`; `/company/campanhas` e `/company/visibilidade` renderizam `CompanyDashboard`. Plano: manter rotas, mas **mapear cada item do menu para a rota mais específica existente** (sem stubs duplicados visíveis):
+  - Produtos → `/company/produtos` (MyCompany já tem aba)
+  - Pedidos → `/company/pedidos`
+  - Campanhas → `/company/sponsor/torneios` (página real)
+  - Patrocínios → `/company/sponsor/resumo` (página real, SponsorDashboard)
+  - Onde apareço → `/company/visibilidade` (mantém CompanyDashboard com foco em métricas de impressão; sem mudar o componente)
+- Remover do menu: `Comandos`, `Explore`, `Feed MoodPlay` (links externos podem ficar como atalhos no header, não no menu principal).
 
-### Arquivos a criar
+## Fase 5 — Tenant
 
-```text
-src/pages/FlowTournament.tsx                  ← rota principal
-src/components/flow-tournament/
-  ├─ FlowShell.tsx                            ← layout 3 eixos + frame mobile
-  ├─ StepStepper.tsx                          ← stepper das 18 etapas
-  ├─ ProfileTabs.tsx                          ← Atleta/Arena/Organizer/Público
-  ├─ StateChips.tsx                           ← Vazio/Cheio/Em andamento/Final
-  ├─ ScreenInfoPanel.tsx                      ← painel lateral descritivo
-  ├─ MobileFrame.tsx                          ← bezel + status bar
-  ├─ mock/tournamentData.ts                   ← dados simulados
-  └─ screens/
-      ├─ S01_Create.tsx          (simplif.)
-      ├─ S02_PublicPage.tsx      (HI-FI)
-      ├─ S03_Enrollment.tsx      (HI-FI)
-      ├─ S04_Athletes.tsx        (HI-FI)
-      ├─ S05_CheckIn.tsx         (HI-FI)
-      ├─ S06_Groups.tsx          (simplif.)
-      ├─ S07_Draw.tsx            (simplif.)
-      ├─ S08_GroupsView.tsx      (HI-FI)
-      ├─ S09_GenerateMatches.tsx (simplif.)
-      ├─ S10_Schedule.tsx        (HI-FI)
-      ├─ S11_Bracket.tsx         (HI-FI)
-      ├─ S12_LiveMatches.tsx     (simplif.)
-      ├─ S13_RegisterResult.tsx  (simplif.)
-      ├─ S14_PhaseAdvance.tsx    (simplif.)
-      ├─ S15_Final.tsx           (simplif.)
-      ├─ S16_FinalResult.tsx     (simplif.)
-      ├─ S17_RankingUpdate.tsx   (simplif.)
-      └─ S18_PostFeed.tsx        (HI-FI)
-```
+**Arquivo:** `src/layouts/sidebars/TenantSidebar.tsx`
 
-E adição de uma rota em `src/App.tsx`: `<Route path="/flow-tournament" element={<FlowTournament />} />`
+- Sidebar: Visão geral, Arenas, Eventos, Empresas, Receita, Configurações, Conversas.
+- Remover do menu: `Comandos`, `Autonomia`, `Roteamento WhatsApp` (rotas continuam vivas).
+- Renomear: `Financeiro → Receita`. `Conta de pagamento` movida para dentro de Configurações (sub-link no header da página) — no menu fica só "Configurações" → `/tenant/dominios` com abas (Domínios · Pagamento) reaproveitando `OrganizerDomains` e `OrganizerPayment` via tabs no shell. Sem backend.
+- Empresas: aponta para `/tenant/empresas` (já existe rota).
+- Conversas → `/tenant/mensagens-wa`.
 
-### Detalhes técnicos
+## Fase 6 — Admin
 
-- 100% client-side, dados mockados em memória (zero backend, zero migrations)
-- Estado da navegação por `useState` (etapa, perfil, estado), URL sincronizada via `useSearchParams` para permitir compartilhar links tipo `/flow-tournament?step=11&role=athlete&state=live`
-- Reuso dos componentes de UI já existentes (`Card`, `Button`, `Badge`, `Avatar`) — só novos componentes para o frame mobile e o bracket SVG
-- Sem dependências novas; SVG inline para o bracket
-- Não toca nada do fluxo real de torneios (`Tournaments.tsx`, `TournamentDetail.tsx`, `Brackets.tsx`) — é uma rota paralela isolada
+**Arquivo:** `src/pages/admin/AdminLayout.tsx`
 
-### Como você vai usar
+Novos grupos enxutos:
 
-1. Acessa `/flow-tournament`
-2. Vê a tela 1 com perfil "Atleta" por padrão
-3. Avança pelo stepper (próximo / anterior / clique direto)
-4. Troca o perfil para ver a mesma etapa sob outra ótica
-5. Alterna estados (vazio → cheio → finalizado) onde fizer sentido
-6. Compartilha qualquer combinação por URL
+- **Visão geral**: Dashboard, Analytics.
+- **Usuários**: Usuários, Tenants.
+- **Operação**: Torneios, Inscrições, Arenas.
+- **Marketplace**: Empresas, Produtos, Patrocínios — Atletas, Patrocínios — Torneios, Brindes, Planos, Destaques pagos.
+- **Campanhas**: Campanhas (Ad Campaigns).
+- **Financeiro**: Financeiro, Divisão de valores (split-rules), Ajustes, Monetização.
+- **Aprovações**: Featured listings em fila (reaproveita `AdminFeaturedListings` filtrada).
+- **Sistema** (recolhido por padrão): Monitor ORKYM, Ações ORKYM, Autonomia, Control Tower, WhatsApp Instâncias, Mensagens, Bindings, Leads, Comandos.
 
-### Fora do escopo
+Itens removidos do menu (rotas vivas): `Campanhas (legado)`, duplicatas.
 
-- Não cria nenhuma migration, edge function ou tabela
-- Não altera o fluxo real de torneios em produção
-- Não conecta a dados reais — todo conteúdo é mock fixo
-- Não inclui PDF/PNG export (pode ser adicionado depois se quiser uma versão estática)
+## Fase 7 — Limpeza global
+
+- Remover footer `WhatsAppCTA "Falar com a ORKYM"` de **todas** as sidebars (Athlete, Arena, Organizer, Company, Tenant, Admin).
+- `WhatsAppStatusBadge` no header de cada shell: trocar texto interno (se houver "ORKYM"/"IA") para "WhatsApp" puro — verificar `src/components/conversational/WhatsAppStatusBadge.tsx`.
+- `OperationModeBanner`: esconder no athlete/company; manter apenas em arena/organizer/tenant **sem** mencionar "modo auto/manual" — texto neutro tipo "Conexão ativa".
+
+## Fase 8 — Sem alterações em rotas (compatibilidade)
+
+`src/App.tsx` permanece praticamente intocado. Único ajuste opcional: redirect default `/athlete` → `/athlete/feed`. Todas as rotas antigas (`/arena/dashboard/comandos`, `/admin/orkym`, etc.) continuam funcionando — apenas saem do menu visível.
+
+---
+
+## Arquivos a editar
+
+1. `src/layouts/sidebars/AthleteSidebar.tsx` — reduzir a 5 itens, remover footer ORKYM.
+2. `src/layouts/AthleteShell.tsx` — adicionar bottom nav mobile.
+3. **Novo**: `src/components/layout/AthleteBottomNav.tsx`.
+4. `src/layouts/sidebars/ArenaSidebar.tsx` — reagrupar, remover IA/Comandos/Autonomia/Ações.
+5. `src/pages/arena-dashboard/ArenaFinance.tsx` — adicionar abas internas (Resumo, Transações, Planos, Assinaturas, Cobranças).
+6. `src/layouts/sidebars/OrganizerSidebar.tsx` — reduzir.
+7. `src/layouts/sidebars/CompanySidebar.tsx` — apontar para rotas específicas, remover externos.
+8. `src/layouts/sidebars/TenantSidebar.tsx` — remover Autonomia/Routing/Comandos, renomear Financeiro.
+9. `src/pages/admin/AdminLayout.tsx` — novos grupos, "Sistema" recolhido.
+10. `src/components/conversational/WhatsAppStatusBadge.tsx` — texto neutro (se necessário).
+11. `src/components/conversational/OperationModeBanner.tsx` — texto neutro/esconder em alguns shells.
+
+## Critérios de aceite
+
+- Nenhum item de menu contém: ORKYM, IA, Autonomia, Comandos, Control Tower, Bindings, Split rules, "(legado)".
+- Athlete em mobile usa bottom nav (5 ícones).
+- Arena Receita é uma página com abas, não 5 itens de menu.
+- Admin "Sistema" agrupa tudo técnico, recolhido por padrão.
+- Todas as rotas antigas continuam respondendo (zero 404 em deep links existentes).
+- Build limpo, sem imports removidos quebrando compilação.

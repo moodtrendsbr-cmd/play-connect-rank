@@ -2,7 +2,6 @@ import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
@@ -11,42 +10,36 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { WhatsAppCTA } from "@/components/conversational/WhatsAppCTA";
 import {
-  LayoutDashboard, Store, Package, ShoppingBag, ExternalLink,
-  Megaphone, Trophy, LineChart, Eye, Compass, Rss, MessageCircle,
+  LayoutDashboard, Package, ShoppingBag, Megaphone, Handshake, Eye, MessageCircle,
 } from "lucide-react";
 
 const groups = [
   {
-    label: "Control Tower",
+    label: "Visão geral",
     items: [
-      { title: "Dashboard", url: "/company/dashboard", icon: LayoutDashboard },
-      { title: "Conexão WhatsApp", url: "/company/connect-whatsapp", icon: MessageCircle },
-      { title: "Comandos", url: "/company/comandos", icon: MessageCircle },
+      { title: "Visão geral", url: "/company/dashboard", icon: LayoutDashboard },
     ],
   },
   {
-    label: "Marketplace",
+    label: "Loja",
     items: [
-      { title: "Minha empresa", url: "/company/marketplace", icon: Store },
       { title: "Produtos", url: "/company/produtos", icon: Package },
       { title: "Pedidos", url: "/company/pedidos", icon: ShoppingBag },
-      { title: "Ver loja pública", url: "/marketplace", icon: ExternalLink },
     ],
   },
   {
-    label: "Campanhas",
+    label: "Marketing",
     items: [
-      { title: "Patrocinar torneio", url: "/company/sponsor/torneios", icon: Trophy },
-      { title: "Meus patrocínios", url: "/company/sponsor/resumo", icon: Megaphone },
+      { title: "Campanhas", url: "/company/sponsor/torneios", icon: Megaphone },
+      { title: "Patrocínios", url: "/company/sponsor/resumo", icon: Handshake },
+      { title: "Onde apareço", url: "/company/visibilidade", icon: Eye },
     ],
   },
   {
-    label: "Visibilidade",
+    label: "Conversas",
     items: [
-      { title: "Explore", url: "/explore", icon: Compass },
-      { title: "Feed MoodPlay", url: "/feed", icon: Rss },
+      { title: "Conversas", url: "/company/mensagens-wa", icon: MessageCircle },
     ],
   },
 ];
@@ -81,16 +74,6 @@ export function CompanySidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      {!collapsed && (
-        <SidebarFooter className="p-2">
-          <WhatsAppCTA
-            variant="inline"
-            command="Olá, sou da empresa e quero falar com a ORKYM"
-            label="Falar com a ORKYM"
-            className="w-full justify-center"
-          />
-        </SidebarFooter>
-      )}
     </Sidebar>
   );
 }

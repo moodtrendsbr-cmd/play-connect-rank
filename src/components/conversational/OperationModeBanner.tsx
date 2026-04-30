@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MessageCircle, QrCode, Gauge, X, Sparkles } from "lucide-react";
+import { MessageCircle, QrCode, X, Sparkles } from "lucide-react";
 
 interface Props {
   profile: "arena" | "tenant" | "organizer" | "athlete" | "company" | "admin";
@@ -36,25 +36,21 @@ export const OperationModeBanner = ({ profile }: Props) => {
           <Sparkles className="h-4 w-4 text-primary mt-0.5 shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground leading-tight">
-              Este painel é para visão e controle.
+              Bem-vindo ao seu painel.
             </p>
             <p className="text-xs text-muted-foreground leading-snug mt-0.5">
-              A operação acontece em 3 canais coordenados pela ORKYM.
+              Acompanhe sua operação, receita e clientes em um só lugar.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3 text-[11px] text-muted-foreground shrink-0 pl-6 md:pl-0">
           <span className="inline-flex items-center gap-1">
             <MessageCircle className="h-3 w-3 text-emerald-600" />
-            Operações → WhatsApp
+            Atendimento via WhatsApp
           </span>
           <span className="inline-flex items-center gap-1">
             <QrCode className="h-3 w-3 text-primary" />
-            Entrada física → QR
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Gauge className="h-3 w-3 text-primary" />
-            Control Tower → Visão e controle
+            Check-in por QR
           </span>
         </div>
       </div>

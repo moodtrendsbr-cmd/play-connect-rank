@@ -251,7 +251,7 @@ const App = () => (
             {/* Phase 11.1 — alias shells (additive, do not break legacy routes) */}
             <Route path="/arena" element={<Navigate to="/arena/dashboard" replace />} />
             <Route path="/athlete" element={<AthleteShell />}>
-              <Route index element={<Navigate to="/athlete/dashboard" replace />} />
+              <Route index element={<Navigate to="/athlete/feed" replace />} />
               <Route path="dashboard" element={<AthleteDashboard />} />
               <Route path="perfil" element={<Profile />} />
               <Route path="meu-dia" element={<AthleteDashboard />} />
