@@ -57,7 +57,9 @@ const ArenaShell = () => {
     })();
   }, [user, userRole]);
 
-  const scope = arenaId ? { scope_type: "arena" as const, arena_id: arenaId, tenant_id: tenantId } : null;
+  const scope = arenaId && !(arena as any)?.__demo
+    ? { scope_type: "arena" as const, arena_id: arenaId, tenant_id: tenantId }
+    : null;
   const { loading: waLoading, connected } = useWhatsAppConnectionStatus(scope);
 
   if (loading) {
@@ -70,9 +72,10 @@ const ArenaShell = () => {
   if (!user) return <Navigate to="/login" replace />;
 
   // Gate: arena owners must connect WhatsApp before using the dashboard.
-  // Super admin bypasses; checkin and connect pages are out of this shell.
+  // Super admin and demo-stub arenas bypass so all pages remain navigable for testing.
   const isAdmin = userRole === "admin";
-  if (!isAdmin && resolved && arenaId && !waLoading && !connected) {
+  const isDemo = (arena as any)?.__demo === true;
+  if (!isAdmin && !isDemo && resolved && arenaId && !waLoading && !connected) {
     return <Navigate to="/arena/connect-whatsapp" replace state={{ from: location.pathname }} />;
   }
 
