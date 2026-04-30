@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Grid3X3, Video, Instagram, Map, Globe, ExternalLink } from "lucide-react";
+import { MapPin, Grid3X3, Video, Instagram, Map, Globe, ExternalLink, ArrowLeft } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
   video: Video,
@@ -15,6 +16,7 @@ const ICON_MAP: Record<string, any> = {
 
 const ArenaPublic = () => {
   const { arenaSlug } = useParams();
+  const { user } = useAuth();
   const [arena, setArena] = useState<any>(null);
   const [courts, setCourts] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
