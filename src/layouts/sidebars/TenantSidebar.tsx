@@ -2,7 +2,6 @@ import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
@@ -11,47 +10,42 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { WhatsAppCTA } from "@/components/conversational/WhatsAppCTA";
 import {
-  Gauge, Building2, Users, Store, DollarSign, CreditCard,
-  Activity, Sparkles, Palette, Globe, MessageCircle, Network, Trophy,
+  Gauge, Building2, Users, Store, DollarSign, Settings, Trophy, MessageCircle,
 } from "lucide-react";
 
 const groups = [
   {
-    label: "Control Tower",
+    label: "Visão geral",
     items: [
-      { title: "Dashboard", url: "/tenant/dashboard", icon: Gauge, end: true },
-      { title: "Conexão WhatsApp", url: "/tenant/connect-whatsapp", icon: MessageCircle },
-      { title: "Comandos", url: "/tenant/comandos", icon: MessageCircle },
+      { title: "Visão geral", url: "/tenant/dashboard", icon: Gauge, end: true },
     ],
   },
   {
     label: "Rede",
     items: [
       { title: "Arenas", url: "/tenant/arenas", icon: Building2 },
-      { title: "Torneios", url: "/tenant/tournaments", icon: Trophy },
+      { title: "Eventos", url: "/tenant/torneios", icon: Trophy },
+      { title: "Empresas", url: "/tenant/empresas", icon: Store },
       { title: "Organizadores", url: "/tenant/membros", icon: Users },
     ],
   },
   {
-    label: "Monetização",
+    label: "Receita",
     items: [
-      { title: "Financeiro", url: "/tenant/financeiro", icon: DollarSign },
-      { title: "Conta de pagamento", url: "/tenant/pagamento", icon: CreditCard },
-    ],
-  },
-  {
-    label: "IA / Autonomia",
-    items: [
-      { title: "Autonomia", url: "/tenant/autonomia", icon: Sparkles },
-      { title: "Roteamento WhatsApp", url: "/tenant/whatsapp-routing", icon: Network },
+      { title: "Receita", url: "/tenant/financeiro", icon: DollarSign },
     ],
   },
   {
     label: "Configurações",
     items: [
-      { title: "Domínios", url: "/tenant/dominios", icon: Globe },
+      { title: "Configurações", url: "/tenant/dominios", icon: Settings },
+    ],
+  },
+  {
+    label: "Conversas",
+    items: [
+      { title: "Conversas", url: "/tenant/mensagens-wa", icon: MessageCircle },
     ],
   },
 ];
@@ -87,16 +81,6 @@ export function TenantSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      {!collapsed && (
-        <SidebarFooter className="p-2">
-          <WhatsAppCTA
-            variant="inline"
-            command="Olá, sou da rede e quero falar com a ORKYM"
-            label="Falar com a ORKYM"
-            className="w-full justify-center"
-          />
-        </SidebarFooter>
-      )}
     </Sidebar>
   );
 }

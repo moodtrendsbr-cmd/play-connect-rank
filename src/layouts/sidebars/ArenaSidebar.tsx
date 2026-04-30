@@ -2,7 +2,6 @@ import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
@@ -11,49 +10,36 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { WhatsAppCTA } from "@/components/conversational/WhatsAppCTA";
 import {
-  LayoutDashboard, Gauge, Sparkles, ShieldCheck, MessageCircle,
-  QrCode, Grid3x3, CalendarDays, BookOpen, GraduationCap, ClipboardList, AlertCircle,
-  Users, UserCog,
-  DollarSign, Receipt, Layers, Repeat, FileText,
-  Trophy, Handshake,
+  LayoutDashboard, QrCode, BookOpen,
+  Grid3x3, CalendarDays, GraduationCap, ClipboardList, Users, UserCog, AlertCircle,
+  Trophy, DollarSign, Handshake, MessageCircle,
 } from "lucide-react";
 
 const groups = [
   {
-    label: "Control Tower",
+    label: "Visão geral",
     items: [
-      { title: "Dashboard", url: "/arena/dashboard", icon: LayoutDashboard, end: true },
-      { title: "Visão geral", url: "/arena/dashboard/control-tower", icon: Gauge },
-      { title: "Conexão WhatsApp", url: "/arena/connect-whatsapp", icon: MessageCircle },
-      { title: "Ações ORKYM", url: "/arena/dashboard/acoes-ia", icon: Sparkles },
-      { title: "Autonomia", url: "/arena/dashboard/autonomia", icon: ShieldCheck },
-      { title: "Comandos", url: "/arena/dashboard/comandos", icon: MessageCircle },
+      { title: "Visão geral", url: "/arena/dashboard", icon: LayoutDashboard, end: true },
+    ],
+  },
+  {
+    label: "Hoje",
+    items: [
+      { title: "Check-in", url: "/arena/checkin", icon: QrCode },
+      { title: "Reservas", url: "/arena/dashboard/reservas", icon: BookOpen },
     ],
   },
   {
     label: "Operação",
     items: [
-      { title: "Check-in", url: "/arena/checkin", icon: QrCode },
       { title: "Quadras", url: "/arena/dashboard/quadras", icon: Grid3x3 },
       { title: "Horários", url: "/arena/dashboard/horarios", icon: CalendarDays },
-      { title: "Reservas", url: "/arena/dashboard/reservas", icon: BookOpen },
       { title: "Aulas", url: "/arena/dashboard/aulas", icon: GraduationCap },
       { title: "Matrículas", url: "/arena/dashboard/matriculas", icon: ClipboardList },
       { title: "Alunos", url: "/arena/dashboard/alunos", icon: Users },
       { title: "Professores", url: "/arena/dashboard/professores", icon: UserCog },
       { title: "Ocorrências", url: "/arena/dashboard/ocorrencias", icon: AlertCircle },
-    ],
-  },
-  {
-    label: "Financeiro",
-    items: [
-      { title: "Financeiro", url: "/arena/dashboard/financeiro", icon: DollarSign },
-      { title: "Transações", url: "/arena/dashboard/transacoes", icon: Receipt },
-      { title: "Planos", url: "/arena/dashboard/planos", icon: Layers },
-      { title: "Assinaturas", url: "/arena/dashboard/assinaturas", icon: Repeat },
-      { title: "Cobranças (mensalidades)", url: "/arena/dashboard/cobrancas", icon: FileText },
     ],
   },
   {
@@ -63,9 +49,21 @@ const groups = [
     ],
   },
   {
-    label: "Growth",
+    label: "Receita",
+    items: [
+      { title: "Receita", url: "/arena/dashboard/financeiro", icon: DollarSign },
+    ],
+  },
+  {
+    label: "Crescimento",
     items: [
       { title: "Patrocínios", url: "/arena/dashboard/patrocinios", icon: Handshake },
+    ],
+  },
+  {
+    label: "Conversas",
+    items: [
+      { title: "Conversas", url: "/arena/dashboard/mensagens-wa", icon: MessageCircle },
     ],
   },
 ];
@@ -101,16 +99,6 @@ export function ArenaSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      {!collapsed && (
-        <SidebarFooter className="p-2">
-          <WhatsAppCTA
-            variant="inline"
-            command="Olá, sou da arena e quero falar com a ORKYM"
-            label="Falar com a ORKYM"
-            className="w-full justify-center"
-          />
-        </SidebarFooter>
-      )}
     </Sidebar>
   );
 }

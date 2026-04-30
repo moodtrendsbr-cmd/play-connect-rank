@@ -2,7 +2,6 @@ import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
@@ -11,39 +10,35 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { WhatsAppCTA } from "@/components/conversational/WhatsAppCTA";
 import {
-  LayoutDashboard,
-  Trophy,
-  PlusCircle,
-  ClipboardList,
-  GitBranch,
-  CheckCircle2,
-  TrendingUp,
-  DollarSign,
-  MessageCircle,
+  LayoutDashboard, Trophy, ClipboardList, Swords, DollarSign, MessageCircle,
 } from "lucide-react";
 
 const groups = [
   {
-    label: "Event Control Tower",
+    label: "Visão geral",
     items: [
-      { title: "Dashboard", url: "/organizer/dashboard", icon: LayoutDashboard, end: true },
-      { title: "Conexão WhatsApp", url: "/organizer/connect-whatsapp", icon: MessageCircle },
-      { title: "Comandos", url: "/organizer/dashboard/comandos", icon: MessageCircle },
+      { title: "Visão geral", url: "/organizer/dashboard", icon: LayoutDashboard, end: true },
     ],
   },
   {
     label: "Eventos",
     items: [
-      { title: "Meus eventos", url: "/organizer/dashboard", icon: Trophy, end: true },
-      { title: "Criar evento", url: "/tournaments/create", icon: PlusCircle },
+      { title: "Eventos", url: "/organizer/dashboard/eventos", icon: Trophy },
+      { title: "Inscritos", url: "/organizer/dashboard/inscricoes", icon: ClipboardList },
+      { title: "Jogos", url: "/organizer/dashboard/jogos", icon: Swords },
     ],
   },
   {
-    label: "Performance & Financeiro",
+    label: "Financeiro",
     items: [
-      { title: "Financeiro do evento", url: "/organizer/dashboard/financeiro", icon: DollarSign },
+      { title: "Financeiro", url: "/organizer/dashboard/financeiro", icon: DollarSign },
+    ],
+  },
+  {
+    label: "Conversas",
+    items: [
+      { title: "Conversas", url: "/organizer/dashboard/mensagens-wa", icon: MessageCircle },
     ],
   },
 ];
@@ -79,16 +74,6 @@ export function OrganizerSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      {!collapsed && (
-        <SidebarFooter className="p-2">
-          <WhatsAppCTA
-            variant="inline"
-            command="Olá, sou organizador e quero falar com a ORKYM"
-            label="Falar com a ORKYM"
-            className="w-full justify-center"
-          />
-        </SidebarFooter>
-      )}
     </Sidebar>
   );
 }
