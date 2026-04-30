@@ -201,6 +201,25 @@ async function processOne(admin: any, t: QueueRow): Promise<string> {
       } as never);
       return "skipped";
     }
+
+    // 3b) Global 6h gap: do not send any proactive message within 6h
+    // of the previous one to the same user.
+    try {
+      const { data: gap } = await admin.rpc(
+        "orkym_proactive_check_global_gap",
+        { _user_id: t.user_id, _hours: 6 } as never,
+      );
+      const ok = (gap as any)?.ok;
+      if (ok === false) {
+        await admin.rpc("orkym_trigger_complete", {
+          _id: t.id, _status: "skipped", _error: "global_gap",
+        } as never);
+        await admin.from("orkym_trigger_feedback").insert({
+          trigger_id: t.id, event: "ignored", metadata: { reason: "global_gap" },
+        } as never);
+        return "skipped";
+      }
+    } catch { /* RPC optional — ignore if missing */ }
   }
 
   // 4) Resolve phone + outbound command (with embedded pending_action)
