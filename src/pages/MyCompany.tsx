@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import PromoteFeaturedDialog from "@/components/featured/PromoteFeaturedDialog";
 import PromoteCampaignDialog from "@/components/featured/PromoteCampaignDialog";
 import { Sparkles, Rocket } from "lucide-react";
+import { ImageUploadField } from "@/components/shared/ImageUploadField";
 
 const MyCompany = () => {
   const { user } = useAuth();
@@ -281,10 +282,15 @@ const MyCompany = () => {
                   </div>
                 ))}
                 {imageUrls.length < 10 && (
-                  <div className="flex gap-2">
-                    <Input value={newImageUrl} onChange={(e) => setNewImageUrl(e.target.value)} placeholder="URL da imagem" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addImageUrl(); } }} />
-                    <Button type="button" size="sm" variant="outline" onClick={addImageUrl}><Plus className="h-4 w-4" /></Button>
-                  </div>
+                  <ImageUploadField
+                    value={null}
+                    onChange={(url) => { if (url) { setImageUrls([...imageUrls, url]); setNewImageUrl(""); } }}
+                    bucket="company-images"
+                    pathPrefix={company?.id ? `products/${company.id}` : "products/new"}
+                    previewShape="square"
+                    aspect="1/1"
+                    helperText="Envie um arquivo ou cole um link. Você pode adicionar até 10 imagens."
+                  />
                 )}
               </div>
               <div>
