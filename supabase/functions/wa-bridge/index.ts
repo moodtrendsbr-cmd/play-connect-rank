@@ -19,6 +19,7 @@ const corsHeaders = {
 const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const WA_SECRET = Deno.env.get("WA_WEBHOOK_SECRET") || "";
+const INTERNAL_TOKEN = Deno.env.get("ORKYM_INTERNAL_TOKEN") || "";
 
 const PROFILE_TO_DOMAIN: Record<string, string> = {
   arena: "arena_operations",
