@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { CheckCircle, Plus, Trash2, CreditCard, QrCode, Search, UserPlus, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { dashboardPathFor } from "@/lib/dashboardPath";
 
 interface Athlete {
   id: string;
@@ -22,7 +23,8 @@ interface Athlete {
 
 const Payment = () => {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
+  const backPath = dashboardPathFor(userRole);
   const navigate = useNavigate();
   const [tournament, setTournament] = useState<any>(null);
   const [athletes, setAthletes] = useState<Athlete[]>([{
@@ -241,7 +243,7 @@ const Payment = () => {
           </div>
           <div className="flex flex-col gap-3">
             <Button asChild><Link to="/feed">Ir para Feed</Link></Button>
-            <Button variant="outline" asChild><Link to="/dashboard">Dashboard</Link></Button>
+            <Button variant="outline" asChild><Link to={backPath}>Dashboard</Link></Button>
             <Button variant="outline" asChild><Link to={`/tournaments/${id}`}>Ver Torneio</Link></Button>
           </div>
         </div>
@@ -305,7 +307,7 @@ const Payment = () => {
             </CardContent>
           </Card>
           <Button className="mt-6 w-full" variant="outline" asChild>
-            <Link to="/dashboard">Voltar ao Dashboard</Link>
+            <Link to={backPath}>Voltar ao Dashboard</Link>
           </Button>
         </main>
       </div>

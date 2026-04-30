@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Trophy, Users, ChevronRight } from "lucide-react";
+import { dashboardPathFor } from "@/lib/dashboardPath";
 
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 
@@ -19,7 +20,8 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 
 const Results = () => {
   const { id } = useParams();
-  const { user, loading: authLoading } = useAuth();
+  const { user, userRole, loading: authLoading } = useAuth();
+  const backPath = dashboardPathFor(userRole);
   const [tournament, setTournament] = useState<any>(null);
   const [modalities, setModalities] = useState<any[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -46,7 +48,7 @@ const Results = () => {
   if (dataLoaded && !tournament) return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground gap-4">
       <p className="text-lg text-muted-foreground">Torneio não encontrado ou sem permissão.</p>
-      <Button asChild><Link to="/dashboard">Voltar</Link></Button>
+      <Button asChild><Link to={backPath}>Voltar</Link></Button>
     </div>
   );
   if (!tournament) return (

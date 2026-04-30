@@ -12,13 +12,15 @@ import EditTournamentForm from "@/components/tournament/EditTournamentForm";
 import TabCategorias from "@/components/tournament/TabCategorias";
 import TabCheckin from "@/components/tournament/TabCheckin";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { dashboardPathFor } from "@/lib/dashboardPath";
 
 const MOOD_COMMISSION_PERCENT = 10;
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 
 const ManageTournament = () => {
   const { id } = useParams();
-  const { user, loading: authLoading } = useAuth();
+  const { user, userRole, loading: authLoading } = useAuth();
+  const backPath = dashboardPathFor(userRole);
   const [tournament, setTournament] = useState<any>(null);
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [profileMap, setProfileMap] = useState<Record<string, any>>({});
@@ -79,7 +81,7 @@ const ManageTournament = () => {
   if (dataLoaded && !tournament) return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground gap-4">
       <p className="text-lg text-muted-foreground">Torneio não encontrado ou sem permissão.</p>
-      <Button asChild><Link to="/dashboard">Voltar</Link></Button>
+      <Button asChild><Link to={backPath}>Voltar</Link></Button>
     </div>
   );
   if (!tournament) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
@@ -91,11 +93,11 @@ const ManageTournament = () => {
       <header className="border-b border-border bg-card">
         <div className="container flex h-16 items-center gap-4">
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/dashboard" className="gap-2">
+            <Link to={backPath} className="gap-2">
               <ArrowLeft className="h-4 w-4" /> Voltar
             </Link>
           </Button>
-          <Link to="/dashboard" className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
+          <Link to={backPath} className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
         </div>
       </header>
 
