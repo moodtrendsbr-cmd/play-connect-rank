@@ -89,7 +89,7 @@ const ArenaProfile = () => {
       logo_url: form.logo_url || null,
       is_public: form.is_public,
       modalities,
-      opening_hours: hours,
+      opening_hours: hours as any,
     }).eq("id", arena.id);
     setSaving(false);
     if (error) {
