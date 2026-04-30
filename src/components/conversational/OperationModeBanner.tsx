@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MessageCircle, QrCode, Gauge, X, Sparkles } from "lucide-react";
+import { MessageCircle, QrCode, X, Sparkles } from "lucide-react";
 
 interface Props {
   profile: "arena" | "tenant" | "organizer" | "athlete" | "company" | "admin";
