@@ -1,5 +1,5 @@
 // High-fidelity tournament screens. Mobile-first, 390px wide content.
-import { tournament, pairs, groups, courts, schedule, bracket, podium, rankingDelta, feedPosts, Profile } from "./mock/tournamentData";
+import { tournament, pairs, groups, courts, schedule, bracket, podium, rankingDelta, feedPosts, Profile } from "../mock/tournamentData";
 import { Calendar, MapPin, Trophy, Users, Clock, CheckCircle2, QrCode, Camera, Heart, MessageCircle, Share2, Play, ArrowDown, ArrowUp, Crown, Medal, Search, Filter } from "lucide-react";
 
 const initials = (name: string) => name.split(" ").map(n => n[0]).slice(0, 2).join("");
