@@ -18,6 +18,7 @@ const ArenaCourts = () => {
   const [form, setForm] = useState({ name: "", price_per_hour: "" });
 
   const fetchCourts = async () => {
+    if (!arena?.id) return;
     const { data } = await supabase.from("courts").select("*").eq("arena_id", arena.id).order("created_at");
     setCourts(data || []);
   };
@@ -28,6 +29,10 @@ const ArenaCourts = () => {
   const openEdit = (c: any) => { setEditCourt(c); setForm({ name: c.name, price_per_hour: c.price_per_hour?.toString() || "" }); setDialogOpen(true); };
 
   const handleSave = async () => {
+    if (!arena?.id) {
+      toast({ title: "Arena não carregada", description: "Aguarde o carregamento ou conecte uma arena." });
+      return;
+    }
     const payload = { name: form.name, price_per_hour: form.price_per_hour ? Number(form.price_per_hour) : null, arena_id: arena.id };
     if (editCourt) {
       await supabase.from("courts").update(payload).eq("id", editCourt.id);

@@ -24,13 +24,17 @@ const TenantShell = () => {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
-  if (!tenant) return <Navigate to="/organizer/onboarding" replace />;
-  if (!isTenantAdmin) return <Navigate to="/organizer/onboarding" replace />;
 
   const isSuperAdmin = userRole === "admin";
-  if (!isSuperAdmin && !waLoading && !connected) {
+  // Admin bypass: allow navigation through tenant pages even without a tenant (for testing).
+  if (!isSuperAdmin && !tenant) return <Navigate to="/organizer/onboarding" replace />;
+  if (!isSuperAdmin && !isTenantAdmin) return <Navigate to="/organizer/onboarding" replace />;
+
+  if (!isSuperAdmin && tenant && !waLoading && !connected) {
     return <Navigate to="/tenant/connect-whatsapp" replace state={{ from: location.pathname }} />;
   }
+
+  const displayTenant = tenant ?? { id: "demo", name: "Tenant Demo" };
 
   return (
     <SidebarProvider>
@@ -42,7 +46,7 @@ const TenantShell = () => {
             <div className="ml-1 flex items-center gap-2 text-sm">
               <span className="rounded-md bg-primary/5 px-2 py-0.5 text-xs font-medium uppercase tracking-wider text-primary">Rede</span>
               <span className="text-muted-foreground">·</span>
-              <span className="font-medium text-foreground truncate">{tenant.name}</span>
+              <span className="font-medium text-foreground truncate">{displayTenant.name}</span>
             </div>
             <div className="ml-auto pr-2">
               {scope && <WhatsAppStatusBadge scope={scope} connectPath="/tenant/connect-whatsapp" />}
