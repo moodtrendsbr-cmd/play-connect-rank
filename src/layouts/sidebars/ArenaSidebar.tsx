@@ -26,7 +26,8 @@ const groups = [
   {
     label: "Hoje",
     items: [
-      { title: "Check-in", url: "/arena/checkin", icon: QrCodeIcon },
+      { title: "Entradas", url: "/arena/dashboard/entradas", icon: UserCheck },
+      { title: "Check-in (aulas)", url: "/arena/checkin", icon: QrCodeIcon },
       { title: "Reservas", url: "/arena/dashboard/reservas", icon: BookOpen },
     ],
   },

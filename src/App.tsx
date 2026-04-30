@@ -95,6 +95,8 @@ import ArenaProfile from "./pages/arena-dashboard/ArenaProfile";
 import ArenaQR from "./pages/arena-dashboard/ArenaQR";
 import ArenaProducts from "./pages/arena-dashboard/ArenaProducts";
 import ArenaTeam from "./pages/arena-dashboard/ArenaTeam";
+import ArenaCheckinList from "./pages/arena-dashboard/ArenaCheckinList";
+import PublicCheckin from "./pages/PublicCheckin";
 import TenantArenaProfiles from "./pages/tenant/TenantArenaProfiles";
 import TenantQR from "./pages/tenant/TenantQR";
 import TenantProducts from "./pages/tenant/TenantProducts";
@@ -212,6 +214,7 @@ const App = () => (
               <Route path="sponsorships/:id" element={<SponsorshipDetail />} />
             </Route>
             <Route path="/arena/checkin" element={<ArenaCheckin />} />
+            <Route path="/c/:code" element={<PublicCheckin />} />
             <Route path="/arena/dashboard" element={<ArenaShell />}>
               <Route index element={<ArenaDashboard />} />
               <Route path="torneios" element={<ArenaTournaments />} />
@@ -238,6 +241,7 @@ const App = () => (
               <Route path="qr" element={<ArenaQR />} />
               <Route path="produtos" element={<ArenaProducts />} />
               <Route path="equipe" element={<ArenaTeam />} />
+              <Route path="entradas" element={<ArenaCheckinList />} />
             </Route>
             <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
             {/* Phase 11.4 — Organizer Event Engine (additive shell) */}
