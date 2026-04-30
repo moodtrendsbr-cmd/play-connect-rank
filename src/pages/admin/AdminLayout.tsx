@@ -132,30 +132,45 @@ const AdminLayout = () => {
               <Link to="/" className="text-xl font-display text-primary text-glow">🏐 MOODPLAY</Link>
               <p className="mt-1 text-xs text-muted-foreground">Painel Admin</p>
             </div>
-            {navGroups.map((group) => (
-              <SidebarGroup key={group.label}>
-                <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {group.items.map((item) => (
-                      <SidebarMenuItem key={item.url}>
-                        <SidebarMenuButton asChild>
-                          <NavLink
-                            to={item.url}
-                            end={item.end}
-                            className="hover:bg-muted/50"
-                            activeClassName="bg-muted text-primary font-medium"
-                          >
-                            <item.icon className="mr-2 h-4 w-4" />
-                            <span>{item.title}</span>
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            ))}
+            {navGroups.map((group) => {
+              const menu = (
+                <SidebarMenu>
+                  {group.items.map((item) => (
+                    <SidebarMenuItem key={item.url + item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.url}
+                          end={item.end}
+                          className="hover:bg-muted/50"
+                          activeClassName="bg-muted text-primary font-medium"
+                        >
+                          <item.icon className="mr-2 h-4 w-4" />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              );
+              if (group.collapsed) {
+                return (
+                  <SidebarGroup key={group.label}>
+                    <details className="group">
+                      <summary className="cursor-pointer list-none px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground select-none">
+                        {group.label}
+                      </summary>
+                      <SidebarGroupContent>{menu}</SidebarGroupContent>
+                    </details>
+                  </SidebarGroup>
+                );
+              }
+              return (
+                <SidebarGroup key={group.label}>
+                  <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+                  <SidebarGroupContent>{menu}</SidebarGroupContent>
+                </SidebarGroup>
+              );
+            })}
             <SidebarGroup>
               <SidebarGroupLabel>Navegar como Usuário</SidebarGroupLabel>
               <SidebarGroupContent>
