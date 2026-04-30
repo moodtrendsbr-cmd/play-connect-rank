@@ -1,148 +1,128 @@
 
-# Plano — Control Tower Proativa via WhatsApp
+# Plano — Insights Proativos via WhatsApp (10 insights + anti-spam + prioridade)
 
-## Objetivo
-Quando o sistema detectar uma oportunidade (baixa inscrição, horário ocioso, atleta inativo, baixa conversão, oportunidade de venda, ranking/streak, performance de campanha), enviar via WhatsApp **uma única mensagem** no formato observação + sugestão + pergunta. Se o usuário responder afirmativamente em 1 palavra (sim/pode/ok/manda/faz), o sistema **executa a ação real automaticamente** e responde com confirmação humana. Sem expor ORKYM/IA/termos técnicos.
+## Estado atual
+- Já existe pipeline: `orkym_triggers_queue` → `orkym-proactive-process` (templates locais, cap 2/24h) → `wa-bridge` (interpreta sim/não → executa). Tudo da Phase H já entregue.
+- Generators atuais cobrem **2 dos 10** insights:
+  - `tournament_low_enrollment` / `low_enrollment` (mas thresholds não batem com a spec).
+  - `inactive_athlete` (com 30 dias; spec pede 5+ dias).
+- Faltam 8 generators e 8 templates de mensagem.
+- Falta gap mínimo de **6h entre QUAISQUER duas msgs** ao mesmo usuário (hoje só temos cap diário 2/24h e cooldown por trigger_type).
+- Falta seletor de **prioridade na claim** — hoje a fila pega na ordem (priority, scheduled_for) mas não consolida múltiplos triggers do mesmo usuário no mesmo tick.
 
-## Diagnóstico — o que já existe vs o que falta
+## O que será feito
 
-Já existe (não tocar):
-- `orkym_triggers_queue` + `growth_generate_opportunity_triggers` (cron 15 min) gerando oportunidades.
-- `orkym-proactive-process` puxa fila, checa elegibilidade/cooldown via `orkym_proactive_check_eligibility`, dispara `wa-send-message`, registra feedback em `orkym_trigger_feedback`.
-- `wa-bridge` recebe inbound, identifica usuário, e já registra feedback `responded` quando há mensagem outbound recente vinculada a um trigger (linhas 325–350).
+### 1. Migration única — generators + ajustes nos thresholds
 
-O que falta para fechar o loop:
-1. **Hoje a mensagem é decidida pelo ORKYM externo** (linhas 144–202 de `orkym-proactive-process`) — quando o ORKYM não responde, o trigger é marcado `skipped`, e nada chega ao usuário. O usuário pediu mensagens determinísticas no formato 1 insight + 1 ação. Vamos gerar a mensagem **localmente** a partir de templates por `trigger_type`, sem depender do ORKYM externo.
-2. **Hoje o reply afirmativo** ("sim/pode") cai no `wa-bridge` e é encaminhado a `orkym-invoke/interpret_natural_command` (linhas 382–471), que pode falhar ou interpretar errado. Vamos interceptar **antes**: se houver outbound proativo recente com `pending_action`, e o texto for afirmativo, executar a ação direto via o handler já criado em `_shared/orkym-handlers.ts` (Phase H wiring). Sem round-trip externo, sem ambiguidade.
-3. **Cap de 2 mensagens/dia por perfil**: hoje a elegibilidade tem cooldown por trigger_type, mas não um cap diário absoluto por usuário. Vamos adicionar uma checagem antes do envio: contar `conversational_commands` outbound proativos das últimas 24h para o `user_id` e bloquear se ≥2.
+Criar/substituir `growth_generate_opportunity_triggers()` para cobrir os 10 insights. Cada bloco enfileira com `dedup_key` por dia para evitar duplicidade.
 
-## Implementação
+| # | Insight | trigger_type | Condição (SQL) | Destino |
+|---|---|---|---|---|
+| 1 | Baixa inscrição | `tournament_low_enrollment` | `tournaments.status IN ('published','active') AND start_date BETWEEN now() AND now()+48h AND enrolled/capacity < 0.6` | organizer |
+| 2 | Horário ocioso | `idle_court_slot` | janela horária com ocupação <40% nos últimos 3 dias (agregado por (arena_id, dow, hour) sobre `bookings`) | arena |
+| 3 | Usuários inativos | `inactive_athlete` | usuário com pelo menos 1 booking/enrollment histórico, sem atividade nos últimos 5 dias e <14d (evita reincidência) | athlete |
+| 4 | Aulas com vagas | `class_open_seats` | `arena_classes.is_active=true AND vagas_livres/capacity > 0.3` (próximas 7 dias) | arena |
+| 5 | Perto de subir ranking | `near_rank_up` | atleta no top-10 da view `ranking_global`/`ranking_by_arena` com gap ≤30 pts pro próximo | athlete |
+| 6 | Produto baixa visibilidade | `low_product_views` | produto ativo com <20 views/7d e nenhum boost ativo | company |
+| 7 | Torneio cheio (expansão) | `tournament_high_demand` | inscritos/capacity > 0.9 e start_date > now() | organizer |
+| 8 | Campanha fraca | `low_campaign_performance` | `ad_campaigns.status='active'` há >3d com CTR <2% **OU** conversão=0 | company/organizer (donos da campanha) |
+| 9 | Arena baixa movimentação | `arena_low_activity` | bookings 7d / média da rede (mesmo tenant) < 0.5 | tenant |
+| 10 | Alta demanda | `high_demand_signal` | buscas/reservas nos últimos 3d > 1.5× média da arena E ≥1 horário próximo esgotado | arena |
 
-### 1. Templates determinísticos (1 insight + 1 ação + 1 pergunta)
+Detalhes de implementação:
+- Janelas com `dedup_key` baseado em `to_char(now(),'YYYYMMDD')` para 1 disparo/dia/entidade.
+- Para insights 2/4/9/10 que precisam de SQL pesado, materializar com CTEs e `LIMIT` defensivo (≤200 por bucket).
+- Insight 5 depende das views `ranking_global`/`ranking_by_arena` já existentes (Phase G-4).
+- Insight 8 lê `ad_campaigns.metrics` (jsonb) com `(metrics->>'ctr')::numeric`. Se a métrica não existir, ignora (não erra).
+- Inserir também índice `idx_bookings_arena_starts_at` se não existir, pra suportar 2/4/9/10.
 
-Novo módulo `supabase/functions/_shared/proactive-templates.ts` exporta:
+### 2. Função de elegibilidade reforçada — gap de 6h
 
-```ts
-export interface ProactiveTemplate {
-  message: (ctx: TemplateCtx) => string;          // texto humano completo
-  action_type: OrkymGrowthActionType;             // tournament_boost, fill_idle_slots, ...
-  build_payload: (ctx: TemplateCtx) => Record<string, unknown>;
-}
+Criar nova RPC `orkym_proactive_check_global_gap(_user_id)` chamada antes de enviar:
+```sql
+SELECT EXISTS (
+  SELECT 1 FROM conversational_commands
+   WHERE user_id = _user_id
+     AND direction = 'outbound' AND initiated_by = 'orkym'
+     AND created_at > now() - interval '6 hours'
+);
+```
+- Em `orkym-proactive-process`, antes do daily-cap, checar este gap. Se `true` → marcar trigger `skipped` com `reason='global_gap_6h'` e re-agendar para `now()+6h` (em vez de descartar; assim o insight não some).
+
+### 3. Seletor de prioridade dentro do tick
+
+Em `orkym-proactive-process`, depois de `claim_batch`, agrupar por `user_id` e manter **somente o trigger de maior prioridade** dessa lista (na ordem da spec). Os demais voltam para a fila com `status='pending'` e `scheduled_for=now()+6h`.
+
+Ordem (em ENUM no código TS, não em SQL):
+```
+tournament_low_enrollment > idle_court_slot > inactive_athlete > class_open_seats >
+low_campaign_performance > low_product_views > near_rank_up >
+tournament_high_demand > arena_low_activity > high_demand_signal
 ```
 
-Mapa por `trigger_type`:
+### 4. Templates de mensagem (texto exato da spec)
 
-| trigger_type | Mensagem (resumo) | action_type ao confirmar |
+Atualizar `_shared/proactive-templates.ts` adicionando os 8 novos types com as frases textuais da spec (1 obs + 1 sug + 1 pergunta) e seus respectivos `pending_action`:
+
+| trigger_type | Mensagem (literal) | action_type |
 |---|---|---|
-| `tournament_low_enrollment` | "Percebi que seu torneio "{name}" ainda está com poucas inscrições. Posso ajudar a atrair mais jogadores agora. Quer que eu faça isso?" | `tournament_boost` |
-| `idle_court_slot` | "Você tem horário disponível {when} ainda sem reservas. Posso divulgar para quem costuma jogar nesse dia. Quer que eu faça?" | `fill_idle_slots` |
-| `inactive_athlete` | "{name} não aparece há {n} dias. Posso enviar um convite para ele(a) voltar. Quer?" | `reactivation_message` |
-| `low_message_performance` | "Sua última campanha está com baixa resposta. Posso impulsionar agora pra mais gente ver. Quer?" | `create_campaign` |
-| `top_product` | "Seu produto "{title}" está vendendo bem. Posso divulgar pra ampliar as vendas. Quer?" | `product_boost` |
-| `relevant_tournament` | "Tem um torneio que combina com você: {name}. Quer que eu faça sua inscrição agora?" | `send_proactive_message` (athlete-side: encaminha link)|
-| `near_rank_up` | "Você está perto de subir no ranking. Faltam {n} pontos. Quer dicas pra acelerar?" | `send_proactive_message` |
-| `revenue_drop` (admin/tenant) | "Sua receita esta semana caiu {pct}%. Posso ativar uma divulgação pra recuperar. Quer?" | `create_campaign` |
+| `tournament_low_enrollment` | "Seu torneio ainda está com poucas inscrições. Posso ajudar a atrair mais jogadores agora?" | `tournament_boost` |
+| `idle_court_slot` | "Suas quadras estão ficando vazias nesse horário. Posso ajudar a atrair jogadores?" | `fill_idle_slots` |
+| `inactive_athlete` | "Alguns jogadores não voltam há alguns dias. Posso ajudar a trazer eles de volta?" | `reactivation_message` |
+| `class_open_seats` | "Você ainda tem vagas em algumas aulas. Posso ajudar a preencher essas turmas?" | `fill_idle_slots` (reuso, payload com `target='class'`) |
+| `near_rank_up` | "Você está perto de subir no ranking. Quer jogar hoje para avançar?" | `send_proactive_message` |
+| `low_product_views` | "Seu produto pode ter mais visibilidade. Posso destacar ele para mais jogadores?" | `product_boost` |
+| `tournament_high_demand` | "Seu torneio está quase cheio. Quer abrir novas vagas ou criar uma nova edição?" | `send_proactive_message` (purpose=`expand_tournament`) |
+| `low_campaign_performance` | "Sua campanha pode melhorar. Posso ajustar para trazer mais resultados?" | `create_campaign` (com flag `replace=true`) |
+| `arena_low_activity` | "Uma das suas arenas está com pouca movimentação. Posso ajudar a atrair mais jogadores?" | `tournament_boost` (no nível do tenant) — *nota técnica: usaremos `create_campaign` que dispara feed_ads scoped à arena* |
+| `high_demand_signal` | "Muita gente está procurando jogos agora. Podemos aproveitar isso para aumentar sua receita." | `create_campaign` |
 
-Mensagem termina com a pergunta exata em uma linha; o valor textual de confirmação nunca aparece no corpo (deixa o reply naturalmente curto).
+Confirmação humana após execução: continua usando `confirmationFor()` já existente. Adicionaremos uma frase genérica para os novos action types que caem no fallback.
 
-### 2. Substituir a etapa "ORKYM decision" por geração local
+### 5. Cooldowns por trigger_type
 
-Em `supabase/functions/orkym-proactive-process/index.ts`:
+Inserir cooldowns padrão em `orkym_proactive_cooldowns_defaults` (se a tabela existir; senão usamos a função `orkym_trigger_default_cooldown`). Spec implícita: "não repetir o mesmo insight em 24h" → cooldown = 24h para todos. Ajustar via constante no código TS de `orkym-proactive-process` se a função não tiver default por type.
 
-- Remover/desabilitar a chamada a `orkym-invoke proactive/decide` (linhas 144–202) e gerar `message` + `pending_action` localmente via `proactive-templates.ts`.
-- Antes de enviar, aplicar **cap diário por usuário**: `SELECT count(*) FROM conversational_commands WHERE user_id = ? AND direction='outbound' AND initiated_by='orkym' AND created_at > now() - interval '24 hours'` → se ≥2, marcar trigger `skipped` reason `daily_cap`.
-- Embutir o `pending_action` no row outbound: usar campo `parsed_intent` (jsonb já existe) com `{ pending_action: { action_type, entity_type, entity_id, payload, expires_at } }`.
-- A `linked_entity_type='trigger'` + `linked_entity_id=t.id` já é gravada → continua sendo o pareamento outbound↔trigger.
+### 6. Observabilidade
 
-### 3. Interceptar reply afirmativo no `wa-bridge`
-
-Em `supabase/functions/wa-bridge/index.ts`, **antes** do bloco que chama ORKYM (linha 382):
-
-1. Detectar afirmação simples por regex normalizado (lowercase, sem acento):
-   ```
-   /^\s*(sim|s|pode|ok|okay|manda|faz|fazer|claro|beleza|bora|vamos|👍|✅)\s*[!.]*\s*$/
-   ```
-2. Buscar último outbound proativo das últimas 6h para esse `user_id`/`phone` que tenha `parsed_intent.pending_action` não consumida (status outbound != 'pending_action_consumed'), via:
-   ```sql
-   SELECT id, parsed_intent, linked_entity_id, tenant_id, arena_id
-   FROM conversational_commands
-   WHERE direction='outbound' AND initiated_by='orkym'
-     AND user_id = $1 AND parsed_intent->'pending_action' IS NOT NULL
-     AND created_at > now() - interval '6 hours'
-     AND status <> 'pending_action_consumed'
-   ORDER BY created_at DESC LIMIT 1
-   ```
-3. Se encontrado → invocar **`control-tower-execute`** com `{ scope, recommendation }` montado a partir de `pending_action`. Reusa toda a lógica de Phase H (kill-switch, budget, idempotência, dispatch via `_shared/orkym-handlers.ts`).
-4. Atualizar a outbound original com `status='pending_action_consumed'` para impedir re-execução; registrar feedback `accepted` em `orkym_trigger_feedback`.
-5. Responder no inbound com confirmação humana mapeada por `action_type` (mesma copy de `controlTowerCopy.ts`, mas em frase completa):
-   - `tournament_boost` → "Perfeito. Já estou divulgando seu torneio. Você deve começar a receber mais inscrições em breve."
-   - `fill_idle_slots` → "Combinado. Já estou avisando quem costuma jogar nesse horário."
-   - `reactivation_message` → "Pode deixar. Já estou enviando o convite."
-   - `create_campaign`/`product_boost` → "Show. Já estou impulsionando agora."
-   - fallback → "Pronto, já estou cuidando disso."
-6. Se a ação falhar/for bloqueada (kill-switch/budget): "Tudo bem, vou tentar de novo mais tarde." (sem detalhes técnicos).
-7. **Importante**: o status check do enum `conversational_commands_status_check` precisa aceitar `'pending_action_consumed'`. Migration: `ALTER TABLE conversational_commands DROP CONSTRAINT … ADD CONSTRAINT … CHECK (status IN (..., 'pending_action_consumed'))`.
-
-Resposta negativa explícita ("não/n/nope") → marcar outbound como `pending_action_consumed`, feedback `declined`, responder "Sem problema. Quando quiser, é só me chamar."
-
-Outras respostas (texto livre) → cair no fluxo ORKYM atual (nenhuma mudança).
-
-### 4. Templates de confirmação (humano, sem jargão)
-
-Novo módulo `supabase/functions/_shared/confirmation-templates.ts` mapeia `action_type` → frase completa. Reutiliza tom do `controlTowerCopy.ts` mas em sentença finalizada.
-
-### 5. Guardrails reforçados
-
-Manter intactos:
-- `orkym_proactive_check_eligibility` (cooldown, opt-in).
-- Kill-switch + budget no `control-tower-execute`.
-- Dedup `dedup_key` da fila.
-
-Adicionar:
-- Cap diário 2 msg/24h por `user_id` (item 2 acima).
-- TTL de 6h para `pending_action`: replies depois disso voltam ao fluxo ORKYM normal.
-
-### 6. Memória / observabilidade
-
-- `orkym_trigger_feedback.event` ganha valores `accepted` e `declined` (já é texto livre — sem mudança de schema).
-- Logar `arena_operational_events('proactive_action.executed' | 'proactive_action.declined')` para o admin.
+- Manter `orkym_trigger_feedback` (eventos `message_sent | accepted | declined | blocked | ignored`).
+- Eventos `arena_operational_events('proactive_action.*')` já são gravados no `wa-bridge` (Phase H).
+- Adicionar log estruturado em `orkym-proactive-process` para cada filtro: `reason: priority_lost | global_gap_6h | daily_cap | ineligible`.
 
 ## Arquivos afetados
 
 ```text
-supabase/functions/_shared/proactive-templates.ts        (NOVO)
-supabase/functions/_shared/confirmation-templates.ts     (NOVO)
-supabase/functions/orkym-proactive-process/index.ts      (gera msg local + cap diário; remove ORKYM round-trip)
-supabase/functions/wa-bridge/index.ts                    (intercepta afirmação/negação ANTES do ORKYM)
-supabase/migrations/<ts>_pending_action_status.sql       (adiciona 'pending_action_consumed' ao check de status)
-mem/features/proactive-ops.md                            (atualizar — agora deterministic local templates)
-mem/features/control-tower-ai.md                         (ligar com loop WhatsApp)
-mem/index.md                                             (atualizar Core)
+supabase/migrations/<ts>_proactive_insights_generators.sql   (substitui growth_generate_opportunity_triggers + cria orkym_proactive_check_global_gap)
+supabase/functions/_shared/proactive-templates.ts            (8 templates novos + textos da spec)
+supabase/functions/_shared/confirmation-templates.ts         (pequenos ajustes de fallback)
+supabase/functions/orkym-proactive-process/index.ts          (gap 6h + dedup por user_id por tick + reschedule)
+mem/features/proactive-ops.md                                (atualizar com 10 insights e regras)
+mem/index.md                                                 (Core: 10 insights ativos, gap 6h, prioridade ordenada)
 ```
 
-Sem mudanças de schema além do enum de status (uma constraint).
+Sem novas tabelas. Reuso integral da fila e do dispatcher já implementados.
 
 ## Detalhes técnicos importantes
 
-- **Por que NÃO depender mais do ORKYM externo para o conteúdo da mensagem**: usuário pediu formato fixo (observação + sugestão + pergunta) e respostas humanas previsíveis. Templates determinísticos garantem 100% de cobertura mesmo com ORKYM offline. ORKYM continua dono do canal WhatsApp via `wa-send-message` — só não decide mais o texto desses insights proativos.
-- **Sem IA local**: templates são strings com placeholders `{name}/{when}/{n}`. Nenhuma decisão dinâmica.
-- **Idempotência**: o `pending_action_consumed` impede duplo execute se o usuário responder duas vezes. O `dedup_key` em `control-tower-execute` (já implementado) é segunda barreira.
-- **Privacidade**: nenhum log expõe ORKYM/IA. Todas as respostas são humanas-naturais.
-- **Athlete-side `relevant_tournament`/`near_rank_up`**: `action_type=send_proactive_message` na verdade só registra/encaminha — não dispara campanha. Mantém o atleta no controle.
+- **Índices**: a função generator depende de leituras frequentes em `bookings(arena_id, starts_at)`, `tournaments(start_date,status)`, `tournament_enrollments(tournament_id,status)`, `ad_campaigns(status,started_at)`, `arena_classes(starts_at,is_active)`. Conferir e criar os que faltarem (a maioria já existe pela Phase G).
+- **Custo**: cron roda a cada 15 min; cada generator tem `LIMIT` interno e usa CTEs com agregações, não loops por linha. Carga aceitável.
+- **Fail-soft**: cada bloco do generator é independente em `BEGIN EXCEPTION WHEN OTHERS THEN`-style (loga e continua) para que falha em um insight não derrube os outros.
+- **Reuso de action_types**: a maioria mapeia para os handlers existentes em `_shared/orkym-handlers.ts`. Não precisamos criar handlers novos. Insight 7 (`expand_tournament`) e 5 (`tips`) usam `send_proactive_message` que apenas envia conteúdo — não exige novo backend.
+- **Sem IA local**: thresholds e mensagens são fixos. Ranking de insights é uma constante TS.
+- **Sem expor jargão**: nenhuma das frases novas menciona ORKYM, IA, sistema, painel, configuração.
 
-## Critérios de sucesso (testes manuais)
+## Critérios de sucesso (testes)
 
-1. Trigger `tournament_low_enrollment` é gerado → usuário recebe **uma** msg "Percebi que seu torneio … Quer que eu faça isso?".
-2. Usuário responde "sim" → `control-tower-execute` cria `ad_campaigns(tournament_highlight)` + queue `relevant_tournament` → usuário recebe "Perfeito. Já estou divulgando…" em <3 s.
-3. Usuário responde "não" → outbound marcada consumida, recebe "Sem problema. Quando quiser, é só me chamar." Nenhuma campanha criada.
-4. Usuário responde "vai um açaí" → cai no fluxo ORKYM (nenhum impacto).
-5. Usuário recebe 2ª msg no mesmo dia → 3ª é bloqueada (`daily_cap`), feedback `skipped`.
-6. Kill-switch ativo → ação bloqueada após "sim", reply é "Tudo bem, vou tentar de novo mais tarde."
-7. Reply "sim" 7h depois da msg original → TTL expirado, cai no ORKYM.
+1. Cron tick → `growth_generate_opportunity_triggers()` retorna integer >0 com a fila populada de pelo menos 1 dos 10 types.
+2. Usuário com 3 oportunidades simultâneas recebe **uma só** mensagem (a mais prioritária); as outras voltam pendentes.
+3. Após enviar 1 mensagem, qualquer próxima dentro de 6h é bloqueada com `reason=global_gap_6h` e remarcada.
+4. Mesma oportunidade gerada duas vezes no dia: a segunda é bloqueada por `dedup_key`.
+5. Reply "sim" → action_type correto roda no `control-tower-execute`, `wa-bridge` responde com a frase correta.
+6. Insight 8 (`low_campaign_performance`) só dispara para campanhas com `status='active'` há >3d.
 
 ## Não-objetivos
-
-- Não criar IA local nem reasoning local.
-- Não expor ORKYM/IA/termos técnicos em nenhum texto enviado.
-- Não criar painel de configuração para o usuário.
-- Não permitir múltiplas sugestões na mesma mensagem.
+- Não alterar UI da Control Tower.
+- Não criar novas tabelas.
+- Não tocar em `orkym-invoke` nem em ORKYM externo.
+- Não criar novos action_type backends — todos os 10 reusam handlers existentes.
+- Não remover generators atuais que já cobrem outros casos (subscriptions due, top_product etc.) — apenas acrescentar/refinar.

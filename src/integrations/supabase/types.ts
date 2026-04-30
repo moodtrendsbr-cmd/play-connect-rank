@@ -7812,6 +7812,10 @@ export type Database = {
         }
         Returns: Json
       }
+      orkym_proactive_check_global_gap: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       orkym_proactive_record_send: {
         Args: { _scope_id: string; _scope_type: string; _trigger_type: string }
         Returns: undefined
