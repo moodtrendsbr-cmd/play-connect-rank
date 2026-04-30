@@ -46,7 +46,7 @@ const TenantShell = () => {
             <div className="ml-1 flex items-center gap-2 text-sm">
               <span className="rounded-md bg-primary/5 px-2 py-0.5 text-xs font-medium uppercase tracking-wider text-primary">Rede</span>
               <span className="text-muted-foreground">·</span>
-              <span className="font-medium text-foreground truncate">{tenant.name}</span>
+              <span className="font-medium text-foreground truncate">{displayTenant.name}</span>
             </div>
             <div className="ml-auto pr-2">
               {scope && <WhatsAppStatusBadge scope={scope} connectPath="/tenant/connect-whatsapp" />}
