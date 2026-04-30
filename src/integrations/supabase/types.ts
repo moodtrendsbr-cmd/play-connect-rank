@@ -1257,6 +1257,69 @@ export type Database = {
           },
         ]
       }
+      arena_staff: {
+        Row: {
+          accepted_at: string | null
+          arena_id: string
+          created_at: string
+          display_name: string
+          email: string | null
+          id: string
+          invited_at: string
+          is_active: boolean
+          permissions: Json
+          phone: string | null
+          role: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          arena_id: string
+          created_at?: string
+          display_name: string
+          email?: string | null
+          id?: string
+          invited_at?: string
+          is_active?: boolean
+          permissions?: Json
+          phone?: string | null
+          role: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          arena_id?: string
+          created_at?: string
+          display_name?: string
+          email?: string | null
+          id?: string
+          invited_at?: string
+          is_active?: boolean
+          permissions?: Json
+          phone?: string | null
+          role?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arena_staff_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_staff_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       arena_student_subscriptions: {
         Row: {
           arena_id: string
@@ -1435,9 +1498,13 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          is_public: boolean
+          logo_url: string | null
+          modalities: string[]
           mp_collector_id: string | null
           mp_connected: boolean
           name: string
+          opening_hours: Json
           owner_user_id: string
           rules: string | null
           slug: string
@@ -1456,9 +1523,13 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_public?: boolean
+          logo_url?: string | null
+          modalities?: string[]
           mp_collector_id?: string | null
           mp_connected?: boolean
           name: string
+          opening_hours?: Json
           owner_user_id: string
           rules?: string | null
           slug: string
@@ -1477,9 +1548,13 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_public?: boolean
+          logo_url?: string | null
+          modalities?: string[]
           mp_collector_id?: string | null
           mp_connected?: boolean
           name?: string
+          opening_hours?: Json
           owner_user_id?: string
           rules?: string | null
           slug?: string
@@ -4690,6 +4765,7 @@ export type Database = {
       }
       products: {
         Row: {
+          category: string | null
           company_id: string
           created_at: string
           description: string | null
@@ -4708,6 +4784,7 @@ export type Database = {
           video_url: string | null
         }
         Insert: {
+          category?: string | null
           company_id: string
           created_at?: string
           description?: string | null
@@ -4726,6 +4803,7 @@ export type Database = {
           video_url?: string | null
         }
         Update: {
+          category?: string | null
           company_id?: string
           created_at?: string
           description?: string | null
@@ -6201,7 +6279,11 @@ export type Database = {
           expires_at: string
           id: string
           intent: string
+          is_active: boolean
+          kind: string | null
+          label: string | null
           payload: Json
+          scans_count: number
           tenant_id: string | null
           token: string
         }
@@ -6214,7 +6296,11 @@ export type Database = {
           expires_at: string
           id?: string
           intent: string
+          is_active?: boolean
+          kind?: string | null
+          label?: string | null
           payload?: Json
+          scans_count?: number
           tenant_id?: string | null
           token?: string
         }
@@ -6227,7 +6313,11 @@ export type Database = {
           expires_at?: string
           id?: string
           intent?: string
+          is_active?: boolean
+          kind?: string | null
+          label?: string | null
           payload?: Json
+          scans_count?: number
           tenant_id?: string | null
           token?: string
         }
