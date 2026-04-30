@@ -14,70 +14,83 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag, Handshake, BarChart3, Gift, Layers, Building2, Percent, ScrollText, Bot, Sparkles, ShieldCheck, Gauge, MessageCircle, Phone, Inbox } from "lucide-react";
+import { LayoutDashboard, Users, Trophy, ClipboardList, DollarSign, Rss, Medal, User, Store, Package, Megaphone, Heart, CreditCard, ShoppingBag, Handshake, BarChart3, Gift, Layers, Building2, Percent, ScrollText, Sparkles, MessageCircle, Phone, Inbox, CheckCircle2, Wrench } from "lucide-react";
 
 type NavGroup = {
   label: string;
   items: { title: string; url: string; icon: typeof LayoutDashboard; end?: boolean }[];
+  collapsed?: boolean;
 };
 
 const navGroups: NavGroup[] = [
   {
-    label: "Control Tower",
+    label: "Visão geral",
     items: [
       { title: "Dashboard", url: "/admin", icon: LayoutDashboard, end: true },
       { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
-      { title: "Control Tower", url: "/admin/control-tower", icon: Gauge },
-      { title: "Comandos", url: "/admin/commands", icon: MessageCircle },
+    ],
+  },
+  {
+    label: "Usuários",
+    items: [
+      { title: "Usuários", url: "/admin/users", icon: Users },
+      { title: "Tenants", url: "/admin/tenants", icon: Building2 },
     ],
   },
   {
     label: "Operação",
     items: [
-      { title: "Usuários", url: "/admin/users", icon: Users },
       { title: "Torneios", url: "/admin/tournaments", icon: Trophy },
       { title: "Inscrições", url: "/admin/enrollments", icon: ClipboardList },
       { title: "Arenas", url: "/admin/arenas", icon: Building2 },
     ],
   },
   {
-    label: "Financeiro",
-    items: [
-      { title: "Financeiro", url: "/admin/finances", icon: DollarSign },
-      { title: "Regras de Split", url: "/admin/split-rules", icon: Percent },
-      { title: "Ajustes", url: "/admin/adjustments", icon: ScrollText },
-      { title: "Monetização", url: "/admin/monetization", icon: CreditCard },
-      { title: "Destaques pagos", url: "/admin/featured-listings", icon: Sparkles },
-      { title: "Planos", url: "/admin/plans", icon: Layers },
-    ],
-  },
-  {
-    label: "Marketplace & Campanhas",
+    label: "Marketplace",
     items: [
       { title: "Empresas", url: "/admin/companies", icon: Store },
       { title: "Produtos", url: "/admin/products", icon: Package },
-      { title: "Campanhas", url: "/admin/ad-campaigns", icon: Megaphone },
-      { title: "Campanhas (legado)", url: "/admin/ads", icon: Megaphone },
       { title: "Patrocínios — Atletas", url: "/admin/sponsors", icon: Heart },
       { title: "Patrocínios — Torneios", url: "/admin/sponsorships", icon: Handshake },
       { title: "Brindes", url: "/admin/gifts", icon: Gift },
+      { title: "Planos", url: "/admin/plans", icon: Layers },
+      { title: "Destaques pagos", url: "/admin/featured-listings", icon: Sparkles },
     ],
   },
   {
-    label: "ORKYM & Autonomia",
+    label: "Campanhas",
     items: [
-      { title: "Monitor ORKYM", url: "/admin/orkym", icon: Bot },
-      { title: "Ações ORKYM", url: "/admin/orkym-actions", icon: Sparkles },
-      { title: "Autonomia", url: "/admin/autonomy", icon: ShieldCheck },
+      { title: "Campanhas", url: "/admin/ad-campaigns", icon: Megaphone },
     ],
   },
   {
-    label: "WhatsApp",
+    label: "Financeiro",
     items: [
-      { title: "Instâncias", url: "/admin/whatsapp-instances", icon: Phone },
-      { title: "Mensagens", url: "/admin/whatsapp-messages", icon: Inbox },
-      { title: "Bindings", url: "/admin/whatsapp-bindings", icon: Phone },
-      { title: "Leads", url: "/admin/whatsapp-leads", icon: Inbox },
+      { title: "Financeiro", url: "/admin/finances", icon: DollarSign },
+      { title: "Divisão de valores", url: "/admin/split-rules", icon: Percent },
+      { title: "Ajustes", url: "/admin/adjustments", icon: ScrollText },
+      { title: "Monetização", url: "/admin/monetization", icon: CreditCard },
+    ],
+  },
+  {
+    label: "Aprovações",
+    items: [
+      { title: "Destaques (fila)", url: "/admin/featured-listings", icon: CheckCircle2 },
+    ],
+  },
+  {
+    label: "Sistema",
+    collapsed: true,
+    items: [
+      { title: "Monitor", url: "/admin/orkym", icon: Wrench },
+      { title: "Ações automáticas", url: "/admin/orkym-actions", icon: Sparkles },
+      { title: "Políticas", url: "/admin/autonomy", icon: Wrench },
+      { title: "Visão geral (operação)", url: "/admin/control-tower", icon: Wrench },
+      { title: "WhatsApp · Instâncias", url: "/admin/whatsapp-instances", icon: Phone },
+      { title: "WhatsApp · Mensagens", url: "/admin/whatsapp-messages", icon: Inbox },
+      { title: "WhatsApp · Conexão de número", url: "/admin/whatsapp-bindings", icon: Phone },
+      { title: "WhatsApp · Leads", url: "/admin/whatsapp-leads", icon: Inbox },
+      { title: "Conversas (logs)", url: "/admin/commands", icon: MessageCircle },
     ],
   },
 ];
