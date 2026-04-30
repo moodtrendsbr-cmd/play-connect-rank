@@ -44,17 +44,45 @@ const TRIGGER_TO_CATEGORY: Record<string, string> = {
   low_campaign_performance: "operations",
   revenue_drop: "operations",
   relevant_tournament: "marketing",
-  // P0 #5 — athlete tournament notifications
   enrollment_created: "operations",
   enrollment_paid: "operations",
   match_result: "operations",
-  // Phase G — Autonomous Growth Engine
   tournament_low_enrollment: "marketing",
   inactive_athlete: "retention",
   near_rank_up: "retention",
   idle_court_slot: "retention",
   low_message_performance: "operations",
+  class_low_enrollment: "operations",
+  low_product_visibility: "marketing",
+  tournament_high_demand: "marketing",
+  low_arena_activity: "marketing",
+  high_search_demand: "marketing",
 };
+
+// Lower number = higher priority (tie-breaker when multiple triggers
+// land for the same user in the same batch).
+const TRIGGER_PRIORITY: Record<string, number> = {
+  tournament_low_enrollment: 1,
+  low_enrollment: 1,
+  idle_court_slot: 2,
+  idle_slot: 2,
+  inactive_athlete: 3,
+  class_low_enrollment: 4,
+  near_rank_up: 5,
+  low_product_visibility: 6,
+  top_product: 6,
+  tournament_high_demand: 7,
+  low_message_performance: 8,
+  low_campaign_performance: 8,
+  low_arena_activity: 9,
+  high_search_demand: 10,
+  revenue_drop: 11,
+  relevant_tournament: 12,
+};
+
+function priorityOf(triggerType: string): number {
+  return TRIGGER_PRIORITY[triggerType] ?? 99;
+}
 
 function safeJson(b: unknown, status = 200) {
   return new Response(JSON.stringify(b), {
@@ -173,6 +201,25 @@ async function processOne(admin: any, t: QueueRow): Promise<string> {
       } as never);
       return "skipped";
     }
+
+    // 3b) Global 6h gap: do not send any proactive message within 6h
+    // of the previous one to the same user.
+    try {
+      const { data: gap } = await admin.rpc(
+        "orkym_proactive_check_global_gap",
+        { _user_id: t.user_id, _hours: 6 } as never,
+      );
+      const ok = (gap as any)?.ok;
+      if (ok === false) {
+        await admin.rpc("orkym_trigger_complete", {
+          _id: t.id, _status: "skipped", _error: "global_gap",
+        } as never);
+        await admin.from("orkym_trigger_feedback").insert({
+          trigger_id: t.id, event: "ignored", metadata: { reason: "global_gap" },
+        } as never);
+        return "skipped";
+      }
+    } catch { /* RPC optional — ignore if missing */ }
   }
 
   // 4) Resolve phone + outbound command (with embedded pending_action)
@@ -278,8 +325,41 @@ Deno.serve(async (req: Request) => {
   const { data: rows, error } = await admin.rpc("orkym_trigger_claim_batch", { _limit: limit } as never);
   if (error) return safeJson({ ok: false, error: error.message });
 
-  const triggers = (rows ?? []) as QueueRow[];
-  const summary: Record<string, number> = { total: triggers.length, sent: 0, skipped: 0, failed: 0, no_send: 0, no_phone: 0, send_failed: 0 };
+  const claimed = (rows ?? []) as QueueRow[];
+
+  // Priority selector: when multiple triggers fall on the same user in
+  // the same batch, only process the highest-priority one. The remaining
+  // ones are released back to the queue (status=skipped, deferred).
+  const byUser = new Map<string, QueueRow>();
+  const deferred: QueueRow[] = [];
+  for (const t of claimed) {
+    const key = t.user_id ?? `nouser:${t.id}`;
+    const cur = byUser.get(key);
+    if (!cur) {
+      byUser.set(key, t);
+    } else if (priorityOf(t.trigger_type) < priorityOf(cur.trigger_type)) {
+      deferred.push(cur);
+      byUser.set(key, t);
+    } else {
+      deferred.push(t);
+    }
+  }
+
+  for (const d of deferred) {
+    try {
+      await admin.rpc("orkym_trigger_complete", {
+        _id: d.id, _status: "skipped", _error: "lower_priority_in_batch",
+      } as never);
+    } catch { /* noop */ }
+  }
+
+  const triggers = Array.from(byUser.values());
+  const summary: Record<string, number> = {
+    total: claimed.length,
+    selected: triggers.length,
+    deferred: deferred.length,
+    sent: 0, skipped: 0, failed: 0, no_send: 0, no_phone: 0, send_failed: 0,
+  };
 
   for (const t of triggers) {
     let outcome = "failed";

@@ -37,14 +37,21 @@ File `_shared/proactive-templates.ts` maps trigger_type → message + pending_ac
 - `tournament_low_enrollment` / `low_enrollment` → `tournament_boost`
 - `idle_court_slot` / `idle_slot` → `fill_idle_slots`
 - `inactive_athlete` → `reactivation_message`
+- `class_low_enrollment` → `fill_idle_slots` (kind=class)
+- `near_rank_up` / `relevant_tournament` → `send_proactive_message`
+- `low_product_visibility` / `top_product` → `product_boost`
+- `tournament_high_demand` → `tournament_boost` (reason=high_demand)
 - `low_message_performance` / `low_campaign_performance` → `create_campaign`
-- `top_product` → `product_boost`
-- `revenue_drop` → `create_campaign`
-- `relevant_tournament` / `near_rank_up` → `send_proactive_message`
+- `low_arena_activity` / `high_search_demand` / `revenue_drop` → `create_campaign`
 Triggers without a template are skipped with reason `no_template` (e.g. billing/transactional notices).
 
-## Defaults
-- Daily cap: ≤2 proactive outbound / 24h per user (enforced inline in `orkym-proactive-process`, in addition to existing `orkym_proactive_check_eligibility`).
+## Generation (10 insights)
+`growth_generate_opportunity_triggers()` produces these via SQL aggregates: tournament_low_enrollment (<60% & <48h), idle_court_slot (<40% over 3d), inactive_athlete (≥5d), class_low_enrollment (>30% open), near_rank_up (top-10, ≤30 pts), low_product_visibility (<20 views/wk), tournament_high_demand (>90% & before start), low_message_performance (<2% CTR or 0 conv after 3d), low_arena_activity (<50% network avg), high_search_demand (>1.5× avg).
+
+## Defaults & guardrails
+- Daily cap: ≤2 proactive outbound / 24h per user.
+- Global gap: ≥6h between any two proactive messages to the same user (RPC `orkym_proactive_check_global_gap`).
+- Priority selector: when a batch contains multiple triggers for the same user, only the highest-priority is processed; the rest are completed as `skipped` with reason `lower_priority_in_batch`. Order: tournament_low_enrollment > idle_court_slot > inactive_athlete > class_low_enrollment > near_rank_up > low_product_visibility/top_product > tournament_high_demand > low_message_performance > low_arena_activity > high_search_demand > revenue_drop > relevant_tournament.
 - Pending-action TTL: 6h.
 - Cooldowns: 24h default; `subscription_overdue`=4h, `idle_slot`=72h, `low_enrollment`=48h.
 
