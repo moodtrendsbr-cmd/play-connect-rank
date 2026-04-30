@@ -22,6 +22,7 @@ import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCa
 import { COMMANDS } from "@/lib/conversationalCommands";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 import { GrowthDashboardPanel } from "@/components/growth/GrowthDashboardPanel";
+import { ControlTowerAIPanel } from "@/components/control-tower/ControlTowerAIPanel";
 import { DollarSign as RevDollar } from "lucide-react";
 
 // ─────────────── helpers locais (não exportados) ───────────────
@@ -284,6 +285,11 @@ const TenantDashboard = () => {
           <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
         </Button>
       </div>
+
+      {/* Phase H — Control Tower AI */}
+      <ControlTowerAIPanel scope={{ type: "tenant", id: tenant.id }} />
+
+
 
       {/* BLOCO 1 — CONTROL TOWER (DOMINANTE) */}
       <section className="rounded-xl border-l-2 border-primary bg-primary/5 p-5 space-y-4">

@@ -28,6 +28,7 @@ import { QrEntryCard } from "@/components/conversational/QrEntryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 import PromoteCampaignDialog from "@/components/featured/PromoteCampaignDialog";
 import { Rocket } from "lucide-react";
+import { ControlTowerAIPanel } from "@/components/control-tower/ControlTowerAIPanel";
 
 // ----- Helpers (locais, não exportados) -----
 const SectionHeader = ({
@@ -285,6 +286,8 @@ const OrganizerDashboard = () => {
 
   return (
     <div className="space-y-8 max-w-7xl">
+      {/* Phase H — Control Tower AI */}
+      <ControlTowerAIPanel scope={{ type: "organizer", id: user!.id }} />
       {/* HEADER */}
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>

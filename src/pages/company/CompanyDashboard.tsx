@@ -16,6 +16,7 @@ import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCa
 import { COMMANDS } from "@/lib/conversationalCommands";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 import { GrowthDashboardPanel } from "@/components/growth/GrowthDashboardPanel";
+import { ControlTowerAIPanel } from "@/components/control-tower/ControlTowerAIPanel";
 
 // ---------- Local helpers (not exported) ----------
 const SectionHeader = ({ id, icon: Icon, title, subtitle, action }: any) => (
@@ -206,6 +207,8 @@ const CompanyDashboard = () => {
 
   return (
     <div className="space-y-8">
+      {/* Phase H — Control Tower AI */}
+      <ControlTowerAIPanel scope={{ type: "company", id: company.id }} tenantId={company.tenant_id ?? undefined} />
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>

@@ -7422,6 +7422,10 @@ export type Database = {
         Args: { _result: Json; _session_id: string; _success: boolean }
         Returns: undefined
       }
+      control_tower_summary: {
+        Args: { _scope_id?: string; _scope_type: string }
+        Returns: Json
+      }
       create_organizer_tenant: {
         Args: { _display_name?: string; _name: string; _slug: string }
         Returns: string

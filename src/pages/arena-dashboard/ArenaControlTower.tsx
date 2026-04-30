@@ -13,6 +13,7 @@ import {
 import { UsageMeter } from "@/components/autonomy/UsageMeter";
 import { UpgradeCTA } from "@/components/autonomy/UpgradeCTA";
 import { OrkymActionsCard } from "@/components/orkym/OrkymActionsCard";
+import { ControlTowerAIPanel } from "@/components/control-tower/ControlTowerAIPanel";
 
 const ArenaControlTower = () => {
   const { arena } = useOutletContext<{ arena: any }>();
@@ -78,6 +79,9 @@ const ArenaControlTower = () => {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Phase H — Control Tower AI */}
+      <ControlTowerAIPanel scope={{ type: "arena", id: arena.id }} tenantId={tenantId} />
 
       {/* Alertas */}
       {warning === "limit" && (
