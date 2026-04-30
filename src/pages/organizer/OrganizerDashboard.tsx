@@ -28,6 +28,7 @@ import { QrEntryCard } from "@/components/conversational/QrEntryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 import PromoteCampaignDialog from "@/components/featured/PromoteCampaignDialog";
 import { Rocket } from "lucide-react";
+import { ControlTowerAIPanel } from "@/components/control-tower/ControlTowerAIPanel";
 
 // ----- Helpers (locais, não exportados) -----
 const SectionHeader = ({
