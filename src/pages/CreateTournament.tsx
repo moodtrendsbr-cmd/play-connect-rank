@@ -13,6 +13,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Upload, Loader2, X, Plus } from "lucide-react";
+import { ImageUploadField } from "@/components/shared/ImageUploadField";
 
 interface SlotConfig {
   type: string;
