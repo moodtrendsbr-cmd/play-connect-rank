@@ -62,8 +62,10 @@ export default function BoostedProductCard({ item }: { item: UnifiedFeedItem }) 
           Impulsionado
         </span>
       </div>
-      {prod.image_url && (
+      {prod.image_url ? (
         <img src={prod.image_url} alt={prod.name} className="w-full h-48 object-cover" />
+      ) : (
+        <div className="w-full h-24 bg-muted/30" />
       )}
       <div className="px-3 py-3">
         <h3 className="font-medium text-foreground text-sm">{prod.name}</h3>

@@ -27,8 +27,10 @@ const SponsoredPostCard = ({ post }: SponsoredPostCardProps) => {
           Patrocinado
         </span>
       </div>
-      {post.image_url && (
+      {post.image_url ? (
         <img src={post.image_url} alt={post.title} className="w-full h-48 object-cover" />
+      ) : (
+        <div className="w-full h-24 bg-muted/30" />
       )}
       <div className="px-3 py-3">
         <h3 className="font-medium text-foreground text-sm">{post.title}</h3>
