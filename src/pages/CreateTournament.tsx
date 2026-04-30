@@ -261,6 +261,17 @@ const CreateTournament = () => {
             <Input value={form.name} onChange={(e) => update("name", e.target.value)} required className="mt-1" />
           </div>
 
+          {/* 1b. Imagem do Torneio */}
+          <ImageUploadField
+            label="Imagem do Torneio"
+            value={form.image_url || null}
+            onChange={(url) => update("image_url", url || "")}
+            bucket="tournament-images"
+            pathPrefix={`tournaments/${user?.id || "anon"}/cover`}
+            aspect="16/9"
+            helperText="Carregue um arquivo ou cole a URL da imagem (capa/banner)."
+          />
+
           {/* 2. Modalidade */}
           <div>
             <Label>Modalidade</Label>
