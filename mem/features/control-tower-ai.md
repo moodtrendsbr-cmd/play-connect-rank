@@ -43,15 +43,15 @@ Média ponderada dos sub-scores disponíveis (pesos renormalizados quando faltam
   - `near_rank_up → send_proactive_message`
   - `idle_court_slot → fill_idle_slots`
 
-## Frontend
+## Frontend (UX 100% não-técnica)
 - `src/hooks/useControlTowerSummary.ts` — chama RPC, polling 60s.
-- `src/components/control-tower/ControlTowerAIPanel.tsx` — 4 blocos: score+sub-scores, alerts, opportunities, NBA com CTA "Executar via ORKYM".
+- `src/components/control-tower/ControlTowerAIPanel.tsx` — título **"Visão geral"** (sem "AI"/Sparkles). Blocos: Saúde do negócio, O que precisa de atenção, O que fazer agora.
+- `src/lib/controlTowerCopy.ts` — mapeia `action_type`/`kind` para rótulo + frase humana. **Nunca** expor "ORKYM", "IA", "decisão", `action_type`, `impact`, `effort`. Sub-score `orkym_adoption` é **omitido** da UI (segue calculado no backend).
 - `src/components/control-tower/HealthScoreBadge.tsx` — utilitário visual.
 - Mounts (topo): AdminControlTower, TenantDashboard, ArenaControlTower, OrganizerDashboard, CompanyDashboard.
 
-## CTA "Executar via ORKYM"
-Chama `invokeOrkym('growth','decide', { entity:{trigger_id, entity_type, entity_id}, context:{source:'control_tower_ai', action_type} })`.
-ORKYM cria proposta em `orkym_action_proposals`, que segue o pipeline existente (eligibility, guardrails, budget, autonomia).
+## CTA humano (1 problema → 1 botão → 1 clique)
+Botão usa rótulo de `copyForAction(action_type)` (ex.: "Divulgar torneio", "Preencher horário"). Internamente chama `invokeOrkym('growth','decide', { entity, context:{source:'control_tower_ai', action_type} })` — pipeline ORKYM (eligibility/guardrails/budget) inalterado. Feedback ao usuário: toast.loading "Estamos cuidando disso…" → success com frase humana ("Estamos divulgando seu torneio agora") ou "Tudo já está sob controle." quando `actions_proposed=0`. Erros sempre genéricos: "Não conseguimos agora. Tente novamente em instantes."
 
 ## Hard rules
 - Nunca decidir/personalizar localmente; sempre via `orkym-invoke`.

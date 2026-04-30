@@ -1,111 +1,87 @@
-## Phase H — Control Tower AI
+# Plan — Control Tower: Experiência Invisível
 
-A thin **synthesis layer** that consolidates existing signals (Phases 8/9/10/12.x/13/G) into a single executive view per scope (admin / tenant / arena / organizer / company). It does **not** add ML, parallel systems, or local AI — it reuses ORKYM for any reasoning and the existing growth/revenue/opportunity infrastructure for data.
+Refazer a camada visível da Control Tower para que **nenhum usuário veja "ORKYM", "IA", "decisão", "configuração" ou jargão técnico**. Toda a inteligência continua igual por baixo (RPC `control_tower_summary`, ORKYM, guardrails) — só muda a apresentação.
 
-### What it delivers
+## O que muda na prática
 
-For each scope, one consolidated payload:
+Antes:
+- "Control Tower AI" + ícone Sparkles
+- "Health score" + sub-scores expostos (Adoção ORKYM, etc.)
+- "Próxima melhor ação" → botão **"Executar via ORKYM"** + badge `tournament_boost`
+- Toast: "ORKYM analisou — sem nova ação."
+
+Depois:
+- Título neutro: **"Visão geral"** (sem AI/Sparkles).
+- Score continua, mas chamado **"Saúde do negócio"**, sem o sub-score `Adoção ORKYM` (oculto na UI; segue calculado no backend).
+- Cada oportunidade vira **um cartão com 1 problema + 1 botão de ação humana + 1 clique**.
+- Toasts em linguagem natural: "Estamos divulgando seu torneio agora", "Estamos tentando preencher esse horário".
+
+## 1. Mapa de ações humanas
+
+Mapear `action_type` → rótulo humano + frase de feedback. Tudo vive em um único arquivo novo `src/lib/controlTowerCopy.ts`:
+
+```text
+tournament_boost        → "Divulgar torneio"           "Estamos divulgando seu torneio agora"
+fill_idle_slots         → "Preencher horário"          "Estamos tentando preencher esse horário"
+reactivation_message    → "Trazer cliente de volta"    "Estamos reativando esse cliente"
+send_proactive_message  → "Incentivar atleta"          "Estamos enviando um incentivo"
+create_campaign         → "Aumentar vendas"            "Estamos impulsionando suas vendas"
+upsell_plan             → "Oferecer upgrade"           "Estamos oferecendo upgrade"
+(fallback)              → "Resolver agora"             "Estamos cuidando disso"
 ```
-{ health_score: 0-100, alerts: [], opportunities: [], recommendations: [], next_best_action }
+
+Também mapear `alert.kind` e `opportunity.kind` para títulos humanos quando o backend devolver chave técnica (ex.: `low_enrollment_tournament` → "Torneio com poucas inscrições"; `revenue_drop` → "Queda na receita esta semana"; `idle_court_slot` → "Horário ocioso amanhã"; `inactive_athlete` → "Cliente sumiu há semanas"; `near_rank_up` → "Atleta perto de subir de nível"; `budget_exhausted` → "Limite mensal atingido"). Sem expor termo técnico em nenhuma string.
+
+## 2. Refazer `ControlTowerAIPanel.tsx`
+
+Renomear arquivo para `OverviewPanel.tsx` (manter `ControlTowerAIPanel` re-exportado para não quebrar imports — opcional; mais simples: manter o arquivo, só reescrever o conteúdo e copy. Vou manter o nome do arquivo para não tocar nas 5 páginas que importam).
+
+Mudanças internas:
+- Header: ícone `Gauge` (em vez de `Sparkles`), título **"Visão geral"**, sem "AI".
+- Bloco 1 — Saúde: label **"Saúde do negócio"** + `HealthScoreBadge`. Sub-scores renomeados: `enrollment`→"Inscrições", `revenue`→"Receita", `occupancy`→"Ocupação", `engagement`→"Engajamento". `orkym_adoption` **omitido** da UI.
+- Bloco 2 — Alertas: usa o título humano via mapa (fallback para `alert.title` original do backend).
+- Bloco 3 — **substitui "Oportunidades" + "Próxima melhor ação"** por uma única lista **"O que fazer agora"**. Para cada `recommendation` (no máx 3, NBA primeiro):
+  - 1 linha de problema (humano, derivado de `kind`/title).
+  - 1 botão único com rótulo humano do mapa (ex.: "Divulgar torneio").
+  - Sem badges técnicas (`action_type`, `impact`, `effort` removidos da UI).
+  - Estado: ocioso → loading "Iniciando…" → sucesso (cartão muda para "Pronto. Estamos cuidando disso." com check verde, sem botão).
+- Estados vazios: "Tudo certo por aqui." (sem mencionar score/IA).
+- Loading inicial: "Carregando…" (sem "Sintetizando visão executiva").
+- Erro: "Não foi possível carregar agora. Tente novamente." (sem detalhe técnico).
+
+## 3. Execução invisível
+
+A função `executeRec` continua chamando `invokeOrkym('growth','decide', ...)` exatamente como hoje (zero mudança no backend, guardrails preservados). Só muda o feedback ao usuário:
+
+```text
+onClick      → toast.loading("Estamos cuidando disso…") + cartão em loading
+res.ok      → toast.success(<frase humana do mapa>) + cartão em estado "feito"
+res.ok && actions_proposed === 0  → toast("Tudo já está sob controle.")
+!res.ok      → toast.error("Não conseguimos agora. Tente novamente em instantes.")
 ```
-Surfaced as a single `ControlTowerAIPanel` card mounted at the top of each Control Tower page.
 
----
+Sem mostrar `actions_proposed`, sem mencionar "proposta", "ORKYM", "ação", "decisão".
 
-### 1. Backend — single SQL function (no new tables)
+## 4. Sem configuração exposta
 
-Add migration with one read-only RPC:
+- Remover qualquer hint de parâmetros/budget/strategy do painel (já não havia, manter assim).
+- O `BudgetEditor` e `GrowthDashboardPanel` continuam existindo onde estão (admin/tenant) — **não são tocados nesta fase**, pois são telas internas separadas. Apenas o `OverviewPanel` (Control Tower visível ao usuário comum) fica 100% limpo.
 
-`public.control_tower_summary(_scope_type text, _scope_id uuid)` → `jsonb`
-- Scopes: `'admin' | 'tenant' | 'arena' | 'organizer' | 'company'`
-- `SECURITY INVOKER` — RLS on underlying tables/views does the access control
-- Reads only from already-existing sources:
-  - `v_growth_dashboard` (suggested/auto/blocked/revenue 30d)
-  - `orkym_revenue_attribution` (revenue, ROI)
-  - `orkym_triggers_queue` (pending opportunities already detected by Phase G)
-  - `orkym_action_proposals` (pending high-priority proposals → recommendations)
-  - `financial_transactions` (revenue trend 7d vs prev 7d)
-  - `enrollments` + `tournaments` (low-fill upcoming)
-  - `court_bookings` + `arena_court_slots` (occupancy)
-  - `athlete_xp` / `xp_events` (engagement signal — admin/tenant only)
-  - `growth_budgets` (budget headroom)
+## 5. Backend / dados
 
-**Health score (0–100)** — weighted average of 5 sub-scores, each 0–100:
-- `enrollment_score` (paid vs capacity for active tournaments)
-- `revenue_score` (last 7d vs previous 7d trend, capped)
-- `occupancy_score` (booked slots vs available, last 14d)
-- `engagement_score` (DAU-style: distinct profiles with activity 7d vs 30d)
-- `orkym_adoption_score` (auto+approved / suggested, 30d)
+- **Nada muda** em SQL, RPC, edge functions, guardrails, atribuição de receita, budgets ou ORKYM.
+- O hook `useControlTowerSummary` permanece igual — só o consumidor (painel) reinterpreta as chaves.
 
-Weights default `0.25/0.25/0.20/0.15/0.15`; missing sub-scores are skipped and weights renormalized so empty scopes don't punish themselves.
+## Arquivos afetados
 
-**Alerts** — deterministic rules from existing data:
-- `low_enrollment_tournament` (pending triggers of type `tournament_low_enrollment`)
-- `revenue_drop` (7d revenue < 70% of previous 7d, both >0)
-- `no_recent_checkins` (active tournament today, 0 check-ins)
-- `inactive_users_spike` (count of `inactive_athlete` triggers)
-- `low_roi_campaigns` (ad_campaigns active 30d with ROI < 0.5)
-- `budget_exhausted` (any `growth_budgets` ≥ 90% spent)
+- **Criar**: `src/lib/controlTowerCopy.ts` (mapas action_type/kind → label + feedback humano).
+- **Reescrever**: `src/components/control-tower/ControlTowerAIPanel.tsx` (mantém nome e API pública: mesmas props `scope` + `tenantId`).
+- **Atualizar memória**: `mem/features/control-tower-ai.md` (anotar que a UI é não-técnica e que `orkym_adoption` não é exibido).
+- **Não tocar**: `useControlTowerSummary.ts`, `HealthScoreBadge.tsx`, as 5 páginas que montam o painel, qualquer SQL/edge.
 
-**Opportunities** — pulled directly from `orkym_triggers_queue` open items (already deduped by Phase G) plus:
-- `idle_court_slots` (next 14d, never-booked recurring slots)
-- `trending_product` (top product by 7d orders growth, company scope)
-- `near_rank_up_athletes` count (admin/tenant)
-- `sponsorable_company` (companies with ≥X reach but no active campaign — admin only)
+## Critério de aceitação
 
-**Recommendations** — each item is `{ id, title, body, action_type, payload, impact, effort }` where `action_type` matches the **existing Phase G allowlist** (`tournament_boost`, `reactivation_message`, `fill_idle_slots`, `upsell_plan`, `create_campaign`, `recommend_product`, `send_proactive_message`). Impact/effort are heuristics (low/medium/high).
-
-**Next Best Action (NBA)** — pick the recommendation with `max(impact_weight − effort_weight)`, tie-break by alert severity it resolves.
-
-### 2. ORKYM hand-off (no duplication)
-
-The summary is **descriptive**. Any actual decision/personalization stays in ORKYM:
-- Each recommendation in the UI has a single CTA → reuses `invokeOrkym('growth', 'decide', { entity: { trigger_id|opportunity }, context })` which already returns a proposal that flows through the existing `orkym_action_proposals` → `orkym-execute-action` pipeline.
-- "Send via WhatsApp" CTAs go through existing `wa-send-message` (never direct).
-- Eligibility, cooldown, opt-in, budget guardrails stay enforced by existing RPCs (`autonomy_check_guardrails`, `growth_check_budget`).
-
-No new edge function. No `control_tower-decide` route. No new ORKYM domain.
-
-### 3. Frontend
-
-**New files:**
-- `src/hooks/useControlTowerSummary.ts` — wraps RPC, returns `{ summary, loading, error, refresh }`. Polls every 60s while panel mounted.
-- `src/components/control-tower/ControlTowerAIPanel.tsx` — single card with 4 blocks:
-  1. **Health Score** (big number 0–100 + colored gauge: ≥80 emerald, 50–79 amber, <50 destructive) + 5 mini-bars for sub-scores.
-  2. **Alerts** (max 3 visible, "+N mais") — severity dot, one-liner, optional "Ver" link.
-  3. **Opportunities** (max 3) — title + impact tag.
-  4. **Próxima melhor ação (NBA)** — highlighted block with title, 1-line rationale, primary CTA "Executar via ORKYM" + secondary "Ver detalhes" (opens existing `ActionProposalDetail` after proposal is created).
-- `src/components/control-tower/HealthScoreBadge.tsx` — small reusable score chip.
-
-**Mounts (top of each page, above existing content):**
-- `src/pages/admin/AdminControlTower.tsx` → `<ControlTowerAIPanel scope={{type:'admin'}} />`
-- `src/pages/tenant/TenantDashboard.tsx` → `scope={{type:'tenant', id: tenant.id}}`
-- `src/pages/arena-dashboard/ArenaControlTower.tsx` → `scope={{type:'arena', id: arena.id}}`
-- `src/pages/organizer/OrganizerDashboard.tsx` → `scope={{type:'organizer', id: organizerId}}`
-- `src/pages/company/CompanyDashboard.tsx` → `scope={{type:'company', id: company.id}}`
-
-### 4. Memory
-
-New file `mem/features/control-tower-ai.md` documenting:
-- Health score formula + weights
-- Alert/opportunity/recommendation catalog
-- Hard rule: Control Tower is **read-only synthesis**; all decisions/executions go through ORKYM + existing guardrails. No local AI, no parallel proposal/budget tables.
-
-Update `mem://index.md` Core line + Memories entry.
-
----
-
-### What we explicitly will NOT do
-
-- No new tables (reuse `orkym_triggers_queue`, `orkym_action_proposals`, `orkym_revenue_attribution`, `growth_budgets`, `v_growth_dashboard`).
-- No new edge function (RPC only; ORKYM calls reuse `orkym-invoke`).
-- No ML, no embeddings, no local scoring model — health score is a transparent weighted average of deterministic SQL.
-- No multi-page BI dashboard — one panel per scope, 4 blocks, mobile-friendly.
-- No bypass of opt-in/cooldown/budget — every CTA flows through the existing autonomy + growth guardrails.
-
-### Success criteria
-
-- Owner opens dashboard → sees one number (health) + ≤3 alerts + ≤3 opportunities + 1 NBA in <2s.
-- NBA "Executar" creates a real `orkym_action_proposals` row via existing pipeline (no shortcut).
-- Empty/new tenants get a graceful "Sem dados suficientes ainda" with neutral score, not zeros.
-- RLS prevents cross-tenant reads (verified by RPC being `SECURITY INVOKER`).
+- Nenhuma string visível contém "ORKYM", "IA", "AI", "decisão", "proposta", "action_type", "score" técnico, "config".
+- Cada recomendação aparece como: 1 problema + 1 botão humano + 1 clique.
+- Toasts são frases naturais ("Estamos divulgando seu torneio agora").
+- Backend, RPC e guardrails continuam idênticos — só a casca muda.
