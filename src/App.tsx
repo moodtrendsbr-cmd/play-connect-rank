@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 import Index from "./pages/Index";
+import FlowTournament from "./pages/FlowTournament";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
@@ -150,6 +151,7 @@ const App = () => (
           <CartProvider>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/flow-tournament" element={<FlowTournament />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
