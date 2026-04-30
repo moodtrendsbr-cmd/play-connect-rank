@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Plus, Pencil, QrCode, Share2, Package } from "lucide-react";
 import { QRGenerator } from "@/components/arena/QRGenerator";
 import { printQRSheet } from "@/components/arena/QRPrintSheet";
+import { ImageUploadField } from "@/components/shared/ImageUploadField";
 
 const CATEGORIES = [
   { value: "bebidas", label: "Bebidas" },
@@ -220,10 +221,15 @@ const ArenaProducts = () => {
                 </Select>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>URL da foto</Label>
-              <Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="https://..." />
-            </div>
+            <ImageUploadField
+              label="Foto do produto"
+              value={form.image_url || null}
+              onChange={(url) => setForm({ ...form, image_url: url ?? "" })}
+              bucket="company-images"
+              pathPrefix={`products/arena-${arena?.id}`}
+              previewShape="square"
+              aspect="1/1"
+            />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Estoque (opcional)</Label>

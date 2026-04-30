@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
+import { ImageUploadField } from "@/components/shared/ImageUploadField";
 
 const AdminAds = () => {
   const [sponsoredPosts, setSponsoredPosts] = useState<any[]>([]);
@@ -84,7 +85,14 @@ const AdminAds = () => {
             <form onSubmit={createSponsoredPost} className="space-y-3">
               <div><Label>Título *</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
               <div><Label>Conteúdo</Label><Textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} rows={2} /></div>
-              <div><Label>URL da imagem</Label><Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} /></div>
+              <ImageUploadField
+                label="Imagem"
+                value={form.image_url || null}
+                onChange={(url) => setForm({ ...form, image_url: url ?? "" })}
+                bucket="company-images"
+                pathPrefix="sponsored-posts"
+                aspect="16/9"
+              />
               <div><Label>Cidade (deixe vazio para todos)</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
               <div>
                 <Label>Empresa *</Label>

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { ImageUploadField } from "@/components/shared/ImageUploadField";
 
 const ArenaSponsors = () => {
   const { arena } = useOutletContext<{ arena: any }>();
@@ -83,7 +84,15 @@ const ArenaSponsors = () => {
               <DialogHeader><DialogTitle>Novo parceiro</DialogTitle></DialogHeader>
               <div className="space-y-4">
                 <div><Label>Nome *</Label><Input className="mt-1" value={pForm.name} onChange={(e) => setPForm({ ...pForm, name: e.target.value })} /></div>
-                <div><Label>Logo URL</Label><Input className="mt-1" value={pForm.logo_url} onChange={(e) => setPForm({ ...pForm, logo_url: e.target.value })} /></div>
+                <ImageUploadField
+                  label="Logo"
+                  value={pForm.logo_url || null}
+                  onChange={(url) => setPForm({ ...pForm, logo_url: url ?? "" })}
+                  bucket="arena-images"
+                  pathPrefix={`arenas/${arena?.id}/partners`}
+                  previewShape="square"
+                  aspect="1/1"
+                />
                 <div><Label>Link</Label><Input className="mt-1" value={pForm.link_url} onChange={(e) => setPForm({ ...pForm, link_url: e.target.value })} /></div>
                 <div>
                   <Label>Nível</Label>

@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { ArrowLeft, ExternalLink, Loader2, Save, Globe, Lock } from "lucide-react";
+import { ImageUploadField } from "@/components/shared/ImageUploadField";
 
 const MODALITY_OPTIONS = ["Beach Tennis", "Futevôlei", "Vôlei de Praia", "Tênis", "Padel", "Outros"];
 const DAYS = [
@@ -143,15 +144,26 @@ const ArenaProfile = () => {
             <Label>Descrição</Label>
             <Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Conte sobre sua arena, infraestrutura, modalidades..." />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>URL do logo</Label>
-              <Input value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} placeholder="https://..." />
-            </div>
-            <div className="space-y-2">
-              <Label>URL da imagem de capa</Label>
-              <Input value={form.cover_image_url} onChange={(e) => setForm({ ...form, cover_image_url: e.target.value })} placeholder="https://..." />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ImageUploadField
+              label="Logo"
+              value={form.logo_url || null}
+              onChange={(url) => setForm({ ...form, logo_url: url ?? "" })}
+              bucket="arena-images"
+              pathPrefix={`arenas/${arena?.id}/logo`}
+              previewShape="square"
+              aspect="1/1"
+              helperText="Recomendado: imagem quadrada"
+            />
+            <ImageUploadField
+              label="Imagem de capa"
+              value={form.cover_image_url || null}
+              onChange={(url) => setForm({ ...form, cover_image_url: url ?? "" })}
+              bucket="arena-images"
+              pathPrefix={`arenas/${arena?.id}/hero`}
+              aspect="16/9"
+              helperText="Recomendado: 16:9, alta resolução"
+            />
           </div>
         </CardContent>
       </Card>

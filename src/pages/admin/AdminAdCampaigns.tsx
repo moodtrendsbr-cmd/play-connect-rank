@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Check, X, Pause, Play } from "lucide-react";
+import { ImageUploadField } from "@/components/shared/ImageUploadField";
 
 const AdminAdCampaigns = () => {
   const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -111,7 +112,14 @@ const AdminAdCampaigns = () => {
                 </Select>
               </div>
               <div><Label>Título exibido</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
-              <div><Label>URL imagem</Label><Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} /></div>
+              <ImageUploadField
+                label="Imagem"
+                value={form.image_url || null}
+                onChange={(url) => setForm({ ...form, image_url: url ?? "" })}
+                bucket="company-images"
+                pathPrefix="campaigns"
+                aspect="16/9"
+              />
               <div><Label>Link destino</Label><Input value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} placeholder="https://..." /></div>
               <div><Label>CTA</Label><Input value={form.cta_label} onChange={(e) => setForm({ ...form, cta_label: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-2">

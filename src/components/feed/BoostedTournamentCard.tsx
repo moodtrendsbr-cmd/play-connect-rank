@@ -60,8 +60,10 @@ export default function BoostedTournamentCard({ item }: { item: UnifiedFeedItem 
           Impulsionado
         </span>
       </div>
-      {tour.cover_url && (
+      {tour.cover_url ? (
         <img src={tour.cover_url} alt={tour.name} className="w-full h-40 object-cover" />
+      ) : (
+        <div className="w-full h-20 bg-muted/30" />
       )}
       <div className="px-3 py-3">
         <h3 className="font-medium text-foreground text-sm">{tour.name}</h3>
