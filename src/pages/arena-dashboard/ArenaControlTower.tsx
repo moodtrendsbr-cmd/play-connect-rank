@@ -80,6 +80,9 @@ const ArenaControlTower = () => {
         </CardContent>
       </Card>
 
+      {/* Phase H — Control Tower AI */}
+      <ControlTowerAIPanel scope={{ type: "arena", id: arena.id }} tenantId={tenantId} />
+
       {/* Alertas */}
       {warning === "limit" && (
         <Alert className="border-destructive/50 bg-destructive/10">

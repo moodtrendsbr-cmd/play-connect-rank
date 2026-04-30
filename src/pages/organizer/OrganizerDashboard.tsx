@@ -285,6 +285,8 @@ const OrganizerDashboard = () => {
 
   return (
     <div className="space-y-8 max-w-7xl">
+      {/* Phase H — Control Tower AI */}
+      <ControlTowerAIPanel scope={{ type: "organizer", id: user!.id }} />
       {/* HEADER */}
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>

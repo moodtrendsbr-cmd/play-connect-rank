@@ -206,6 +206,8 @@ const CompanyDashboard = () => {
 
   return (
     <div className="space-y-8">
+      {/* Phase H — Control Tower AI */}
+      <ControlTowerAIPanel scope={{ type: "company", id: company.id }} tenantId={company.tenant_id ?? undefined} />
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
