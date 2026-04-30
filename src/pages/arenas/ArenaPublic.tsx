@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Grid3X3, Video, Instagram, Map, Globe, ExternalLink } from "lucide-react";
+import { MapPin, Grid3X3, Video, Instagram, Map, Globe, ExternalLink, ArrowLeft } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
   video: Video,
@@ -15,7 +16,9 @@ const ICON_MAP: Record<string, any> = {
 
 const ArenaPublic = () => {
   const { arenaSlug } = useParams();
+  const { user } = useAuth();
   const [arena, setArena] = useState<any>(null);
+  const [isOwner, setIsOwner] = useState(false);
   const [courts, setCourts] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
   const [partners, setPartners] = useState<any[]>([]);
@@ -27,6 +30,11 @@ const ArenaPublic = () => {
       const { data: arenaData } = await supabase.from("arenas_public").select("*").eq("slug", arenaSlug).maybeSingle();
       if (!arenaData) { setLoading(false); return; }
       setArena(arenaData);
+
+      if (user?.id) {
+        const { data: own } = await supabase.from("arenas").select("id").eq("slug", arenaSlug).eq("owner_user_id", user.id).maybeSingle();
+        setIsOwner(!!own);
+      }
 
       const [c, l, p, inv] = await Promise.all([
         supabase.from("courts").select("*").eq("arena_id", arenaData.id).eq("is_active", true).order("created_at"),
@@ -41,13 +49,18 @@ const ArenaPublic = () => {
       setLoading(false);
     };
     load();
-  }, [arenaSlug]);
+  }, [arenaSlug, user?.id]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   if (!arena) return <div className="text-center py-20 text-muted-foreground">Arena não encontrada</div>;
 
   return (
     <div className="space-y-6 pb-24">
+      {isOwner && (
+        <Link to="/arena/dashboard" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> Voltar ao painel
+        </Link>
+      )}
       {/* Hero */}
       <div className="relative rounded-2xl overflow-hidden">
         {arena.cover_image_url ? (
