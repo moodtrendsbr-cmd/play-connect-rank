@@ -239,13 +239,18 @@ export function ControlTowerAIPanel({
                       <Button
                         size="sm"
                         onClick={() => executeRec(rec)}
-                        disabled={state === "running" || !effectiveTenantId}
+                        disabled={state === "starting" || state === "running"}
                         className="shrink-0"
                       >
-                        {state === "running" ? (
+                        {state === "starting" ? (
                           <>
                             <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                             Iniciando…
+                          </>
+                        ) : state === "running" ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                            Em andamento…
                           </>
                         ) : (
                           copy.label
