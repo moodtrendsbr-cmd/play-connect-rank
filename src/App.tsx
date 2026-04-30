@@ -91,6 +91,14 @@ import AdminAutonomy from "./pages/admin/AdminAutonomy";
 import ArenaActions from "./pages/arena-dashboard/ArenaActions";
 import ArenaAutonomy from "./pages/arena-dashboard/ArenaAutonomy";
 import ArenaControlTower from "./pages/arena-dashboard/ArenaControlTower";
+import ArenaProfile from "./pages/arena-dashboard/ArenaProfile";
+import ArenaQR from "./pages/arena-dashboard/ArenaQR";
+import ArenaProducts from "./pages/arena-dashboard/ArenaProducts";
+import ArenaTeam from "./pages/arena-dashboard/ArenaTeam";
+import TenantArenaProfiles from "./pages/tenant/TenantArenaProfiles";
+import TenantQR from "./pages/tenant/TenantQR";
+import TenantProducts from "./pages/tenant/TenantProducts";
+import TenantTeam from "./pages/tenant/TenantTeam";
 import AdminControlTower from "./pages/admin/AdminControlTower";
 import Explore from "./pages/Explore";
 import AthletesList from "./pages/AthletesList";
@@ -226,6 +234,10 @@ const App = () => (
               <Route path="control-tower" element={<ArenaControlTower />} />
               <Route path="comandos" element={<ArenaCommands />} />
               <Route path="mensagens-wa" element={<ArenaMessages />} />
+              <Route path="perfil" element={<ArenaProfile />} />
+              <Route path="qr" element={<ArenaQR />} />
+              <Route path="produtos" element={<ArenaProducts />} />
+              <Route path="equipe" element={<ArenaTeam />} />
             </Route>
             <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
             {/* Phase 11.4 — Organizer Event Engine (additive shell) */}
@@ -302,6 +314,10 @@ const App = () => (
               <Route path="mensagens-wa" element={<TenantMessages />} />
               <Route path="tournaments" element={<TenantTournaments />} />
               <Route path="torneios" element={<TenantTournaments />} />
+              <Route path="arenas/perfis" element={<TenantArenaProfiles />} />
+              <Route path="qr" element={<TenantQR />} />
+              <Route path="produtos" element={<TenantProducts />} />
+              <Route path="equipe" element={<TenantTeam />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
