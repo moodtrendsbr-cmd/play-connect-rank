@@ -9,6 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Search, Trophy, MapPin, Calendar } from "lucide-react";
 import { useFeaturedSet } from "@/hooks/useFeaturedSet";
 import FeaturedBadge from "@/components/featured/FeaturedBadge";
+import { useAuth } from "@/contexts/AuthContext";
+import { dashboardPathFor } from "@/lib/dashboardPath";
 
 type StatusFilter = "all" | "active" | "upcoming" | "finished";
 
@@ -28,6 +30,8 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 };
 
 const Tournaments = () => {
+  const { userRole } = useAuth();
+  const backPath = dashboardPathFor(userRole);
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -88,11 +92,11 @@ const Tournaments = () => {
       <header className="border-b border-border bg-card">
         <div className="container flex h-16 items-center gap-4">
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/dashboard" className="gap-2">
+            <Link to={backPath} className="gap-2">
               <ArrowLeft className="h-4 w-4" /> Voltar
             </Link>
           </Button>
-          <Link to="/dashboard" className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
+          <Link to={backPath} className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
         </div>
       </header>
 
