@@ -49,13 +49,18 @@ const ArenaPublic = () => {
       setLoading(false);
     };
     load();
-  }, [arenaSlug]);
+  }, [arenaSlug, user?.id]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   if (!arena) return <div className="text-center py-20 text-muted-foreground">Arena não encontrada</div>;
 
   return (
     <div className="space-y-6 pb-24">
+      {isOwner && (
+        <Link to="/arena/dashboard" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> Voltar ao painel
+        </Link>
+      )}
       {/* Hero */}
       <div className="relative rounded-2xl overflow-hidden">
         {arena.cover_image_url ? (
