@@ -391,6 +391,23 @@ export function summarizeResult(
       return "💰 Cobrança gerada.";
     case "propose_promotion":
       return "📣 Campanha proposta (pendente de aprovação).";
+    case "tournament_boost":
+      return "📣 Torneio em destaque.";
+    case "create_campaign":
+    case "product_boost":
+      return "📣 Campanha ativa.";
+    case "company_boost":
+      return "📣 Empresa em destaque.";
+    case "fill_idle_slots":
+      return "🎯 Horários sendo divulgados.";
+    case "reactivation_message":
+      return "✉️ Reativação iniciada.";
+    case "send_proactive_message":
+      return "✉️ Mensagem agendada.";
+    case "recommend_product":
+      return "🛍️ Recomendação enviada.";
+    case "upsell_plan":
+      return "⬆️ Upgrade oferecido.";
     default:
       return "✅ Ação executada.";
   }
