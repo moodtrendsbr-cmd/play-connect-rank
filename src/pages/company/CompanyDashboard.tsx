@@ -16,6 +16,7 @@ import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCa
 import { COMMANDS } from "@/lib/conversationalCommands";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 import { GrowthDashboardPanel } from "@/components/growth/GrowthDashboardPanel";
+import { ControlTowerAIPanel } from "@/components/control-tower/ControlTowerAIPanel";
 
 // ---------- Local helpers (not exported) ----------
 const SectionHeader = ({ id, icon: Icon, title, subtitle, action }: any) => (
