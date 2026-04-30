@@ -497,6 +497,86 @@ export type Database = {
           },
         ]
       }
+      arena_checkins: {
+        Row: {
+          arena_id: string
+          booking_id: string | null
+          confirmed_by: string | null
+          court_id: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          phone_e164: string | null
+          qr_token: string | null
+          social_identity_id: string
+          source: string
+          sport: string | null
+          tenant_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          arena_id: string
+          booking_id?: string | null
+          confirmed_by?: string | null
+          court_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          phone_e164?: string | null
+          qr_token?: string | null
+          social_identity_id: string
+          source?: string
+          sport?: string | null
+          tenant_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          arena_id?: string
+          booking_id?: string | null
+          confirmed_by?: string | null
+          court_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          phone_e164?: string | null
+          qr_token?: string | null
+          social_identity_id?: string
+          source?: string
+          sport?: string | null
+          tenant_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arena_checkins_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_checkins_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_checkins_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_checkins_social_identity_id_fkey"
+            columns: ["social_identity_id"]
+            isOneToOne: false
+            referencedRelation: "social_identities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       arena_class_enrollments: {
         Row: {
           arena_id: string
@@ -1490,6 +1570,7 @@ export type Database = {
       arenas: {
         Row: {
           address: string | null
+          checkin_enabled: boolean
           city: string
           contact_email: string | null
           contact_whatsapp: string | null
@@ -1515,6 +1596,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          checkin_enabled?: boolean
           city?: string
           contact_email?: string | null
           contact_whatsapp?: string | null
@@ -1540,6 +1622,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          checkin_enabled?: boolean
           city?: string
           contact_email?: string | null
           contact_whatsapp?: string | null
@@ -1976,6 +2059,35 @@ export type Database = {
           xp_reward?: number
         }
         Relationships: []
+      }
+      booking_checkin_links: {
+        Row: {
+          booking_id: string
+          created_at: string
+          expires_at: string
+          shortcode: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          expires_at: string
+          shortcode: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          expires_at?: string
+          shortcode?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_checkin_links_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bookings: {
         Row: {
@@ -5054,6 +5166,7 @@ export type Database = {
           first_arena_id: string | null
           first_tenant_id: string | null
           id: string
+          metadata: Json
           phone_e164: string
           source: string
           updated_at: string
@@ -5067,6 +5180,7 @@ export type Database = {
           first_arena_id?: string | null
           first_tenant_id?: string | null
           id?: string
+          metadata?: Json
           phone_e164: string
           source?: string
           updated_at?: string
@@ -5080,6 +5194,7 @@ export type Database = {
           first_arena_id?: string | null
           first_tenant_id?: string | null
           id?: string
+          metadata?: Json
           phone_e164?: string
           source?: string
           updated_at?: string
@@ -6125,6 +6240,7 @@ export type Database = {
           default_arena_id: string | null
           default_profile_type: string
           id: string
+          last_seen_at: string | null
           metadata: Json
           tenant_id: string | null
           updated_at: string
@@ -6139,6 +6255,7 @@ export type Database = {
           default_arena_id?: string | null
           default_profile_type: string
           id?: string
+          last_seen_at?: string | null
           metadata?: Json
           tenant_id?: string | null
           updated_at?: string
@@ -6153,6 +6270,7 @@ export type Database = {
           default_arena_id?: string | null
           default_profile_type?: string
           id?: string
+          last_seen_at?: string | null
           metadata?: Json
           tenant_id?: string | null
           updated_at?: string
@@ -7427,6 +7545,21 @@ export type Database = {
         Args: { _arena_id: string; _older_than_days?: number }
         Returns: number
       }
+      arena_checkin_complete: {
+        Args: {
+          _arena_id: string
+          _booking_id?: string
+          _court_id?: string
+          _name: string
+          _phone: string
+          _qr_token?: string
+          _source?: string
+          _sport: string
+          _user_id?: string
+          _visibility?: string
+        }
+        Returns: Json
+      }
       arena_checkin_validate: { Args: { _token: string }; Returns: Json }
       arena_generate_billing_cycle: {
         Args: { _subscription_id: string }
@@ -7508,6 +7641,22 @@ export type Database = {
         }
         Returns: Json
       }
+      booking_checkin_link_get_or_create: {
+        Args: { _booking_id: string }
+        Returns: {
+          booking_id: string
+          created_at: string
+          expires_at: string
+          shortcode: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "booking_checkin_links"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      booking_checkin_resolve: { Args: { _shortcode: string }; Returns: Json }
       complete_session: {
         Args: { _result: Json; _session_id: string; _success: boolean }
         Returns: undefined
@@ -7581,6 +7730,7 @@ export type Database = {
         }
         Returns: string
       }
+      gen_shortcode: { Args: { _len?: number }; Returns: string }
       get_arena_id_from_court: { Args: { _court_id: string }; Returns: string }
       get_arena_id_from_instructor: {
         Args: { _instructor_id: string }
