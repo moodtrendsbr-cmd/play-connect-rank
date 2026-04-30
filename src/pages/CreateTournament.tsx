@@ -222,6 +222,7 @@ const CreateTournament = () => {
       payment_deadline_days: parseInt(form.payment_deadline_days) || 3,
       rules: form.rules,
       rules_file_url: form.rules_file_url || null,
+      image_url: form.image_url || null,
       match_enabled: form.match_enabled,
     } as any);
 
