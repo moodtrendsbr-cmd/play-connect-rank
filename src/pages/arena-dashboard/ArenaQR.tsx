@@ -43,9 +43,13 @@ const ArenaQR = () => {
 
   useEffect(() => { if (arena) fetchItems(); }, [arena]);
 
-  const buildTargetUrl = (token: string, _kind: string) => {
+  const buildTargetUrl = (token: string, kind: string) => {
+    // Frictionless arena check-in: open the public check-in page directly.
+    if (kind === "checkin") {
+      return `${window.location.origin}/c/QR-${token}?kind=qr`;
+    }
     const wa = (arena?.contact_whatsapp || "").replace(/\D/g, "");
-    if (wa) return `https://wa.me/${wa}?text=${encodeURIComponent(`MoodPlay ${token.slice(0, 8)}`)}`;
+    if (wa) return `https://wa.me/${wa}?text=${encodeURIComponent(`MoodPlay #QR-${token.slice(0, 8)}`)}`;
     return `${window.location.origin}/arenas/${arena.slug}?qr=${token}`;
   };
 
