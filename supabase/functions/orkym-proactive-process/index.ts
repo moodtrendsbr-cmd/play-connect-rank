@@ -325,8 +325,41 @@ Deno.serve(async (req: Request) => {
   const { data: rows, error } = await admin.rpc("orkym_trigger_claim_batch", { _limit: limit } as never);
   if (error) return safeJson({ ok: false, error: error.message });
 
-  const triggers = (rows ?? []) as QueueRow[];
-  const summary: Record<string, number> = { total: triggers.length, sent: 0, skipped: 0, failed: 0, no_send: 0, no_phone: 0, send_failed: 0 };
+  const claimed = (rows ?? []) as QueueRow[];
+
+  // Priority selector: when multiple triggers fall on the same user in
+  // the same batch, only process the highest-priority one. The remaining
+  // ones are released back to the queue (status=skipped, deferred).
+  const byUser = new Map<string, QueueRow>();
+  const deferred: QueueRow[] = [];
+  for (const t of claimed) {
+    const key = t.user_id ?? `nouser:${t.id}`;
+    const cur = byUser.get(key);
+    if (!cur) {
+      byUser.set(key, t);
+    } else if (priorityOf(t.trigger_type) < priorityOf(cur.trigger_type)) {
+      deferred.push(cur);
+      byUser.set(key, t);
+    } else {
+      deferred.push(t);
+    }
+  }
+
+  for (const d of deferred) {
+    try {
+      await admin.rpc("orkym_trigger_complete", {
+        _id: d.id, _status: "skipped", _error: "lower_priority_in_batch",
+      } as never);
+    } catch { /* noop */ }
+  }
+
+  const triggers = Array.from(byUser.values());
+  const summary: Record<string, number> = {
+    total: claimed.length,
+    selected: triggers.length,
+    deferred: deferred.length,
+    sent: 0, skipped: 0, failed: 0, no_send: 0, no_phone: 0, send_failed: 0,
+  };
 
   for (const t of triggers) {
     let outcome = "failed";
