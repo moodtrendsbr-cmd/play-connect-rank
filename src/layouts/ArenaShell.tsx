@@ -68,7 +68,7 @@ const ArenaShell = () => {
             </div>
           </header>
           <main className="flex-1 p-6">
-            <Outlet />
+            <Outlet context={{ arena: arenaId ? { id: arenaId, tenant_id: tenantId, name: "Arena" } : null }} />
           </main>
         </div>
       </div>
