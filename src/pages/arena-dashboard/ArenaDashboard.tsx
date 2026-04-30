@@ -19,6 +19,7 @@ import { QrEntryCard } from "@/components/conversational/QrEntryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 import { cn } from "@/lib/utils";
+import { NextStepsCard } from "@/components/arena/NextStepsCard";
 
 // ---------- Local UI helpers (not exported) ----------
 
@@ -149,6 +150,8 @@ const ArenaDashboard = () => {
           </p>
         </div>
       </header>
+
+      {arena?.id && <NextStepsCard arenaId={arena.id} />}
 
       {/* BLOCO 1 — CONTROL TOWER (DOMINANTE) */}
       <section className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 md:p-5">
