@@ -108,10 +108,11 @@ const ArenaFinance = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <DollarSign className="h-6 w-6" /> Financeiro da Arena
+          <DollarSign className="h-6 w-6" /> Receita
         </h1>
-        <p className="text-sm text-muted-foreground">Receita gerada e splits a receber.</p>
+        <p className="text-sm text-muted-foreground">Receita gerada e valores a receber.</p>
       </div>
+      <FinanceTabs />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
