@@ -2,16 +2,19 @@ import { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, Grid3X3, Clock, CalendarCheck, Handshake, Zap, ArrowLeft, Users, GraduationCap, CalendarClock, ClipboardList, Tag, RefreshCw, Receipt, AlertTriangle, Trophy, DollarSign, ListOrdered, Sparkles, ShieldCheck, Gauge } from "lucide-react";
+import { LayoutDashboard, Grid3X3, Clock, CalendarCheck, Handshake, Zap, ArrowLeft, Users, GraduationCap, CalendarClock, ClipboardList, Tag, RefreshCw, Receipt, AlertTriangle, Trophy, DollarSign, ListOrdered, UserCheck, QrCode, Package, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const navItems = [
   { to: "/arena/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/arena/dashboard/perfil", label: "Perfil", icon: UserCheck },
   { to: "/arena/dashboard/torneios", label: "Torneios", icon: Trophy },
   { to: "/arena/dashboard/financeiro", label: "Financeiro", icon: DollarSign },
+  { to: "/arena/dashboard/produtos", label: "Produtos", icon: Package },
   { to: "/arena/dashboard/transacoes", label: "Transações", icon: ListOrdered },
   { to: "/arena/dashboard/alunos", label: "Alunos", icon: Users },
   { to: "/arena/dashboard/professores", label: "Professores", icon: GraduationCap },
+  { to: "/arena/dashboard/equipe", label: "Equipe", icon: ShieldCheck },
   { to: "/arena/dashboard/aulas", label: "Aulas", icon: CalendarClock },
   { to: "/arena/dashboard/matriculas", label: "Matrículas", icon: ClipboardList },
   { to: "/arena/dashboard/planos", label: "Planos", icon: Tag },
@@ -21,10 +24,8 @@ const navItems = [
   { to: "/arena/dashboard/quadras", label: "Quadras", icon: Grid3X3 },
   { to: "/arena/dashboard/horarios", label: "Horários", icon: Clock },
   { to: "/arena/dashboard/reservas", label: "Reservas", icon: CalendarCheck },
+  { to: "/arena/dashboard/qr", label: "QR físico", icon: QrCode },
   { to: "/arena/dashboard/patrocinios", label: "Patrocínios", icon: Handshake },
-  { to: "/arena/dashboard/acoes-ia", label: "Ações IA", icon: Sparkles },
-  { to: "/arena/dashboard/autonomia", label: "Autonomia", icon: ShieldCheck },
-  { to: "/arena/dashboard/control-tower", label: "Control Tower", icon: Gauge },
 ];
 
 const ArenaLayout = () => {
