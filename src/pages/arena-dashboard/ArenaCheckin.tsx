@@ -64,7 +64,7 @@ const ArenaCheckin = () => {
               <CheckCircle2 className="h-12 w-12 text-primary mx-auto" />
               <h1 className="text-xl font-display text-foreground">Check-in confirmado</h1>
               {classTitle && <p className="text-sm text-muted-foreground">{classTitle}</p>}
-              <Link to="/feed"><Button className="w-full">Voltar ao feed</Button></Link>
+              <Link to="/arena/dashboard"><Button className="w-full">Voltar ao dashboard</Button></Link>
             </>
           )}
           {state === "error" && (
@@ -72,7 +72,7 @@ const ArenaCheckin = () => {
               <XCircle className="h-12 w-12 text-destructive mx-auto" />
               <h1 className="text-xl font-display text-foreground">Check-in não realizado</h1>
               <p className="text-sm text-muted-foreground">{message}</p>
-              <Link to="/feed"><Button variant="outline" className="w-full">Voltar</Button></Link>
+              <Link to="/arena/dashboard"><Button variant="outline" className="w-full">Voltar</Button></Link>
             </>
           )}
         </CardContent>
