@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Percent } from "lucide-react";
+import { ImageUploadField } from "@/components/shared/ImageUploadField";
 
 const OrganizerSettings = () => {
   const { tenant, settings, refresh } = useTenant();
@@ -84,15 +85,27 @@ const OrganizerSettings = () => {
             <Label>Razão social</Label>
             <Input value={form.legal_name} onChange={(e) => setForm({ ...form, legal_name: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Logo URL</Label>
-              <Input value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} placeholder="https://..." />
-            </div>
-            <div>
-              <Label>Favicon URL</Label>
-              <Input value={form.favicon_url} onChange={(e) => setForm({ ...form, favicon_url: e.target.value })} placeholder="https://..." />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ImageUploadField
+              label="Logo"
+              value={form.logo_url || null}
+              onChange={(url) => setForm({ ...form, logo_url: url ?? "" })}
+              bucket="company-images"
+              pathPrefix={`tenants/${tenant?.id}/branding`}
+              previewShape="square"
+              aspect="1/1"
+              helperText="Logo da marca, formato quadrado recomendado"
+            />
+            <ImageUploadField
+              label="Favicon"
+              value={form.favicon_url || null}
+              onChange={(url) => setForm({ ...form, favicon_url: url ?? "" })}
+              bucket="company-images"
+              pathPrefix={`tenants/${tenant?.id}/favicon`}
+              previewShape="square"
+              aspect="1/1"
+              helperText="Ícone do site, idealmente .png 64×64"
+            />
           </div>
         </CardContent>
       </Card>
