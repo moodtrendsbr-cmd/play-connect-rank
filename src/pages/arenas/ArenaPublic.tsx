@@ -18,6 +18,7 @@ const ArenaPublic = () => {
   const { arenaSlug } = useParams();
   const { user } = useAuth();
   const [arena, setArena] = useState<any>(null);
+  const [isOwner, setIsOwner] = useState(false);
   const [courts, setCourts] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
   const [partners, setPartners] = useState<any[]>([]);
@@ -29,6 +30,11 @@ const ArenaPublic = () => {
       const { data: arenaData } = await supabase.from("arenas_public").select("*").eq("slug", arenaSlug).maybeSingle();
       if (!arenaData) { setLoading(false); return; }
       setArena(arenaData);
+
+      if (user?.id) {
+        const { data: own } = await supabase.from("arenas").select("id").eq("slug", arenaSlug).eq("owner_user_id", user.id).maybeSingle();
+        setIsOwner(!!own);
+      }
 
       const [c, l, p, inv] = await Promise.all([
         supabase.from("courts").select("*").eq("arena_id", arenaData.id).eq("is_active", true).order("created_at"),
