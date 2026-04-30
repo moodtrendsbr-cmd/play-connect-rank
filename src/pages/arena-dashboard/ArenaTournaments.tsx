@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trophy, Users, DollarSign, Calendar, ExternalLink } from "lucide-react";
+import { Trophy, Users, DollarSign, Calendar, ExternalLink, Plus } from "lucide-react";
 
 const ArenaTournaments = () => {
   const { arena } = useOutletContext<{ arena: any }>();
@@ -59,15 +59,31 @@ const ArenaTournaments = () => {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Trophy className="h-6 w-6" /> Torneios
-        </h1>
-        <p className="text-sm text-muted-foreground">Torneios vinculados a esta arena ou ao seu organizador.</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Trophy className="h-6 w-6" /> Torneios
+          </h1>
+          <p className="text-sm text-muted-foreground">Torneios vinculados a esta arena ou ao seu organizador.</p>
+        </div>
+        <Button asChild size="sm" className="gap-1.5">
+          <Link to={`/tournaments/create?arena_id=${arena?.id ?? ""}`}>
+            <Plus className="h-4 w-4" /> Criar torneio
+          </Link>
+        </Button>
       </div>
 
       {tournaments.length === 0 ? (
-        <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum torneio encontrado.</CardContent></Card>
+        <Card>
+          <CardContent className="py-10 text-center space-y-3">
+            <p className="text-muted-foreground">Nenhum torneio encontrado.</p>
+            <Button asChild size="sm" className="gap-1.5">
+              <Link to={`/tournaments/create?arena_id=${arena?.id ?? ""}`}>
+                <Plus className="h-4 w-4" /> Criar primeiro torneio
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-3">
           {tournaments.map((t) => (
