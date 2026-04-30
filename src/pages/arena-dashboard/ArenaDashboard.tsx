@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { QrEntryCard } from "@/components/conversational/QrEntryCard";
 import { cn } from "@/lib/utils";
 import { NextStepsCard } from "@/components/arena/NextStepsCard";
-import { useWhatsAppConnection } from "@/hooks/useWhatsAppConnection";
+import { useWhatsAppConnectionStatus } from "@/hooks/useWhatsAppConnection";
 
 // ---------- Local UI helpers ----------
 
