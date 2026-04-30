@@ -131,6 +131,10 @@ const ArenaDashboard = () => {
   const sourceIcon = (s: string) => s === "orkym" ? Bot : s === "manual" ? UserIcon : Cog;
   const sourceLabel = (s: string) => s === "orkym" ? "ORKYM" : s === "manual" ? "Manual" : "Sistema";
 
+  if (!arena) {
+    return <p className="text-sm text-muted-foreground">Carregando arena…</p>;
+  }
+
   return (
     <div className="space-y-8">
       {/* HEADER */}
