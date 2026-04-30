@@ -1,158 +1,111 @@
-## Autonomous Growth Engine (Phase G)
+## Phase H — Control Tower AI
 
-Costura fina sobre Phases 8/9/10/12.9/13. Zero IA local. Zero tabelas paralelas. ORKYM decide, MoodPlay detecta/executa/limita/registra.
+A thin **synthesis layer** that consolidates existing signals (Phases 8/9/10/12.x/13/G) into a single executive view per scope (admin / tenant / arena / organizer / company). It does **not** add ML, parallel systems, or local AI — it reuses ORKYM for any reasoning and the existing growth/revenue/opportunity infrastructure for data.
 
-### Mapeamento "spec → infra existente"
+### What it delivers
 
-| Spec | Já existe | Adicionar agora |
-|---|---|---|
-| Modos suggest/approve/auto | `autonomy_policies` + `autonomy_resolve_policy` | reusar — só estender allowlist |
-| Guardrails / kill-switch / cooldown / max_amount / allowed_hours | `autonomy_check_guardrails` | só estender condições com `max_daily_budget` |
-| Tier / quota por plano | `orkym_get_tenant_tier` + `orkym_check_quota` | reusar |
-| Detecção de oportunidades | `orkym_generate_periodic_triggers`, `orkym_generate_optimization_triggers` | + 4 detectores novos |
-| ORKYM decide | `orkym-invoke` + `orkym-proactive-process` (proactive/decide) | + ação `growth/decide` |
-| Execução | `orkym-execute-action` + `moodplay-execute-action` | + 6 novos action_types na allowlist |
-| Outbound WA | `wa-send-message` (eligibility+cooldown) | reusar |
-| Atribuição de receita / ROI / cap adaptativo | `orkym_revenue_attribution` + `orkym_roi_multiplier` | reusar |
-| Feed monetização | `ad_campaigns` + `feed_unified_v` + `purchase_boost` | reusar |
-| Budget control | — | **novo: `growth_budgets` + `growth_check_budget`** |
-| Dashboard | `RevenueDashboardPanel`, `OrkymActionsCard`, `ProactiveTriggersPanel` | + `GrowthDashboardPanel` agregando |
-
-### 1. Migration `phase_g_growth_engine.sql`
-
-**Allowlist Phase 8 estendida** (em `autonomy_action_risk` + ingest):
-- `tournament_boost` (high → bloqueado em auto por padrão; arena_owner pode aprovar)
-- `send_proactive_message` (low — já passa por eligibility)
-- `create_campaign` (high)
-- `recommend_product` (low)
-- `reactivation_message` (low)
-- `fill_idle_slots` (medium)
-- `upsell_plan` (medium)
-
-**Tabela `growth_budgets`** (única tabela nova):
+For each scope, one consolidated payload:
 ```
-scope_type ('global'|'tenant'|'arena'|'company'|'campaign')
-scope_id uuid null
-period ('daily'|'weekly'|'monthly')
-budget_brl numeric, spent_brl numeric default 0
-boost_count_limit int null, boost_count_used int default 0
-period_started_at timestamptz, active bool
-UNIQUE(scope_type, scope_id, period)
+{ health_score: 0-100, alerts: [], opportunities: [], recommendations: [], next_best_action }
 ```
-RLS: admin tudo; tenant_admin tenant/arena/company do seu tenant; arena_owner sua arena; company owner sua company. Service role bypass.
+Surfaced as a single `ControlTowerAIPanel` card mounted at the top of each Control Tower page.
 
-**RPC `growth_check_budget(_scope_type, _scope_id, _amount_brl)`** SECURITY DEFINER:
-- soma `spent_brl` do período corrente vs `budget_brl`
-- aplica também budget pai (arena → tenant → global)
-- retorna `{allowed, remaining_brl, blocked_by}`
-- chamado pelo guardrail `autonomy_check_guardrails` quando action_type ∈ {tournament_boost, create_campaign, fill_idle_slots, upsell_plan} antes de permitir auto.
+---
 
-**RPC `growth_record_spend(_scope_type,_scope_id,_amount_brl,_campaign_id)`** SECURITY DEFINER:
-- chamado pelo `trg_boost_activate_on_paid` para incrementar `spent_brl`/`boost_count_used`.
+### 1. Backend — single SQL function (no new tables)
 
-**Detectores novos em `orkym_generate_periodic_triggers`** (já roda no `orkym-cron-tick`):
-- `tournament_low_enrollment` — torneios públicos start_date 3-7d, enrollment < 30% dos slots → enqueue (priority=high, dedup=`growth:low_enroll:<tournament_id>:<day>`)
-- `idle_court_slot` — `arena_court_slots` sem booking nas próximas 48h em horário de pico (18-22h) → enqueue (medium)
-- `inactive_athlete` — atleta sem booking/enrollment em 30d com opt-in → enqueue (low)
-- `near_rank_up` — `athlete_xp` a < 100 XP do próximo nível → enqueue (low)
-- `top_converting_product` — já existe via `marketplace_orders` trigger → reusar
-- `low_campaign_conversion` — já existe via `orkym_generate_optimization_triggers` → reusar
+Add migration with one read-only RPC:
 
-**View `v_growth_dashboard`** (security_invoker):
-agrega por tenant/arena/company:
-- ações sugeridas/aprovadas/auto-executadas (last 30d)
-- ações bloqueadas por guardrail (com source: budget|kill_switch|tier|cooldown|policy)
-- receita atribuída (`orkym_revenue_attribution` filtrada)
-- ROI por action_type (revenue / spent_brl)
-- top trigger types por receita
+`public.control_tower_summary(_scope_type text, _scope_id uuid)` → `jsonb`
+- Scopes: `'admin' | 'tenant' | 'arena' | 'organizer' | 'company'`
+- `SECURITY INVOKER` — RLS on underlying tables/views does the access control
+- Reads only from already-existing sources:
+  - `v_growth_dashboard` (suggested/auto/blocked/revenue 30d)
+  - `orkym_revenue_attribution` (revenue, ROI)
+  - `orkym_triggers_queue` (pending opportunities already detected by Phase G)
+  - `orkym_action_proposals` (pending high-priority proposals → recommendations)
+  - `financial_transactions` (revenue trend 7d vs prev 7d)
+  - `enrollments` + `tournaments` (low-fill upcoming)
+  - `court_bookings` + `arena_court_slots` (occupancy)
+  - `athlete_xp` / `xp_events` (engagement signal — admin/tenant only)
+  - `growth_budgets` (budget headroom)
 
-### 2. Edge functions
+**Health score (0–100)** — weighted average of 5 sub-scores, each 0–100:
+- `enrollment_score` (paid vs capacity for active tournaments)
+- `revenue_score` (last 7d vs previous 7d trend, capped)
+- `occupancy_score` (booked slots vs available, last 14d)
+- `engagement_score` (DAU-style: distinct profiles with activity 7d vs 30d)
+- `orkym_adoption_score` (auto+approved / suggested, 30d)
 
-**Estender `orkym-proactive-process`**: além de `proactive/decide`, claim batch também roteia triggers de growth para `orkym-invoke` action `growth/decide`. ORKYM responde:
-```
-{
-  action_type: "tournament_boost"|"send_proactive_message"|...,
-  confidence: 0..1,
-  expected_impact_brl: number,
-  recommended: bool,
-  payload: {...},
-  proposal_text?: string  // se for proactive_message
-}
-```
-Se `recommended=false` → marca trigger `skipped`.
-Se `recommended=true` → injeta em `orkym_ingest_actions` (Phase 8 pipeline). Policy resolver + tier + guardrail + budget decidem `suggest|approve|auto`. Se cair em `auto` e action for `send_proactive_message` → chama `wa-send-message` direto (já com eligibility/cooldown).
+Weights default `0.25/0.25/0.20/0.15/0.15`; missing sub-scores are skipped and weights renormalized so empty scopes don't punish themselves.
 
-**Sem nova edge function** — reusa `orkym-invoke`, `orkym-execute-action`, `moodplay-execute-action`, `wa-send-message`, `orkym-cron-tick`, `orkym-proactive-process`.
+**Alerts** — deterministic rules from existing data:
+- `low_enrollment_tournament` (pending triggers of type `tournament_low_enrollment`)
+- `revenue_drop` (7d revenue < 70% of previous 7d, both >0)
+- `no_recent_checkins` (active tournament today, 0 check-ins)
+- `inactive_users_spike` (count of `inactive_athlete` triggers)
+- `low_roi_campaigns` (ad_campaigns active 30d with ROI < 0.5)
+- `budget_exhausted` (any `growth_budgets` ≥ 90% spent)
 
-**Novos handlers em `_shared/orkym-handlers.ts`** para os 6 action_types novos:
-- `tournament_boost` → chama `purchase_boost` RPC com `_kind='tournament_boost'` + cria `financial_transactions` pendente (precisa pagamento — só executa se policy=`approve` com aprovador humano OU se houver budget pré-aprovado via `growth_budgets`)
-- `create_campaign` → INSERT `ad_campaigns` (status='pending') — humano aprova
-- `recommend_product` / `reactivation_message` → roteia para `wa-send-message` (passa por eligibility)
-- `fill_idle_slots` → cria `ad_campaigns kind='company_boost'` (low) ou envia mensagem para alunos do bairro (passa por eligibility)
-- `upsell_plan` → cria `arena_operational_tasks` para o owner (manual) OU mensagem (auto se eligibility passar)
+**Opportunities** — pulled directly from `orkym_triggers_queue` open items (already deduped by Phase G) plus:
+- `idle_court_slots` (next 14d, never-booked recurring slots)
+- `trending_product` (top product by 7d orders growth, company scope)
+- `near_rank_up_athletes` count (admin/tenant)
+- `sponsorable_company` (companies with ≥X reach but no active campaign — admin only)
+
+**Recommendations** — each item is `{ id, title, body, action_type, payload, impact, effort }` where `action_type` matches the **existing Phase G allowlist** (`tournament_boost`, `reactivation_message`, `fill_idle_slots`, `upsell_plan`, `create_campaign`, `recommend_product`, `send_proactive_message`). Impact/effort are heuristics (low/medium/high).
+
+**Next Best Action (NBA)** — pick the recommendation with `max(impact_weight − effort_weight)`, tie-break by alert severity it resolves.
+
+### 2. ORKYM hand-off (no duplication)
+
+The summary is **descriptive**. Any actual decision/personalization stays in ORKYM:
+- Each recommendation in the UI has a single CTA → reuses `invokeOrkym('growth', 'decide', { entity: { trigger_id|opportunity }, context })` which already returns a proposal that flows through the existing `orkym_action_proposals` → `orkym-execute-action` pipeline.
+- "Send via WhatsApp" CTAs go through existing `wa-send-message` (never direct).
+- Eligibility, cooldown, opt-in, budget guardrails stay enforced by existing RPCs (`autonomy_check_guardrails`, `growth_check_budget`).
+
+No new edge function. No `control_tower-decide` route. No new ORKYM domain.
 
 ### 3. Frontend
 
-**Novo `src/components/growth/GrowthDashboardPanel.tsx`** consumindo `v_growth_dashboard`:
-- 4 KPI cards: Sugeridas / Auto-executadas / Bloqueadas / Receita atribuída
-- Tabela de últimas 20 ações com badge de policy source (reusa `PolicyDecisionBadge`)
-- Gráfico ROI por action_type (recharts) — semanal últimos 30d
-- Painel de budgets: barra de gasto vs limite por escopo
+**New files:**
+- `src/hooks/useControlTowerSummary.ts` — wraps RPC, returns `{ summary, loading, error, refresh }`. Polls every 60s while panel mounted.
+- `src/components/control-tower/ControlTowerAIPanel.tsx` — single card with 4 blocks:
+  1. **Health Score** (big number 0–100 + colored gauge: ≥80 emerald, 50–79 amber, <50 destructive) + 5 mini-bars for sub-scores.
+  2. **Alerts** (max 3 visible, "+N mais") — severity dot, one-liner, optional "Ver" link.
+  3. **Opportunities** (max 3) — title + impact tag.
+  4. **Próxima melhor ação (NBA)** — highlighted block with title, 1-line rationale, primary CTA "Executar via ORKYM" + secondary "Ver detalhes" (opens existing `ActionProposalDetail` after proposal is created).
+- `src/components/control-tower/HealthScoreBadge.tsx` — small reusable score chip.
 
-**Novo `src/components/growth/BudgetEditor.tsx`** (admin/tenant/arena/company):
-- CRUD de `growth_budgets` por escopo permitido pelo RLS
-- Form: período, budget_brl, boost_count_limit, active
+**Mounts (top of each page, above existing content):**
+- `src/pages/admin/AdminControlTower.tsx` → `<ControlTowerAIPanel scope={{type:'admin'}} />`
+- `src/pages/tenant/TenantDashboard.tsx` → `scope={{type:'tenant', id: tenant.id}}`
+- `src/pages/arena-dashboard/ArenaControlTower.tsx` → `scope={{type:'arena', id: arena.id}}`
+- `src/pages/organizer/OrganizerDashboard.tsx` → `scope={{type:'organizer', id: organizerId}}`
+- `src/pages/company/CompanyDashboard.tsx` → `scope={{type:'company', id: company.id}}`
 
-**Mounts**:
-- `src/pages/admin/AdminControlTower.tsx` → adiciona aba "Growth"
-- `src/pages/arena-dashboard/ArenaDashboard.tsx` → bloco GrowthDashboardPanel scope=arena
-- `src/pages/tenant/TenantDashboard.tsx` → scope=tenant
-- `src/pages/company/CompanyDashboard.tsx` → scope=company
-- `src/pages/admin/AdminMonetization.tsx` → BudgetEditor global
-- Hook `src/hooks/useGrowthDashboard.ts` (scope-aware, reusa padrão de `useRevenueKpis`).
+### 4. Memory
 
-### 4. Memória
-Criar `mem/features/autonomous-growth.md` documentando: detectores, action_types novos, budget guardrail, fluxo `growth/decide`, dashboards, hard limits.
-Atualizar `mem://index.md` com entrada `[Autonomous Growth Engine](mem://features/autonomous-growth)` e linha de Core: "Phase G growth: detectors→ORKYM decide→Phase 8 ingest. Budget via `growth_budgets`+`growth_check_budget` no guardrail. Nunca criar IA local nem bypass de eligibility/cooldown/budget."
+New file `mem/features/control-tower-ai.md` documenting:
+- Health score formula + weights
+- Alert/opportunity/recommendation catalog
+- Hard rule: Control Tower is **read-only synthesis**; all decisions/executions go through ORKYM + existing guardrails. No local AI, no parallel proposal/budget tables.
 
-### 5. Testes obrigatórios (extension dos integration_test.ts existentes)
+Update `mem://index.md` Core line + Memories entry.
 
-1. trigger `tournament_low_enrollment` enfileira corretamente (SQL)
-2. ORKYM `recommended=false` marca skipped (mock orkym-invoke)
-3. ação `tournament_boost` em auto sem budget → guardrail rebaixa para approve com `policy_source='budget_block'`
-4. ação `send_proactive_message` em auto sem opt-in → eligibility bloqueia
-5. ação executada com `financial_transactions paid` → `orkym_attribute_revenue` registra `attribution_type='proactive'` e `growth_record_spend` incrementa
-6. kill_switch ativo → todas ações de growth caem para suggest
-7. tier free → `create_campaign`/`tournament_boost` em auto rebaixados (tier_no_auto)
+---
 
-### Hard rules (não negociar)
+### What we explicitly will NOT do
 
-- Eligibility, cooldown, opt-in **nunca** são bypassados — nem por enterprise tier.
-- `tournament_boost`/`create_campaign`/`upsell_plan` em `auto` SEMPRE checam `growth_check_budget` antes; bloqueio rebaixa para `approve`.
-- Toda ação financeira (`tournament_boost`) só executa após `financial_transactions.status='paid'` (já é o trigger atual `trg_boost_activate_on_paid`).
-- Zero IA local: `orkym-invoke action='growth/decide'` é a ÚNICA origem da decisão.
-- Outbound WA SOMENTE via `wa-send-message`.
-- Sem novas edge functions; sem novas tabelas além de `growth_budgets`.
+- No new tables (reuse `orkym_triggers_queue`, `orkym_action_proposals`, `orkym_revenue_attribution`, `growth_budgets`, `v_growth_dashboard`).
+- No new edge function (RPC only; ORKYM calls reuse `orkym-invoke`).
+- No ML, no embeddings, no local scoring model — health score is a transparent weighted average of deterministic SQL.
+- No multi-page BI dashboard — one panel per scope, 4 blocks, mobile-friendly.
+- No bypass of opt-in/cooldown/budget — every CTA flows through the existing autonomy + growth guardrails.
 
-### Arquivos
+### Success criteria
 
-**Novos**
-- `supabase/migrations/<ts>_phase_g_growth_engine.sql`
-- `src/components/growth/GrowthDashboardPanel.tsx`
-- `src/components/growth/BudgetEditor.tsx`
-- `src/hooks/useGrowthDashboard.ts`
-- `mem/features/autonomous-growth.md`
-
-**Editados**
-- `supabase/functions/_shared/orkym-handlers.ts` (6 handlers novos)
-- `supabase/functions/orkym-proactive-process/index.ts` (rota growth/decide)
-- `supabase/functions/orkym-cron-tick/index.ts` (chama detectores novos via RPC já existente)
-- `src/pages/admin/AdminControlTower.tsx`, `AdminMonetization.tsx`
-- `src/pages/arena-dashboard/ArenaDashboard.tsx`
-- `src/pages/tenant/TenantDashboard.tsx`
-- `src/pages/company/CompanyDashboard.tsx`
-- `src/lib/orkym.ts` (tipos `OrkymActionType` extendidos)
-- `src/integrations/supabase/types.ts` (auto-gerado)
-- `mem://index.md`
-
-Aprova para implementar?
+- Owner opens dashboard → sees one number (health) + ≤3 alerts + ≤3 opportunities + 1 NBA in <2s.
+- NBA "Executar" creates a real `orkym_action_proposals` row via existing pipeline (no shortcut).
+- Empty/new tenants get a graceful "Sem dados suficientes ainda" with neutral score, not zeros.
+- RLS prevents cross-tenant reads (verified by RPC being `SECURITY INVOKER`).
