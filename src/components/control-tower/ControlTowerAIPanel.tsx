@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Gauge, RefreshCw, Loader2, CheckCircle2 } from "lucide-react";
 import { useControlTowerSummary, type CTScope, type CTRecommendation } from "@/hooks/useControlTowerSummary";
 import { HealthScoreBadge, scoreBg, scoreColor } from "./HealthScoreBadge";
-import { invokeOrkym } from "@/lib/orkym";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   copyForAction,
@@ -20,48 +20,75 @@ const SEV_DOT: Record<string, string> = {
   info: "bg-sky-500",
 };
 
-type RunState = "idle" | "running" | "done";
+type RunState = "idle" | "starting" | "running" | "done";
 
 export function ControlTowerAIPanel({
   scope,
-  tenantId,
+  tenantId: _tenantId,
 }: {
   scope: CTScope;
   tenantId?: string;
 }) {
   const { summary, loading, error, refresh } = useControlTowerSummary(scope);
   const [runStates, setRunStates] = useState<Record<string, RunState>>({});
+  const promotionTimers = useRef<Record<string, number>>({});
 
-  const effectiveTenantId =
-    tenantId ?? (scope.type === "tenant" ? scope.id : undefined);
+  const setRunState = (id: string, next: RunState) =>
+    setRunStates((s) => ({ ...s, [id]: next }));
 
   const executeRec = async (rec: CTRecommendation) => {
-    if (!effectiveTenantId) {
-      toast.error("Não conseguimos agora. Tente novamente em instantes.");
-      return;
-    }
     const copy = copyForAction(rec.action_type);
-    setRunStates((s) => ({ ...s, [rec.id]: "running" }));
-    const toastId = toast.loading("Estamos cuidando disso…");
-    const res = await invokeOrkym("growth", "decide", {
-      tenant_id: effectiveTenantId,
-      arena_id: scope.type === "arena" ? scope.id : undefined,
-      entity: { trigger_id: rec.trigger_id, entity_type: rec.entity_type, entity_id: rec.entity_id },
-      context: { source: "control_tower_ai", action_type: rec.action_type },
-    });
+    setRunState(rec.id, "starting");
 
-    if (!res.ok) {
+    // After 800ms still in flight → switch label to "Em andamento…"
+    const timerId = window.setTimeout(() => {
+      setRunStates((s) =>
+        s[rec.id] === "starting" ? { ...s, [rec.id]: "running" } : s,
+      );
+    }, 800);
+    promotionTimers.current[rec.id] = timerId;
+
+    const toastId = toast.loading("Estamos cuidando disso…");
+
+    const { data, error: invokeErr } = await supabase.functions.invoke(
+      "control-tower-execute",
+      {
+        body: {
+          scope: { type: scope.type, id: (scope as any).id ?? null },
+          recommendation: {
+            id: rec.id,
+            title: rec.title,
+            body: rec.body,
+            action_type: rec.action_type,
+            entity_type: rec.entity_type,
+            entity_id: rec.entity_id,
+            payload: {},
+          },
+        },
+      },
+    );
+
+    window.clearTimeout(promotionTimers.current[rec.id]);
+    delete promotionTimers.current[rec.id];
+
+    const ok = !invokeErr && (data as any)?.ok === true;
+    const status = (data as any)?.status as string | undefined;
+
+    if (!ok) {
       toast.error("Não conseguimos agora. Tente novamente em instantes.", { id: toastId });
-      setRunStates((s) => ({ ...s, [rec.id]: "idle" }));
+      setRunState(rec.id, "idle");
       return;
     }
 
-    if (res.actions_proposed === 0) {
-      toast.success("Tudo já está sob controle.", { id: toastId });
-    } else {
-      toast.success(copy.feedback, { id: toastId });
+    if (status === "blocked") {
+      toast.success("Tudo já está sob controle por agora.", { id: toastId });
+      setRunState(rec.id, "done");
+      refresh();
+      return;
     }
-    setRunStates((s) => ({ ...s, [rec.id]: "done" }));
+
+    toast.success(copy.feedback, { id: toastId });
+    setRunState(rec.id, "done");
     refresh();
   };
 
