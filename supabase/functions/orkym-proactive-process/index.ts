@@ -44,17 +44,45 @@ const TRIGGER_TO_CATEGORY: Record<string, string> = {
   low_campaign_performance: "operations",
   revenue_drop: "operations",
   relevant_tournament: "marketing",
-  // P0 #5 — athlete tournament notifications
   enrollment_created: "operations",
   enrollment_paid: "operations",
   match_result: "operations",
-  // Phase G — Autonomous Growth Engine
   tournament_low_enrollment: "marketing",
   inactive_athlete: "retention",
   near_rank_up: "retention",
   idle_court_slot: "retention",
   low_message_performance: "operations",
+  class_low_enrollment: "operations",
+  low_product_visibility: "marketing",
+  tournament_high_demand: "marketing",
+  low_arena_activity: "marketing",
+  high_search_demand: "marketing",
 };
+
+// Lower number = higher priority (tie-breaker when multiple triggers
+// land for the same user in the same batch).
+const TRIGGER_PRIORITY: Record<string, number> = {
+  tournament_low_enrollment: 1,
+  low_enrollment: 1,
+  idle_court_slot: 2,
+  idle_slot: 2,
+  inactive_athlete: 3,
+  class_low_enrollment: 4,
+  near_rank_up: 5,
+  low_product_visibility: 6,
+  top_product: 6,
+  tournament_high_demand: 7,
+  low_message_performance: 8,
+  low_campaign_performance: 8,
+  low_arena_activity: 9,
+  high_search_demand: 10,
+  revenue_drop: 11,
+  relevant_tournament: 12,
+};
+
+function priorityOf(triggerType: string): number {
+  return TRIGGER_PRIORITY[triggerType] ?? 99;
+}
 
 function safeJson(b: unknown, status = 200) {
   return new Response(JSON.stringify(b), {
