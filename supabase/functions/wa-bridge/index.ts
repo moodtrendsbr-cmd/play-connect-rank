@@ -2,6 +2,13 @@
 // verify_jwt = false (public webhook validated via HMAC OR mock mode)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { getMemoryContext } from "../_shared/memory.ts";
+import {
+  blockedReply,
+  confirmationFor,
+  declinedReply,
+  isAffirmative,
+  isNegative,
+} from "../_shared/confirmation-templates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
