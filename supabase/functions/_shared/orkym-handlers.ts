@@ -162,7 +162,7 @@ export async function dispatchAction(
           company_id: (payload as any).company_id,
           name: p.title,
           title: p.title,
-          kind: (payload as any).kind ?? "feed",
+          kind: (payload as any).kind ?? "feed_highlight",
           status: "pending",
           priority: 5,
           budget: (payload as any).budget ?? 0,
@@ -181,6 +181,184 @@ export async function dispatchAction(
         ok: true,
         result: { ad_campaign_id: data.id, status: "pending" },
       };
+    }
+
+    // ===========================================================
+    // Phase H — Growth Engine handlers (Control Tower 1-click)
+    // All flows reuse existing tables; ZERO new business logic.
+    // ===========================================================
+
+    case "tournament_boost":
+    case "create_campaign":
+    case "product_boost":
+    case "company_boost": {
+      const kindMap: Record<string, string> = {
+        tournament_boost: "tournament_highlight",
+        product_boost: "marketplace_highlight",
+        company_boost: "arena_highlight",
+        create_campaign: "feed_highlight",
+      };
+      const kind = kindMap[p.action_type];
+      const targetType =
+        p.action_type === "tournament_boost" ? "tournament"
+        : p.action_type === "product_boost" ? "product"
+        : p.action_type === "company_boost" ? "arena"
+        : ((payload as any).target_type ?? null);
+      const targetId =
+        (payload as any).target_id ?? p.related_entity_id ?? null;
+
+      // company_id fallback: payload → first company of tenant
+      let companyId = (payload as any).company_id as string | undefined;
+      if (!companyId) {
+        const { data: c } = await admin
+          .from("companies")
+          .select("id")
+          .eq("tenant_id", p.tenant_id)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        companyId = (c as any)?.id;
+      }
+      if (!companyId) return { ok: false, error: "no_company_for_tenant" };
+
+      const durationDays = Number((payload as any).duration_days ?? 7);
+      const { data, error } = await admin
+        .from("ad_campaigns")
+        .insert({
+          tenant_id: p.tenant_id,
+          company_id: companyId,
+          name: p.title,
+          title: p.title,
+          kind,
+          status: "active",
+          priority: 5,
+          budget: Number((payload as any).budget ?? 0),
+          target_type: targetType,
+          target_id: targetId,
+          duration_days: durationDays,
+          starts_at: new Date().toISOString(),
+          ends_at: new Date(Date.now() + durationDays * 24 * 3600_000).toISOString(),
+        })
+        .select("id")
+        .single();
+      if (error) return { ok: false, error: error.message };
+
+      // Best-effort: enqueue audience trigger for tournament_boost
+      let queued = 0;
+      if (p.action_type === "tournament_boost" && targetId) {
+        const dedup = `ct:tb:${targetId}:${new Date().toISOString().slice(0, 10)}`;
+        const { error: qErr } = await admin
+          .from("orkym_triggers_queue")
+          .insert({
+            tenant_id: p.tenant_id,
+            arena_id: p.arena_id,
+            profile_type: "tenant",
+            trigger_type: "relevant_tournament",
+            entity_type: "tournament",
+            entity_id: targetId,
+            priority: "medium",
+            dedup_key: dedup,
+            payload: { source: "control_tower", campaign_id: data.id },
+          });
+        if (!qErr) queued = 1;
+      }
+      return {
+        ok: true,
+        result: { ad_campaign_id: data.id, kind, queued },
+      };
+    }
+
+    case "fill_idle_slots": {
+      if (!p.arena_id) return { ok: false, error: "arena_id_required" };
+      const dedup = `ct:fill:${p.arena_id}:${new Date().toISOString().slice(0, 10)}`;
+      const { error } = await admin
+        .from("orkym_triggers_queue")
+        .insert({
+          tenant_id: p.tenant_id,
+          arena_id: p.arena_id,
+          profile_type: "arena",
+          trigger_type: "idle_court_slot",
+          entity_type: p.related_entity_type,
+          entity_id: p.related_entity_id,
+          priority: "medium",
+          dedup_key: dedup,
+          payload: { source: "control_tower", ...payload },
+        });
+      if (error && !String(error.message).includes("duplicate")) {
+        return { ok: false, error: error.message };
+      }
+      return { ok: true, result: { queued: 1, kind: "idle_court_slot" } };
+    }
+
+    case "reactivation_message": {
+      const dedup = `ct:react:${p.tenant_id}:${p.arena_id ?? "-"}:${new Date().toISOString().slice(0, 10)}`;
+      const { error } = await admin
+        .from("orkym_triggers_queue")
+        .insert({
+          tenant_id: p.tenant_id,
+          arena_id: p.arena_id,
+          user_id: p.related_entity_type === "athlete" ? p.related_entity_id : null,
+          profile_type: "athlete",
+          trigger_type: "inactive_athlete",
+          entity_type: p.related_entity_type,
+          entity_id: p.related_entity_id,
+          priority: "medium",
+          dedup_key: dedup,
+          payload: { source: "control_tower", ...payload },
+        });
+      if (error && !String(error.message).includes("duplicate")) {
+        return { ok: false, error: error.message };
+      }
+      return { ok: true, result: { queued: 1, kind: "inactive_athlete" } };
+    }
+
+    case "send_proactive_message": {
+      const triggerType = (payload as any).trigger_type ?? "relevant_tournament";
+      const dedup =
+        (payload as any).dedup_key ??
+        `ct:msg:${p.tenant_id}:${triggerType}:${p.related_entity_id ?? "-"}:${new Date().toISOString().slice(0, 10)}`;
+      const { error } = await admin
+        .from("orkym_triggers_queue")
+        .insert({
+          tenant_id: p.tenant_id,
+          arena_id: p.arena_id,
+          user_id: (payload as any).user_id ?? null,
+          profile_type: (payload as any).profile_type ?? "athlete",
+          trigger_type: triggerType,
+          entity_type: p.related_entity_type,
+          entity_id: p.related_entity_id,
+          priority: (p.priority as any) ?? "medium",
+          dedup_key: dedup,
+          payload: { source: "control_tower", ...payload },
+        });
+      if (error && !String(error.message).includes("duplicate")) {
+        return { ok: false, error: error.message };
+      }
+      return { ok: true, result: { queued: 1, kind: triggerType } };
+    }
+
+    case "recommend_product":
+    case "upsell_plan": {
+      const triggerType =
+        p.action_type === "recommend_product" ? "top_product" : "relevant_tournament";
+      const dedup = `ct:${p.action_type}:${p.tenant_id}:${p.related_entity_id ?? "-"}:${new Date().toISOString().slice(0, 10)}`;
+      const { error } = await admin
+        .from("orkym_triggers_queue")
+        .insert({
+          tenant_id: p.tenant_id,
+          arena_id: p.arena_id,
+          profile_type: "athlete",
+          trigger_type: triggerType,
+          entity_type: p.related_entity_type,
+          entity_id: p.related_entity_id,
+          priority: "medium",
+          dedup_key: dedup,
+          payload: { source: "control_tower", ...payload },
+        });
+      if (error && !String(error.message).includes("duplicate")) {
+        return { ok: false, error: error.message };
+      }
+      return { ok: true, result: { queued: 1, kind: triggerType } };
     }
 
     default:
