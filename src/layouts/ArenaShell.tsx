@@ -11,6 +11,7 @@ import { WhatsAppStatusBadge } from "@/components/conversational/WhatsAppStatusB
 const ArenaShell = () => {
   const { user, userRole, loading } = useAuth();
   const location = useLocation();
+  const [arena, setArena] = useState<any | null>(null);
   const [arenaId, setArenaId] = useState<string | null>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
@@ -20,11 +21,12 @@ const ArenaShell = () => {
     (async () => {
       const { data } = await supabase
         .from("arenas")
-        .select("id, tenant_id")
+        .select("*")
         .eq("owner_user_id", user.id)
         .limit(1)
         .maybeSingle();
       if (data) {
+        setArena(data);
         setArenaId(data.id);
         setTenantId((data as any).tenant_id ?? null);
       }
@@ -68,7 +70,7 @@ const ArenaShell = () => {
             </div>
           </header>
           <main className="flex-1 p-6">
-            <Outlet />
+            <Outlet context={{ arena }} />
           </main>
         </div>
       </div>
