@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 import { GrowthDashboardPanel } from "@/components/growth/GrowthDashboardPanel";
 import { BudgetEditor } from "@/components/growth/BudgetEditor";
+import { ControlTowerAIPanel } from "@/components/control-tower/ControlTowerAIPanel";
 import { toast } from "sonner";
 
 const tierColor: Record<AutonomyTier, string> = {
@@ -111,6 +112,9 @@ const AdminControlTower = () => {
           </Button>
         </div>
       </div>
+
+      {/* Phase H — Control Tower AI */}
+      <ControlTowerAIPanel scope={{ type: "admin" }} />
 
       {/* Métricas top */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
