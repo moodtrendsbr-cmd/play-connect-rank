@@ -19,12 +19,25 @@ const ArenaShell = () => {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase
+      // 1) Try owned arena
+      let { data } = await supabase
         .from("arenas")
         .select("*")
         .eq("owner_user_id", user.id)
         .limit(1)
         .maybeSingle();
+
+      // 2) Admin (or user without owned arena) → fall back to any arena so they can navigate/test
+      if (!data && userRole === "admin") {
+        const fallback = await supabase
+          .from("arenas")
+          .select("*")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        data = fallback.data;
+      }
+
       if (data) {
         setArena(data);
         setArenaId(data.id);
@@ -32,7 +45,7 @@ const ArenaShell = () => {
       }
       setResolved(true);
     })();
-  }, [user]);
+  }, [user, userRole]);
 
   const scope = arenaId ? { scope_type: "arena" as const, arena_id: arenaId, tenant_id: tenantId } : null;
   const { loading: waLoading, connected } = useWhatsAppConnectionStatus(scope);
