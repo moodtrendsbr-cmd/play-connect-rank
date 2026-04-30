@@ -289,8 +289,7 @@ const TenantDashboard = () => {
       {/* Phase H — Control Tower AI */}
       <ControlTowerAIPanel scope={{ type: "tenant", id: tenant.id }} />
 
-      <div className="hidden">
-      </div>
+
 
       {/* BLOCO 1 — CONTROL TOWER (DOMINANTE) */}
       <section className="rounded-xl border-l-2 border-primary bg-primary/5 p-5 space-y-4">

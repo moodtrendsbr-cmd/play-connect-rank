@@ -13,6 +13,7 @@ import {
 import { UsageMeter } from "@/components/autonomy/UsageMeter";
 import { UpgradeCTA } from "@/components/autonomy/UpgradeCTA";
 import { OrkymActionsCard } from "@/components/orkym/OrkymActionsCard";
+import { ControlTowerAIPanel } from "@/components/control-tower/ControlTowerAIPanel";
 
 const ArenaControlTower = () => {
   const { arena } = useOutletContext<{ arena: any }>();
