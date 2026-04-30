@@ -46,6 +46,9 @@ const formatDateShort = (iso: string) => {
 const CreateTournament = () => {
   const { user, userRole } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromArena = !!searchParams.get("arena_id");
+  const backPath = fromArena ? "/arena" : dashboardPathFor(userRole);
   const [loading, setLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
