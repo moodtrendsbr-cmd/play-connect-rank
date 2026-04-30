@@ -68,6 +68,7 @@ const CreateTournament = () => {
     payment_deadline_days: "3",
     rules: "",
     rules_file_url: "",
+    image_url: "",
     match_enabled: true,
   });
 
