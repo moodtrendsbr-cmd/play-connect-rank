@@ -246,11 +246,11 @@ const CreateTournament = () => {
       <header className="border-b border-border bg-card">
         <div className="container flex h-16 items-center gap-4">
           <Button variant="ghost" size="sm" asChild>
-            <Link to={dashboardPathFor(userRole)} className="gap-2">
+            <Link to={backPath} className="gap-2">
               <ArrowLeft className="h-4 w-4" /> Voltar
             </Link>
           </Button>
-          <Link to={dashboardPathFor(userRole)} className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
+          <Link to={backPath} className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
         </div>
       </header>
 
