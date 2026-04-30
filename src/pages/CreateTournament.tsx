@@ -13,6 +13,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Upload, Loader2, X, Plus } from "lucide-react";
+import { ImageUploadField } from "@/components/shared/ImageUploadField";
 
 interface SlotConfig {
   type: string;
@@ -67,6 +68,7 @@ const CreateTournament = () => {
     payment_deadline_days: "3",
     rules: "",
     rules_file_url: "",
+    image_url: "",
     match_enabled: true,
   });
 
@@ -220,6 +222,7 @@ const CreateTournament = () => {
       payment_deadline_days: parseInt(form.payment_deadline_days) || 3,
       rules: form.rules,
       rules_file_url: form.rules_file_url || null,
+      image_url: form.image_url || null,
       match_enabled: form.match_enabled,
     } as any);
 
@@ -257,6 +260,17 @@ const CreateTournament = () => {
             <Label>Nome do Torneio</Label>
             <Input value={form.name} onChange={(e) => update("name", e.target.value)} required className="mt-1" />
           </div>
+
+          {/* 1b. Imagem do Torneio */}
+          <ImageUploadField
+            label="Imagem do Torneio"
+            value={form.image_url || null}
+            onChange={(url) => update("image_url", url || "")}
+            bucket="tournament-images"
+            pathPrefix={`tournaments/${user?.id || "anon"}/cover`}
+            aspect="16/9"
+            helperText="Carregue um arquivo ou cole a URL da imagem (capa/banner)."
+          />
 
           {/* 2. Modalidade */}
           <div>
