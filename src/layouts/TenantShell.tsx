@@ -24,13 +24,17 @@ const TenantShell = () => {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
-  if (!tenant) return <Navigate to="/organizer/onboarding" replace />;
-  if (!isTenantAdmin) return <Navigate to="/organizer/onboarding" replace />;
 
   const isSuperAdmin = userRole === "admin";
-  if (!isSuperAdmin && !waLoading && !connected) {
+  // Admin bypass: allow navigation through tenant pages even without a tenant (for testing).
+  if (!isSuperAdmin && !tenant) return <Navigate to="/organizer/onboarding" replace />;
+  if (!isSuperAdmin && !isTenantAdmin) return <Navigate to="/organizer/onboarding" replace />;
+
+  if (!isSuperAdmin && tenant && !waLoading && !connected) {
     return <Navigate to="/tenant/connect-whatsapp" replace state={{ from: location.pathname }} />;
   }
+
+  const displayTenant = tenant ?? { id: "demo", name: "Tenant Demo" };
 
   return (
     <SidebarProvider>
