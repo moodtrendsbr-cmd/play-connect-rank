@@ -64,7 +64,7 @@ const fmtBRL = (n: number) =>
 
 const ArenaDashboard = () => {
   const { arena } = useOutletContext<{ arena: any }>();
-  const wa = useWhatsAppConnection();
+  const wa = useWhatsAppConnectionStatus(arena?.id ? { scope_type: "arena", arena_id: arena.id } : null);
   const [stats, setStats] = useState({
     today: 0, week: 0, revenue: 0, students: 0, classesToday: 0,
     dueSoon: 0, overdue: 0, activeTournaments: 0, monthRevenue: 0,
