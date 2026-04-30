@@ -205,6 +205,85 @@ export function buildProactiveTemplate(ctx: TemplateContext): ProactiveTemplate 
       };
     }
 
+    case "class_low_enrollment": {
+      const name = pickName(p, "sua aula");
+      return {
+        message:
+          `${name} ainda tem vagas abertas. ` +
+          `Posso convidar alunos que costumam praticar nesse horário. Quer?`,
+        pending: {
+          action_type: "fill_idle_slots",
+          entity_type: ctx.entity_type ?? "class",
+          entity_id: ctx.entity_id,
+          payload: { ...p, source: "proactive_wa", kind: "class" },
+          scope,
+        },
+      };
+    }
+
+    case "low_product_visibility": {
+      const name = pickName(p, "seu produto");
+      return {
+        message:
+          `Seu produto "${name}" está com pouca visibilidade essa semana. ` +
+          `Posso destacá-lo agora pra mais gente ver. Quer?`,
+        pending: {
+          action_type: "product_boost",
+          entity_type: ctx.entity_type ?? "product",
+          entity_id: ctx.entity_id,
+          payload: { ...p, source: "proactive_wa" },
+          scope,
+        },
+      };
+    }
+
+    case "tournament_high_demand": {
+      const name = pickName(p, "seu torneio");
+      return {
+        message:
+          `"${name}" está bombando, quase lotado. ` +
+          `Posso ampliar as vagas ou criar uma nova edição. Quer?`,
+        pending: {
+          action_type: "tournament_boost",
+          entity_type: ctx.entity_type ?? "tournament",
+          entity_id: ctx.entity_id,
+          payload: { ...p, source: "proactive_wa", reason: "high_demand" },
+          scope,
+        },
+      };
+    }
+
+    case "low_arena_activity": {
+      return {
+        message:
+          `Sua arena está abaixo da média da rede essa semana. ` +
+          `Posso ativar uma divulgação pra atrair mais jogadores. Quer?`,
+        pending: {
+          action_type: "create_campaign",
+          entity_type: ctx.entity_type ?? "arena",
+          entity_id: ctx.entity_id ?? ctx.arena_id,
+          payload: { ...p, source: "proactive_wa", reason: "low_activity" },
+          scope,
+        },
+      };
+    }
+
+    case "high_search_demand": {
+      const term = (typeof p.term === "string" && p.term.trim()) ? p.term.trim() : "essa modalidade";
+      return {
+        message:
+          `Tem muita gente procurando por ${term} aqui na sua região. ` +
+          `Posso criar uma divulgação direcionada agora. Quer?`,
+        pending: {
+          action_type: "create_campaign",
+          entity_type: ctx.entity_type ?? null,
+          entity_id: ctx.entity_id,
+          payload: { ...p, source: "proactive_wa", reason: "search_demand" },
+          scope,
+        },
+      };
+    }
+
     // Trigger types that we explicitly don't want to render as
     // 1-action proactive prompts (billing, transactional notices, etc.)
     default:
