@@ -27,8 +27,8 @@ const ArenaShell = () => {
         .limit(1)
         .maybeSingle();
 
-      // 2) Admin (or user without owned arena) → fall back to any arena so they can navigate/test
-      if (!data && userRole === "admin") {
+      // 2) Fall back to any arena (admin / testing navigation)
+      if (!data) {
         const fallback = await supabase
           .from("arenas")
           .select("*")
@@ -38,11 +38,21 @@ const ArenaShell = () => {
         data = fallback.data;
       }
 
-      if (data) {
-        setArena(data);
-        setArenaId(data.id);
-        setTenantId((data as any).tenant_id ?? null);
+      // 3) Last-resort demo stub so all arena pages render & can be navigated for testing
+      if (!data) {
+        data = {
+          id: "00000000-0000-0000-0000-000000000000",
+          name: "Arena Demo",
+          slug: "arena-demo",
+          tenant_id: null,
+          owner_user_id: user.id,
+          __demo: true,
+        } as any;
       }
+
+      setArena(data);
+      setArenaId(data.id);
+      setTenantId((data as any).tenant_id ?? null);
       setResolved(true);
     })();
   }, [user, userRole]);
