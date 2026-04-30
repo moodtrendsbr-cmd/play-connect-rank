@@ -4,24 +4,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  CalendarCheck, Grid3X3, DollarSign, ArrowRight, Users, CalendarClock, Receipt,
-  AlertTriangle, Inbox, Bot, User as UserIcon, Cog, Trophy, TrendingUp,
-  Gauge, Activity, Wallet, Sparkles, QrCode, ClipboardList,
+  CalendarCheck, DollarSign, ArrowRight, Users, CalendarClock, Receipt,
+  Trophy, TrendingUp, Activity, Wallet, QrCode, MessageCircle, CheckCircle2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { OrkymInsightsCard } from "@/components/orkym/InsightsCard";
-import { OrkymActionsCard } from "@/components/orkym/OrkymActionsCard";
-import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
-import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
-import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { QrEntryCard } from "@/components/conversational/QrEntryCard";
-import { COMMANDS } from "@/lib/conversationalCommands";
-import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 import { cn } from "@/lib/utils";
 import { NextStepsCard } from "@/components/arena/NextStepsCard";
+import { useWhatsAppConnectionStatus } from "@/hooks/useWhatsAppConnection";
 
-// ---------- Local UI helpers (not exported) ----------
+// ---------- Local UI helpers ----------
 
 const SectionHeader = ({
   icon: Icon, title, subtitle, accent = "text-primary",
@@ -64,11 +57,18 @@ const ShortcutLink = ({ to, label }: { to: string; label: string }) => (
   </Link>
 );
 
+const fmtBRL = (n: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n || 0);
+
 // ---------- Page ----------
 
 const ArenaDashboard = () => {
   const { arena } = useOutletContext<{ arena: any }>();
-  const [stats, setStats] = useState({ today: 0, week: 0, revenue: 0, courts: 0, students: 0, classesToday: 0, dueSoon: 0, overdue: 0, openOcc: 0, openTasks: 0, activeTournaments: 0, monthRevenue: 0 });
+  const wa = useWhatsAppConnectionStatus(arena?.id ? { scope_type: "arena", arena_id: arena.id } : null);
+  const [stats, setStats] = useState({
+    today: 0, week: 0, revenue: 0, students: 0, classesToday: 0,
+    dueSoon: 0, overdue: 0, activeTournaments: 0, monthRevenue: 0,
+  });
   const [upcoming, setUpcoming] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
 
@@ -81,18 +81,15 @@ const ArenaDashboard = () => {
     const sevenDaysAhead = new Date(Date.now() + 7 * 86400000).toISOString();
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
 
-    const [todayRes, weekRes, courtsRes, upcomingRes, studentsRes, classesTodayRes, dueSoonRes, overdueRes, openOccRes, openTasksRes, tasksListRes, activeTournRes, monthRevRes] = await Promise.all([
+    const [todayRes, weekRes, upcomingRes, studentsRes, classesTodayRes, dueSoonRes, overdueRes, tasksListRes, activeTournRes, monthRevRes] = await Promise.all([
       supabase.from("bookings").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("booking_date", today).neq("status", "canceled"),
       supabase.from("bookings").select("id,amount", { count: "exact" }).eq("arena_id", arena.id).gte("booking_date", today).lte("booking_date", weekEnd).neq("status", "canceled"),
-      supabase.from("courts").select("id", { count: "exact", head: true }).eq("arena_id", arena.id),
       supabase.from("bookings").select("*, courts(name)").eq("arena_id", arena.id).gte("booking_date", today).neq("status", "canceled").order("booking_date").order("start_time").limit(5),
       supabase.from("arena_students").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("status", "active"),
       supabase.from("arena_classes").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).gte("start_at", dayStart.toISOString()).lte("start_at", dayEnd.toISOString()),
       supabase.from("arena_billing_cycles").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("status", "pending").lte("due_at", sevenDaysAhead),
       supabase.from("arena_billing_cycles").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("status", "overdue"),
-      supabase.from("arena_occurrences").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).in("status", ["open", "in_progress"]),
-      supabase.from("arena_operational_tasks").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("status", "open"),
-      supabase.from("arena_operational_tasks").select("*").eq("arena_id", arena.id).eq("status", "open").order("priority").order("created_at", { ascending: false }).limit(5),
+      supabase.from("arena_operational_tasks").select("*").eq("arena_id", arena.id).eq("status", "open").order("priority").order("created_at", { ascending: false }).limit(1),
       supabase.from("tournaments").select("id", { count: "exact", head: true }).eq("arena", arena.name).gte("end_date", today),
       supabase.from("financial_transactions").select("total_amount").eq("arena_id", arena.id).eq("status", "paid").gte("paid_at", monthStart.toISOString()),
     ]);
@@ -104,13 +101,10 @@ const ArenaDashboard = () => {
       today: todayRes.count || 0,
       week: weekRes.count || 0,
       revenue: weekRevenue,
-      courts: courtsRes.count || 0,
       students: studentsRes.count || 0,
       classesToday: classesTodayRes.count || 0,
       dueSoon: dueSoonRes.count || 0,
       overdue: overdueRes.count || 0,
-      openOcc: openOccRes.count || 0,
-      openTasks: openTasksRes.count || 0,
       activeTournaments: activeTournRes.count || 0,
       monthRevenue,
     });
@@ -129,114 +123,36 @@ const ArenaDashboard = () => {
     load();
   };
 
-  const sourceIcon = (s: string) => s === "orkym" ? Bot : s === "manual" ? UserIcon : Cog;
-  const sourceLabel = (s: string) => s === "orkym" ? "ORKYM" : s === "manual" ? "Manual" : "Sistema";
-
   if (!arena) {
     return <p className="text-sm text-muted-foreground">Carregando arena…</p>;
   }
+
+  const nextTask = tasks[0];
+  const waConnected = wa.connected || wa.status === "active";
 
   return (
     <div className="space-y-8">
       {/* HEADER */}
       <header className="flex items-end justify-between gap-3 border-b border-border pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <Gauge className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-display text-foreground">Control Tower</h1>
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            {arena?.name ? `Central de operação · ${arena.name}` : "Central de operação"}
-          </p>
+          <h1 className="text-2xl font-display text-foreground">
+            Sua arena{arena?.name ? ` · ${arena.name}` : ""}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Resumo de hoje</p>
         </div>
       </header>
 
       {arena?.id && <NextStepsCard arenaId={arena.id} />}
 
-      {/* BLOCO 1 — CONTROL TOWER (DOMINANTE) */}
-      <section className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 md:p-5">
-        <SectionHeader
-          icon={Sparkles}
-          title="Control Tower"
-          subtitle="ORKYM · alertas · ações pendentes · pendências operacionais"
-        />
-
-        {arena?.id && arena?.tenant_id && (
-          <OrkymInsightsCard tenantId={arena.tenant_id} arenaId={arena.id} />
-        )}
-
-        {arena?.id && arena?.tenant_id && (
-          <OrkymActionsCard tenantId={arena.tenant_id} arenaId={arena.id} />
-        )}
-
-        <Card id="tasks" className="bg-card border-border">
-          <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base font-medium">Caixa de pendências operacionais</CardTitle>
-            <span className="text-xs text-muted-foreground">{tasks.length} aberta(s)</span>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {tasks.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma pendência. ORKYM populará aqui sugestões e ações operacionais.</p>}
-            {tasks.map((t) => {
-              const SourceIcon = sourceIcon(t.source);
-              return (
-                <div key={t.id} className="flex items-start justify-between gap-2 p-3 rounded-lg bg-muted/30">
-                  <div className="space-y-1 flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium text-foreground truncate">{t.title}</p>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-background/60 text-muted-foreground inline-flex items-center gap-1">
-                        <SourceIcon className="h-2.5 w-2.5" /> {sourceLabel(t.source)}
-                      </span>
-                      {t.occurrence_id && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive inline-flex items-center gap-1">
-                          <AlertTriangle className="h-2.5 w-2.5" /> do incidente
-                        </span>
-                      )}
-                    </div>
-                    {t.description && <p className="text-xs text-muted-foreground line-clamp-2">{t.description}</p>}
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => updateTask(t.id, "done")}>Feito</Button>
-                    <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => updateTask(t.id, "dismissed")}>Dispensar</Button>
-                  </div>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* CAMADA CONVERSACIONAL */}
-      <OperationModeBanner profile="arena" />
-      <div className="grid md:grid-cols-2 gap-4">
-        <CommandExamplesCard
-          title="Operar pelo WhatsApp"
-          subtitle="Comandos rápidos para a operação da arena"
-          examples={COMMANDS.arena}
-        />
-        <QrEntryCard
-          title="Entrada física por QR"
-          subtitle="Check-in de aulas, torneios e quadras"
-          ctaTo="/arena/checkin"
-          ctaLabel="Abrir check-in"
-        />
-      </div>
-      {arena?.id && (
-        <CommandHistoryCard
-          scope="arena"
-          scopeId={arena.id}
-          seeAllHref="/arena/dashboard/comandos"
-        />
-      )}
-
-      {/* BLOCO 2 — OPERAÇÃO DO DIA */}
+      {/* [1] HOJE NA SUA ARENA */}
       <section className="space-y-3">
-        <SectionHeader icon={Activity} title="Operação do dia" subtitle="O que está acontecendo agora" accent="text-blue-400" />
+        <SectionHeader icon={Activity} title="Hoje na sua arena" subtitle="O que está rolando agora" accent="text-blue-400" />
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard icon={CalendarCheck} label="Reservas hoje"   value={stats.today}        color="text-primary" />
-          <KpiCard icon={CalendarClock} label="Aulas hoje"      value={stats.classesToday} color="text-blue-400" />
-          <KpiCard icon={Grid3X3}       label="Quadras"         value={stats.courts}       color="text-cyan-400" />
-          <KpiCard icon={Users}         label="Alunos ativos"   value={stats.students}     color="text-emerald-400" to="/arena/dashboard/alunos" />
+          <KpiCard icon={CalendarCheck} label="Reservas hoje"   value={stats.today}             color="text-primary"     to="/arena/dashboard/agenda" />
+          <KpiCard icon={CalendarClock} label="Aulas hoje"      value={stats.classesToday}      color="text-blue-400"    to="/arena/dashboard/aulas" />
+          <KpiCard icon={QrCode}        label="Check-ins"       value="Abrir"                   color="text-cyan-400"    to="/arena/checkin" />
+          <KpiCard icon={Trophy}        label="Torneios ativos" value={stats.activeTournaments} color="text-purple-400"  to="/arena/dashboard/torneios" />
         </div>
 
         <Card className="bg-card border-border">
@@ -258,62 +174,102 @@ const ArenaDashboard = () => {
             ))}
           </CardContent>
         </Card>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KpiCard icon={QrCode}         label="Check-in"             value="Abrir" color="text-primary"     to="/arena/checkin" />
-          <KpiCard icon={AlertTriangle}  label="Ocorrências abertas"  value={stats.openOcc} color="text-amber-400" to="/arena/dashboard/ocorrencias" />
-          <KpiCard icon={ClipboardList}  label="Matrículas"           value="Gerir" color="text-emerald-400" to="/arena/dashboard/matriculas" />
-        </div>
       </section>
 
-      {/* BLOCO 3 — FINANCEIRO */}
+      {/* [2] SEU DINHEIRO */}
       <section className="space-y-3">
-        <SectionHeader icon={Wallet} title="Financeiro" subtitle="Visão rápida" accent="text-emerald-400" />
+        <SectionHeader icon={Wallet} title="Seu dinheiro" subtitle="Como está o caixa" accent="text-emerald-400" />
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard icon={TrendingUp} label="Receita do mês"   value={`R$ ${stats.monthRevenue.toFixed(2)}`} color="text-emerald-400" to="/arena/dashboard/financeiro" />
-          <KpiCard icon={DollarSign} label="Receita 7 dias"   value={`R$ ${stats.revenue.toFixed(2)}`}      color="text-amber-400"   to="/arena/dashboard/transacoes" />
-          <KpiCard icon={Receipt}    label="Vencimentos 7d"   value={stats.dueSoon}                         color="text-amber-400"   to="/arena/dashboard/cobrancas" />
-          <KpiCard icon={Receipt}    label="Inadimplência"    value={stats.overdue}                         color="text-destructive" to="/arena/dashboard/cobrancas" />
+          <KpiCard icon={TrendingUp} label="Receita do mês" value={fmtBRL(stats.monthRevenue)} color="text-emerald-400" to="/arena/dashboard/financeiro" />
+          <KpiCard icon={DollarSign} label="Recebimentos 7d" value={fmtBRL(stats.revenue)}      color="text-amber-400"   to="/arena/dashboard/transacoes" />
+          <KpiCard icon={Receipt}    label="Vencimentos 7d"  value={stats.dueSoon}              color="text-amber-400"   to="/arena/dashboard/cobrancas" />
+          <KpiCard icon={Receipt}    label="Pendências"      value={stats.overdue}              color="text-destructive" to="/arena/dashboard/cobrancas" />
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <ShortcutLink to="/arena/dashboard/cobrancas"   label="Cobranças (mensalidades)" />
+          <ShortcutLink to="/arena/dashboard/cobrancas"   label="Cobranças" />
           <ShortcutLink to="/arena/dashboard/assinaturas" label="Assinaturas" />
           <ShortcutLink to="/arena/dashboard/transacoes"  label="Transações" />
         </div>
       </section>
 
-      {/* BLOCO 4 — TORNEIOS */}
+      {/* [3] MOVIMENTO DA ARENA */}
       <section className="space-y-3">
-        <SectionHeader icon={Trophy} title="Torneios" subtitle="Estado competitivo" accent="text-purple-400" />
+        <SectionHeader icon={Users} title="Movimento da arena" subtitle="Quem está com você" accent="text-emerald-400" />
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KpiCard icon={Trophy} label="Torneios ativos" value={stats.activeTournaments} color="text-purple-400" to="/arena/dashboard/torneios" />
+          <KpiCard icon={Users}         label="Alunos ativos" value={stats.students}     color="text-emerald-400" to="/arena/dashboard/alunos" />
+          <KpiCard icon={CalendarClock} label="Aulas hoje"    value={stats.classesToday} color="text-blue-400"    to="/arena/dashboard/aulas" />
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <ShortcutLink to="/arena/dashboard/torneios" label="Gerir torneios" />
-          <ShortcutLink to="/arena/checkin"            label="Check-in de torneios" />
-          <ShortcutLink to="/arena/dashboard/horarios" label="Horários e quadras" />
-        </div>
-      </section>
-
-      {/* BLOCO 5 — GROWTH */}
-      <section className="space-y-3">
-        <SectionHeader icon={Sparkles} title="Growth" subtitle="Crescimento e visibilidade" accent="text-pink-400" />
-
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <ShortcutLink to="/arena/dashboard/patrocinios" label="Patrocínios" />
-          <ShortcutLink to="/marketplace"                 label="Marketplace" />
-          <ShortcutLink to="/arena/dashboard/acoes-ia"    label="Sugestões da ORKYM" />
+          <ShortcutLink to="/arena/dashboard/alunos"     label="Alunos" />
+          <ShortcutLink to="/arena/dashboard/aulas"      label="Aulas" />
+          <ShortcutLink to="/arena/dashboard/matriculas" label="Matrículas" />
         </div>
       </section>
 
-      {/* BLOCO 6 — RECEITA CONVERSACIONAL (Fase 13) */}
+      {/* [4] O QUE FAZER AGORA */}
       <section className="space-y-3">
-        <SectionHeader icon={DollarSign} title="Receita via ORKYM" subtitle="Atribuição WhatsApp · 30 dias" accent="text-[#2BFF88]" />
-        <RevenueDashboardPanel scope={{ type: "arena", id: arena.id }} />
+        <SectionHeader icon={CheckCircle2} title="O que fazer agora" subtitle="Uma coisa de cada vez" accent="text-primary" />
+
+        <Card className="bg-card border-border">
+          <CardContent className="p-4">
+            {!nextTask ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                Tudo em dia por aqui.
+              </div>
+            ) : (
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1 flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">{nextTask.title}</p>
+                  {nextTask.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2">{nextTask.description}</p>
+                  )}
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <Button size="sm" variant="default" className="h-8 text-xs" onClick={() => updateTask(nextTask.id, "done")}>Feito</Button>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => updateTask(nextTask.id, "dismissed")}>Dispensar</Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* [5] GERENCIE PELO WHATSAPP */}
+      <section className="space-y-3">
+        <SectionHeader icon={MessageCircle} title="Gerencie pelo WhatsApp" subtitle="Tudo na palma da mão" accent="text-[#2BFF88]" />
+
+        <Card className="bg-card border-border">
+          <CardContent className="p-5 flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">
+                {waConnected ? "WhatsApp conectado" : "Receba alertas e gerencie sua arena pelo WhatsApp"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {waConnected ? "Você recebe avisos e pode responder direto pelo celular." : "Conecte seu número para receber resumos e responder rápido."}
+              </p>
+            </div>
+            <Link to="/arena/connect-whatsapp">
+              <Button size="sm" variant={waConnected ? "outline" : "default"} className="shrink-0">
+                {waConnected ? "Gerenciar conexão" : "Conectar agora"}
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* [6] ENTRADA VIA QR */}
+      <section className="space-y-3">
+        <QrEntryCard
+          title="Entrada via QR"
+          subtitle="Check-in rápido em aulas, torneios e quadras"
+          ctaTo="/arena/checkin"
+          ctaLabel="Abrir check-in"
+        />
       </section>
     </div>
   );
