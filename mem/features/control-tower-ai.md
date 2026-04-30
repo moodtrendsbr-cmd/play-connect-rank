@@ -50,11 +50,34 @@ Média ponderada dos sub-scores disponíveis (pesos renormalizados quando faltam
 - `src/components/control-tower/HealthScoreBadge.tsx` — utilitário visual.
 - Mounts (topo): AdminControlTower, TenantDashboard, ArenaControlTower, OrganizerDashboard, CompanyDashboard.
 
-## CTA humano (1 problema → 1 botão → 1 clique)
-Botão usa rótulo de `copyForAction(action_type)` (ex.: "Divulgar torneio", "Preencher horário"). Internamente chama `invokeOrkym('growth','decide', { entity, context:{source:'control_tower_ai', action_type} })` — pipeline ORKYM (eligibility/guardrails/budget) inalterado. Feedback ao usuário: toast.loading "Estamos cuidando disso…" → success com frase humana ("Estamos divulgando seu torneio agora") ou "Tudo já está sob controle." quando `actions_proposed=0`. Erros sempre genéricos: "Não conseguimos agora. Tente novamente em instantes."
+## CTA humano (1 problema → 1 botão → 1 clique → execução real)
+Botão usa rótulo de `copyForAction(action_type)` (ex.: "Divulgar torneio", "Preencher horário"). Internamente chama a edge function **`control-tower-execute`** com `{ scope, recommendation }`. Esta função:
+1. Resolve `tenant_id`/`arena_id` a partir do `scope` + permissão (`is_admin`/`is_tenant_admin`/`is_arena_owner`/owner de company).
+2. Verifica kill-switch em `autonomy_kill_switches` (global/tenant/arena/action_type).
+3. Para ações com orçamento (`tournament_boost`, `create_campaign`, `product_boost`, `company_boost`) chama `growth_check_budget` → bloqueia se zerado e registra `growth_record_spend` ao final.
+4. Cria `orkym_action_proposals` em modo `auto` (idempotente via `orkym_request_id = ct:<tenant>:<arena>:<action_type>:<entity_id>:<YYYY-MM-DDTHH>`).
+5. Despacha via `dispatchAction` (handlers compartilhados em `_shared/orkym-handlers.ts` — ver tabela abaixo).
+6. Marca `executed/auto_executed=true` e registra `arena_operational_events` (`event_type='control_tower.action_executed'`).
+
+Estados visíveis: `Iniciando…` → `Em andamento…` (após 800 ms) → `Concluído` (CheckCircle2). Toasts: success com frase humana de `controlTowerCopy.feedback`; bloqueio (kill-switch/budget/no_targets/already_running) → "Tudo já está sob controle por agora."; erro → "Não conseguimos agora. Tente novamente em instantes." Nunca expor reason ao usuário.
+
+### Mapa action_type → execution flow (em `_shared/orkym-handlers.ts`)
+| action_type | Fluxo |
+|---|---|
+| `tournament_boost` | INSERT `ad_campaigns(kind='tournament_highlight', status='active', target_type='tournament')` + queue `relevant_tournament` |
+| `create_campaign` | INSERT `ad_campaigns(kind='feed_highlight')` |
+| `product_boost` | INSERT `ad_campaigns(kind='marketplace_highlight', target_type='product')` |
+| `company_boost` | INSERT `ad_campaigns(kind='arena_highlight', target_type='arena')` |
+| `fill_idle_slots` | queue `idle_court_slot` (arena required) |
+| `reactivation_message` | queue `inactive_athlete` |
+| `send_proactive_message` | queue `<payload.trigger_type>` (default `relevant_tournament`) |
+| `recommend_product` | queue `top_product` |
+| `upsell_plan` | queue `relevant_tournament` |
+
+`ad_campaigns.kind` permitidos hoje: `feed_highlight | tournament_highlight | arena_highlight | marketplace_highlight` — handlers mapeiam os action_types Phase G/M para esses kinds. `company_id` faz fallback para a primeira `companies` do tenant quando não vem no payload.
 
 ## Hard rules
-- Nunca decidir/personalizar localmente; sempre via `orkym-invoke`.
+- Nunca decidir/personalizar localmente; conteúdo de mensagem é decidido por ORKYM no consumo da queue (`orkym-proactive-process`).
 - Nunca gerar mensagem fora de `wa-send-message`.
 - Nunca bypass de opt-in/cooldown/budget — guardrails atuais são autoritativos.
-- Sem novas tabelas, sem novas edge functions, sem ML.
+- Sem novas tabelas. Apenas uma nova edge function (`control-tower-execute`) que reusa handlers existentes.
