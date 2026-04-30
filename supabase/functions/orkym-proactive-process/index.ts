@@ -5,7 +5,7 @@
 // function only orchestrates eligibility + cooldown + logging + feedback.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getMemoryContext } from "../_shared/memory.ts";
+import { buildProactiveTemplate } from "../_shared/proactive-templates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -129,78 +129,53 @@ async function processOne(admin: any, t: QueueRow): Promise<string> {
     return "skipped";
   }
 
-  // 2) Memory context
-  let memory_context: unknown = null;
-  try {
-    memory_context = await getMemoryContext(admin, {
-      profile_type: t.profile_type,
-      user_id: t.user_id ?? undefined,
-      arena_id: t.arena_id ?? undefined,
-      tenant_id: t.tenant_id,
-      max_items: 15,
-    } as never);
-  } catch (_e) { memory_context = null; }
+  // 2) Build deterministic message + pending_action from local template.
+  // No external ORKYM round-trip — content is fixed per trigger_type.
+  const tpl = buildProactiveTemplate({
+    trigger_type: t.trigger_type,
+    profile_type: t.profile_type,
+    tenant_id: t.tenant_id,
+    arena_id: t.arena_id,
+    user_id: t.user_id,
+    entity_type: t.entity_type,
+    entity_id: t.entity_id,
+    payload: t.payload || {},
+  });
 
-  // 3) ORKYM decision
-  const decisionPayload = {
-    domain: "proactive",
-    action: "decide",
-    payload: {
-      tenant_id: t.tenant_id,
-      arena_id: t.arena_id,
-      context: {
-        profile_type: t.profile_type,
-        trigger: {
-          id: t.id,
-          type: t.trigger_type,
-          priority: t.priority,
-          entity_type: t.entity_type,
-          entity_id: t.entity_id,
-          payload: t.payload,
-        },
-        memory_context,
-        user_id: t.user_id,
-      },
-      metadata: { source: "proactive", trigger_id: t.id },
-    },
-  };
-
-  const invokeUrl = `${SUPA_URL}/functions/v1/orkym-invoke`;
-  let decision: any = null;
-  try {
-    const resp = await fetch(invokeUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${SERVICE_KEY}`,
-        "Content-Type": "application/json",
-        "apikey": SERVICE_KEY,
-      },
-      body: JSON.stringify(decisionPayload),
-    });
-    const text = await resp.text();
-    try { decision = text ? JSON.parse(text) : null; } catch { decision = null; }
-  } catch (e) {
+  if (!tpl) {
     await admin.rpc("orkym_trigger_complete", {
-      _id: t.id, _status: "failed", _error: `orkym_invoke_error:${(e as Error).message}`,
-    } as never);
-    return "failed";
-  }
-
-  const orkymResp = decision?.orkym_response ?? decision?.data ?? decision ?? {};
-  const shouldSend = Boolean(orkymResp?.should_send ?? orkymResp?.result?.should_send);
-  const message = String(orkymResp?.message ?? orkymResp?.result?.message ?? "").trim();
-
-  if (!shouldSend || !message) {
-    await admin.rpc("orkym_trigger_complete", {
-      _id: t.id, _status: "skipped", _error: "orkym_no_send",
+      _id: t.id, _status: "skipped", _error: "no_template",
     } as never);
     await admin.from("orkym_trigger_feedback").insert({
-      trigger_id: t.id, event: "ignored", metadata: { reason: "orkym_no_send" },
+      trigger_id: t.id, event: "ignored", metadata: { reason: "no_template" },
     } as never);
     return "no_send";
   }
 
-  // 4) Resolve phone + outbound command
+  const message = tpl.message;
+
+  // 3) Daily cap: max 2 proactive outbound messages / 24h per user.
+  if (t.user_id) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count } = await admin
+      .from("conversational_commands")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", t.user_id)
+      .eq("direction", "outbound")
+      .eq("initiated_by", "orkym")
+      .gte("created_at", since);
+    if ((count ?? 0) >= 2) {
+      await admin.rpc("orkym_trigger_complete", {
+        _id: t.id, _status: "skipped", _error: "daily_cap",
+      } as never);
+      await admin.from("orkym_trigger_feedback").insert({
+        trigger_id: t.id, event: "ignored", metadata: { reason: "daily_cap" },
+      } as never);
+      return "skipped";
+    }
+  }
+
+  // 4) Resolve phone + outbound command (with embedded pending_action)
   const phone = await lookupPhone(admin, t);
   if (!phone) {
     await admin.rpc("orkym_trigger_complete", {
@@ -210,6 +185,9 @@ async function processOne(admin: any, t: QueueRow): Promise<string> {
   }
 
   const correlationId = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+  const pendingAction = { ...tpl.pending, expires_at: expiresAt };
+
   const { data: cmdRow } = await admin
     .from("conversational_commands")
     .insert({
@@ -226,6 +204,7 @@ async function processOne(admin: any, t: QueueRow): Promise<string> {
       linked_entity_type: "trigger",
       linked_entity_id: t.id,
       orkym_correlation_id: correlationId,
+      parsed_intent: { pending_action: pendingAction, trigger_type: t.trigger_type },
     } as never)
     .select("id")
     .single();
