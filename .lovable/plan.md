@@ -1,145 +1,138 @@
-# Reparo estrutural do módulo de torneios
 
-Objetivo: deixar o fluxo **pagamento → categoria → chaveamento → jogos → resultado → pódio** funcionando ponta a ponta, com automações no servidor e sem criar features novas.
+# Auditoria estrutural — Módulo Torneios (validação real)
 
----
+## Veredito direto
 
-## 1. Inscrição vincula categoria automaticamente
+**A correção foi escrita mas não foi aplicada.** A migration `20260504144850_*.sql` existe no disco do projeto, mas **não consta em `supabase_migrations.schema_migrations`** — ou seja, nunca foi executada no banco. Triggers ausentes, colunas ausentes, lógica nova inerte. O front-end já chama o novo fluxo, mas o banco é o de antes.
 
-Hoje `enrollments.modality_id` está sempre `NULL` (0/28 inscrições reais). O atleta paga mas não entra em nenhum chaveamento.
-
-Mudanças:
-- **Payment.tsx**: passar a exigir seleção de categoria (modality) já existente em `tournament_modalities` antes do checkout. Um seletor por atleta (em torneios com 1 categoria, auto-seleciona). Se não houver modalidades, bloquear checkout com mensagem clara para o organizador.
-- Salvar `modality_id` ao criar a `enrollment` (pendente).
-- **Trigger no DB** `trg_enrollments_create_entry` em `enrollments AFTER UPDATE OF status`:
-  - quando `status` vira `paid` e `modality_id IS NOT NULL`:
-    - cria `modality_entries` (name = `athlete_name` ou perfil; tenant_id propagado)
-    - cria `modality_entry_members(entry_id, user_id)` quando `user_id` existir
-    - guarda o `entry_id` no enrollment (nova coluna `entry_id uuid` em `enrollments`, FK para `modality_entries`).
-  - idempotente: se já existe entry vinculada, não recria.
-- **Backfill**: para inscrições já `paid` com `modality_id` definida no novo fluxo, o trigger roda em UPDATE — para histórico antigo (28 atuais sem modality), nada é feito (não temos como adivinhar a categoria).
-
-Critério: 1 enrollment paga = 1 `modality_entry` + (quando aplicável) 1 `modality_entry_members`.
+Resultado: **o módulo continua quebrado exatamente como estava antes da "correção"**.
 
 ---
 
-## 2. Criar torneio gera modalidades reais
+## 1. Validação de dados (números reais agora)
 
-Hoje `CreateTournament` salva tudo em `tournaments.slot_config` (jsonb) e nunca cria linhas em `tournament_modalities`. Por isso quase todo torneio fica sem categoria.
+| Métrica | Valor | Esperado pós-fix |
+|---|---|---|
+| Total enrollments | 28 | — |
+| Enrollments `paid` | 21 | — |
+| Enrollments com `modality_id` | **0** | >0 nas novas |
+| Enrollments com `entry_id` | **0** | >0 nas pagas com modality |
+| Pagos com modality, sem entry | 0 (porque ninguém tem modality) | 0 |
+| `modality_entries` | 78 (todos seed de 2026‑02‑16) | — |
+| `modality_entry_members` | **0** | ≥1 por entry real |
+| `entries` sem members | **78 (100%)** | ~0 |
+| `tournament_modalities` | 18 | — |
+| `modality_matches` | 69 | — |
+| `matches` com winner | 46 | — |
+| `modality_placements` | **0** | >0 em torneios concluídos |
 
-Mudanças em `CreateTournament.tsx`:
-- Após `insert` no `tournaments`, fazer `insert` em `tournament_modalities` uma linha por item de `slot_config`, com:
-  - `tournament_id`, `tenant_id`
-  - `name` = `"{type} {gender} {category}"` (ex: "Dupla Masculina Iniciante")
-  - `type` = mapeado (`Duplas`→`dupla`, `Trios`→`trio`, `Quartetos`→`quarteto`, `Individual`→`individual`)
-  - `team_size` = 2/3/4/1
-  - `gender`, `level` = category, `sport` = modality, `max_entries` = slots, `start_time` = parse do datetime
-- Manter `slot_config` por compatibilidade, mas a fonte de verdade passa a ser `tournament_modalities`.
-- A página `EditTournamentForm` ganha sincronização equivalente quando o organizador edita slots (criar/atualizar/remover modalidades correspondentes).
+**Leitura honesta:**
+- Pagamento → entrada: **NÃO funciona**. Zero enrollments têm `modality_id`, zero têm `entry_id`. O selector de categoria existe no Payment.tsx, mas o backend que materializa a entry **não existe** (trigger não criado).
+- Entries sem members (78/78): herança do seed antigo + ausência da função que insere membros.
+- Pódio: **0 registros** mesmo com 46 matches finalizadas e finais decididas.
+
+## 2. Validação do schema (o que está faltando no banco)
+
+```text
+enrollments.entry_id ............... AUSENTE  (esperado: uuid FK)
+modality_matches.source_a_match_id . AUSENTE
+modality_matches.source_b_match_id . AUSENTE
+modality_matches.source_a_role ..... AUSENTE
+modality_matches.source_b_role ..... AUSENTE
+modality_matches.bracket_side ...... AUSENTE
+modality_placements UNIQUE(modality_id,position) ... AUSENTE
+
+trg_enrollments_create_entry ....... AUSENTE (função e trigger)
+trg_matches_advance ................ AUSENTE
+trg_matches_finalize_podium ........ AUSENTE
+```
+
+`is_modality_tournament_owner`, `get_my_next_match`, `list_today_matches` existem (são antigas).
+
+## 3. Fluxo ponta-a-ponta — o que acontece hoje
+
+| Passo | Comportamento real |
+|---|---|
+| 1. Criar torneio | OK; `CreateTournament.tsx` agora insere em `tournament_modalities` (18 registros confirmam que a parte de UI roda). 🟢 |
+| 2. Criar categorias | Junto com criação. 🟢 |
+| 3. Inscrição com pagamento | UI já força escolher categoria; envia `modality_id`. **Mas no banco a coluna é gravada como NULL nas 28 inscrições atuais** — nenhuma criada via novo fluxo ainda, ou create-payment não persiste. 🟡 |
+| 4a. Enrollment criado | OK |
+| 4b. `modality_entry` automático | **NÃO** — trigger não existe. 🔴 |
+| 4c. `modality_entry_members` | **NÃO** — função não existe. 🔴 |
+| 5. Gerar chave | Edge function `generate-bracket` está deployada (verify_jwt=true) e o front chama ela. 🟢 código / 🟡 dados (tenta gravar `bracket_side`/`source_*` em colunas inexistentes → INSERT vai falhar em runtime) |
+| 6. Bye/ímpar | Lógica server correta no código, mas **runtime quebrado** porque colunas não existem. 🔴 |
+| 7. Registrar resultado | Manual (UI grava winner). OK. |
+| 8. Avanço automático | **NÃO** — `trg_matches_advance` não existe. Próxima fase fica vazia. 🔴 |
+| 9. Finalizar torneio | Manual. |
+| 10. Pódio | **NÃO** — `trg_matches_finalize_podium` não existe. `modality_placements`=0. 🔴 |
+
+## 4. Bracket — classificação
+
+- Lógica: **server-side** (✓ migrou de client para edge function). 🟢 código
+- Byes: algoritmo correto no código (padding até pow2, `winner_entry_id` pré-preenchido). 🟢 código / 🔴 dados (insere coluna `bracket_side` que não existe → falha)
+- Números ímpares: tratados via byes. 🟢 código
+- Double elimination: gera placeholders de losers bracket + grand final, mas **source links e progressão de loser nunca são preenchidos** no código atual (só winners avançam). É um esqueleto, não DE funcional. 🟡
+- Matches completos: para single elim sim; para DE, só estrutura.
+
+**Status real:** 🔴 — qualquer chamada à `generate-bracket` em produção hoje retorna erro de coluna inexistente.
+
+## 5. Avanço de fase
+
+- `trg_matches_advance` definida na migration, mas **não criada**. 🔴
+- Sem o trigger, registrar resultado **não move** ninguém. Organizador teria que editar manualmente `entry_a_id`/`entry_b_id` da próxima rodada — não existe UI para isso.
+
+## 6. Pódio
+
+- `trg_matches_finalize_podium` definida, **não criada**. 🔴
+- `modality_placements`: 0 registros, mesmo com 8/9 partidas finalizadas em duas modalidades.
+- Nenhuma UI mostra pódio porque não há dado.
+
+## 7. Experiência do atleta
+
+- Componente `MyNextMatchCard.tsx` criado e integrado em `AthleteDashboard.tsx`. 🟢
+- Consome RPC `get_my_next_match` (existe). 🟢
+- **Porém**: como nenhum atleta tem `modality_entry_members`, o RPC **retorna vazio para todos**. O card aparece "sem próximos jogos". 🔴 efeito final.
+- QR de check-in: `enrollments.checkin_token` existe; `MyNextMatchCard` renderiza QR via lib `qrcode`. 🟢 estrutura, 🟡 alcance (depende de enrollment ter virado entry).
+
+## 8. WhatsApp
+
+- Actions ORKYM existentes relevantes a torneios: enfileiramento de notificações em `enrollment_paid`, `match_result` (via memória `tournament-go-live-fix`). 🟢
+- "Meu próximo jogo" / "registrar resultado" / "check-in" via WA: **não há handlers dedicados** no `orkym-execute-action` para esses verbos específicos no contexto torneio. ORKYM responde só ao que está cadastrado em `_shared/orkym-handlers.ts`. 🟡
+- Como `modality_entry_members` está vazio, mesmo se houvesse handler, não acharia "meu jogo".
+
+## 9. Inconsistências e duas verdades
+
+1. **`tournaments.slot_config` (jsonb) vs `tournament_modalities`** — código novo grava nos dois; código antigo (EditTournamentForm, ManageTournament) lê só do jsonb. Duas verdades convivendo.
+2. **Front-end novo + banco antigo** — `Payment.tsx` envia `modality_id`, `GenerateBracketDialog` chama edge function, `MyNextMatchCard` espera entry_id; banco não suporta nada disso.
+3. **Entries seed (78) sem members (0)** — bracket-gerado em torneios atuais usa entries fantasmas; quem é "Time A" / "Time B" é placeholder do seed, ninguém real.
+4. **`bracket_side` no INSERT da edge function** vai estourar erro de coluna inexistente assim que alguém clicar "gerar chave" em produção.
+
+## 10. Notas (0–10, baseado no que está RODANDO, não no que está escrito)
+
+| Item | Nota | Justificativa |
+|---|---|---|
+| Integração pagamento → categoria | **2** | UI manda; banco descarta; 0/28 enrollments com modality |
+| Estrutura de dados | **3** | Schema novo não aplicado; FKs ausentes; placements vazio |
+| Bracket | **3** | Server-side correto em teoria; quebra em runtime por colunas faltantes |
+| Automação | **1** | Nenhum dos 3 triggers críticos existe |
+| Experiência do atleta | **2** | Componente existe, dado não existe → tela vazia |
+
+**Média: 2.2/10.**
+
+## 11. Veredito final (sem rodeio)
+
+- O sistema **NÃO** funciona como fluxo único.
+- O torneio **NÃO** roda sozinho — pior: várias telas vão dar erro porque o front pressupõe schema que não existe.
+- Continua existindo dois sistemas paralelos (`slot_config` jsonb vs `tournament_modalities` + entries reais vs entries seed).
+- O código da correção foi escrito de forma plausível, mas **a migration que sustenta tudo nunca foi aplicada** — provavelmente foi rejeitada/não aprovada ou falhou silenciosamente. É preciso reaplicar essa migration e rodar um backfill para validar.
+
+## 12. O que precisa acontecer para sair do 2.2 (não é parte da auditoria, mas é o caminho)
+
+1. Reaplicar a migration `20260504144850_*.sql` (recriar como nova migration `20260504XXXXXX_*.sql`) — adiciona colunas, constraint, 3 triggers.
+2. Backfill: para enrollments `paid` antigas com `modality_id` (atualmente 0), executar a função de criação de entry; para as 78 entries seed sem members, deletar ou marcar como descartáveis.
+3. Validar: rodar `smoke-test-payment` (já existe) após migration; checar que `entry_id` é populado e que finalizar match dispara avanço + pódio.
+4. Limpar `tournaments.slot_config` como fonte de verdade — passar `EditTournamentForm` e `ManageTournament` a ler de `tournament_modalities`.
 
 ---
 
-## 3. Bracket server-side
-
-Hoje `GenerateBracketDialog.tsx` gera chaves no cliente, com bugs em byes e double elimination.
-
-Mudanças:
-- Nova edge function `generate-bracket` (`verify_jwt = true`):
-  - Input: `{ modality_id, format, num_groups? }`
-  - Valida que o caller é dono do torneio (`is_modality_tournament_owner`) ou admin.
-  - Lê `modality_entries` da modalidade.
-  - Implementa corretamente:
-    - **single_elimination com byes**: padding até a próxima potência de 2, byes distribuídos pelos seeds top; quem recebe bye avança como `winner_entry_id` na partida da R1 já marcada como `bye`/`finished`.
-    - **double_elimination**: gera winners bracket completo + losers bracket espelhado com placeholders `null` em todas as rodadas, links entre fases via `source_match_id` (ver §4).
-    - **round_robin** e **groups**: como hoje, mas server-side e idempotente.
-  - Apaga matches/groups antigos e reinsere em transação (RPC com `security definer`).
-- `GenerateBracketDialog.tsx` passa a chamar a edge function via `supabase.functions.invoke`.
-
-Coluna nova em `modality_matches`:
-- `source_a_match_id uuid` e `source_b_match_id uuid` (FK self) + `source_a_role text` (`winner|loser`), `source_b_role text` — usados no avanço automático.
-
----
-
-## 4. Avanço automático de partidas
-
-Hoje organizador grava placar mas a próxima partida fica vazia.
-
-Mudanças:
-- Trigger `trg_matches_advance` em `modality_matches AFTER UPDATE OF winner_entry_id`:
-  - Se `winner_entry_id` foi setado, encontrar matches que tenham `source_a_match_id = NEW.id` ou `source_b_match_id = NEW.id`.
-  - Preencher `entry_a_id`/`entry_b_id` com o vencedor (ou perdedor, no caso de losers bracket via `source_*_role = 'loser'`).
-  - Idempotente: se já tem `entry_*_id` igual ao vencedor, não faz nada.
-- Caso a partida não tenha `source_*` definido (formato round_robin/groups), o trigger é no-op.
-
----
-
-## 5. Pódio automático
-
-Hoje `modality_placements` tem 0 registros, mesmo com torneios concluídos.
-
-Mudanças:
-- Trigger `trg_matches_finalize_podium` em `modality_matches AFTER UPDATE OF winner_entry_id`:
-  - Detecta a final (maior `round_number` da modalidade no winners bracket) e a semifinal (round anterior).
-  - Quando final ganha vencedor: insere `position=1` (vencedor) e `position=2` (perdedor da final).
-  - Quando ambas semifinais têm vencedor: insere `position=3` para os dois perdedores (ou `position=3` e `position=4` se houver disputa de 3º lugar; configurável via `tournament_modalities.rules_json.third_place_match`).
-  - Conflito (`ON CONFLICT (modality_id, position) DO NOTHING`) para idempotência — adicionar UNIQUE(modality_id, position).
-- Atualiza `tournament_modalities.status` para `finished` quando pódio completo.
-
----
-
-## 6. Tela "Meu jogo" do atleta
-
-Hoje o atleta não vê quando joga.
-
-Mudanças:
-- Em `AthleteDashboard.tsx`, no bloco "Meu Dia / Jogos", adicionar card **"Meu próximo jogo"** consumindo a RPC já existente `get_my_next_match` (não precisa criar).
-- Mostrar: modalidade, adversário (via `modality_entries.name` + `modality_entry_members`/`profiles`), `scheduled_at`, quadra (`court_id`→nome), torneio.
-- Listar também próximas 5 partidas via `list_today_matches` ou query equivalente filtrando por `entry` do usuário.
-- Sem nova rota; reaproveita `/athlete/dashboard`.
-
----
-
-## 7. QR individual do atleta
-
-`enrollments.checkin_token` já existe e é gerado por default — só não é exposto na UI.
-
-Mudanças:
-- Em `AthleteDashboard.tsx`, quando houver enrollments `paid` em torneios futuros/em andamento, exibir botão "Meu QR de check-in" que abre dialog com QR (componente `QRGenerator` já existe) codificando a URL pública `/{base}/checkin?token={checkin_token}` (rota `PublicCheckin` já existe).
-- Sem mudanças em backend — apenas SELECT do próprio enrollment (RLS já permite).
-
----
-
-## Detalhes técnicos / arquivos tocados
-
-**Migrations (schema):**
-- `enrollments`: adicionar `entry_id uuid` (nullable, FK→`modality_entries(id) ON DELETE SET NULL`).
-- `modality_matches`: adicionar `source_a_match_id`, `source_b_match_id` (uuid, FK self), `source_a_role`, `source_b_role` (text check `IN ('winner','loser')`).
-- `modality_placements`: UNIQUE `(modality_id, position)`.
-- Funções/triggers: `trg_enrollments_create_entry`, `trg_matches_advance`, `trg_matches_finalize_podium` (todos `SECURITY DEFINER`, `search_path = public`).
-- Mantém todos triggers/políticas existentes (não mexe em `auth/storage/realtime`).
-
-**Edge functions:**
-- `supabase/functions/generate-bracket/index.ts` (novo, `verify_jwt = true`, valida ownership via `getClaims` + RPC).
-- Atualizar `create-payment` e `mercadopago-webhook` apenas para garantir que `modality_id` já vem persistido na enrollment desde a criação (a transição para `paid` é o que dispara o trigger §1).
-
-**Front-end:**
-- `src/pages/CreateTournament.tsx`: após insert do torneio, criar modalidades.
-- `src/components/tournament/EditTournamentForm.tsx`: sincronizar modalidades ao editar slots.
-- `src/pages/Payment.tsx`: seletor de categoria por atleta + envio de `modality_id`.
-- `src/components/brackets/GenerateBracketDialog.tsx`: usar edge function.
-- `src/pages/athlete/AthleteDashboard.tsx`: card "Meu próximo jogo" + QR de check-in.
-
-**Sem mudanças em:**
-- ORKYM/MoodPlay (continuam consumindo via `orkym_enqueue_athlete_notification`, que já dispara em match_result/enrollment_paid).
-- `src/integrations/supabase/{client,types}.ts` (regenerados automaticamente).
-
----
-
-## Critério de sucesso (verificável)
-
-1. Inscrição paga → `enrollments.entry_id NOT NULL` e `modality_entries` correspondente existe.
-2. Torneio criado pela UI → `tournament_modalities` tem N linhas (= itens do `slot_config`).
-3. "Gerar chave" cria todas as partidas no servidor; byes resolvidos; double elimination com winners + losers brackets coerentes.
-4. Registrar resultado preenche automaticamente o slot da próxima fase.
-5. Final concluída → `modality_placements` populado (1º, 2º, 3º).
-6. Atleta vê "Meu próximo jogo" e tem QR pessoal de check-in no dashboard.
+**Conclusão honesta:** a correção foi *desenhada e codada*, não *entregue*. Em produção, hoje, o módulo torneios está pior do que antes — porque agora UI espera coisas que o banco não tem, então além de não automatizar, vai gerar erros de runtime na primeira chave gerada via novo dialog.
