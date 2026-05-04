@@ -213,4 +213,14 @@ const MyNextMatchCard = () => {
   );
 };
 
+const QrCanvas = ({ value }: { value: string }) => {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (ref.current && value) {
+      QRCodeLib.toCanvas(ref.current, value, { width: 220, margin: 1 }).catch(() => {});
+    }
+  }, [value]);
+  return <canvas ref={ref} />;
+};
+
 export default MyNextMatchCard;
