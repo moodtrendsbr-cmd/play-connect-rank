@@ -499,6 +499,8 @@ const AthleteDashboard = () => {
           subtitle="Sua vida competitiva"
         />
 
+        <MyNextMatchCard />
+
         <div className="grid md:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pb-2">
