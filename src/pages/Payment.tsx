@@ -82,6 +82,19 @@ const Payment = () => {
       const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).single();
       setTournament(t);
 
+      // Fetch tournament modalities (categories)
+      const { data: mods } = await supabase
+        .from("tournament_modalities")
+        .select("id, name, type, gender, level, max_entries")
+        .eq("tournament_id", id!)
+        .order("created_at");
+      const list = (mods || []) as Modality[];
+      setModalities(list);
+      // Auto-select if only one modality
+      if (list.length === 1) {
+        setAthletes((prev) => prev.map((a) => ({ ...a, modality_id: list[0].id })));
+      }
+
       // Fetch MP public key
       const { data: keyData } = await supabase.functions.invoke("get-mp-public-key");
       if (keyData?.public_key) {
