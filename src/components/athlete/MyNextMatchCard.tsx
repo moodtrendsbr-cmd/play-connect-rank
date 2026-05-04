@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Swords, QrCode, MapPin, Clock } from "lucide-react";
-import QRCode from "react-qr-code";
+import QRCode from "qrcode";
 
 interface NextMatch {
   id: string;
