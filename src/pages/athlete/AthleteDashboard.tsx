@@ -28,6 +28,7 @@ import { CommandExamplesCard } from "@/components/conversational/CommandExamples
 import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { QrEntryCard } from "@/components/conversational/QrEntryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
+import MyNextMatchCard from "@/components/athlete/MyNextMatchCard";
 
 // ----- Helpers locais -----
 const SectionHeader = ({
