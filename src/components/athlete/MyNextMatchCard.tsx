@@ -202,7 +202,7 @@ const MyNextMatchCard = () => {
           {qrFor && (
             <div className="flex flex-col items-center gap-3 py-2">
               <div className="bg-white p-4 rounded-md">
-                <QRCode value={qrUrl} size={220} />
+                <QrCanvas value={qrUrl} />
               </div>
               <p className="text-xs text-muted-foreground text-center break-all">{qrUrl}</p>
             </div>
