@@ -438,6 +438,7 @@ const Payment = () => {
                   )}
                 </div>
 
+                {searchingFor === athlete.id && (
                   <div className="space-y-2">
                     <Input
                       placeholder="Buscar por nome..."
