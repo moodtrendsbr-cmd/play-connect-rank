@@ -19,6 +19,16 @@ interface Athlete {
   name: string;
   email: string;
   whatsapp: string;
+  modality_id?: string;
+}
+
+interface Modality {
+  id: string;
+  name: string;
+  type: string;
+  gender: string | null;
+  level: string | null;
+  max_entries: number | null;
 }
 
 const Payment = () => {
