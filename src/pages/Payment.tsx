@@ -164,10 +164,24 @@ const Payment = () => {
   const handlePayment = async () => {
     if (!user || !tournament) return;
 
+    // Block checkout if no modalities exist on the tournament
+    if (modalities.length === 0) {
+      toast({
+        title: "Sem categorias",
+        description: "O organizador ainda não cadastrou categorias para este torneio.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Validate athletes
     for (const a of athletes) {
       if (!a.name.trim()) {
         toast({ title: "Erro", description: "Preencha o nome de todos os atletas.", variant: "destructive" });
+        return;
+      }
+      if (!a.modality_id) {
+        toast({ title: "Erro", description: "Selecione a categoria de cada atleta.", variant: "destructive" });
         return;
       }
     }
@@ -191,6 +205,7 @@ const Payment = () => {
         athlete_name: a.name,
         athlete_email: a.email || null,
         athlete_whatsapp: a.whatsapp || null,
+        modality_id: a.modality_id!,
         status: "pending" as const,
         expires_at: expiresAt.toISOString(),
       }));
