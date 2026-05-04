@@ -199,7 +199,7 @@ const CreateTournament = () => {
     const typesArr = [...new Set(slotConfig.map((s) => s.type))];
     const categoriesArr = [...new Set(slotConfig.map((s) => s.category))];
 
-    const { error } = await supabase.from("tournaments").insert({
+    const { data: created, error } = await supabase.from("tournaments").insert({
       organizer_id: user.id,
       name: form.name,
       modality: form.modality,
@@ -227,16 +227,52 @@ const CreateTournament = () => {
       rules_file_url: form.rules_file_url || null,
       image_url: form.image_url || null,
       match_enabled: form.match_enabled,
-    } as any);
+    } as any).select("id, tenant_id").single();
+
+    if (error || !created) {
+      setLoading(false);
+      toast({ title: "Erro", description: error?.message || "Falha ao criar torneio", variant: "destructive" });
+      return;
+    }
+
+    // Create one tournament_modalities row per slot_config entry
+    const typeMap: Record<string, { type: string; team_size: number }> = {
+      "Individual": { type: "individual", team_size: 1 },
+      "Duplas": { type: "dupla", team_size: 2 },
+      "Trios": { type: "trio", team_size: 3 },
+      "Quartetos": { type: "quarteto", team_size: 4 },
+    };
+    const modalitiesPayload = slotConfig.map((s: any) => {
+      const mapped = typeMap[s.type] || { type: String(s.type || "dupla").toLowerCase(), team_size: 2 };
+      const startTime = s.datetime ? (s.datetime.includes("T") ? s.datetime.split("T")[1]?.slice(0, 5) : null) : null;
+      return {
+        tournament_id: created.id,
+        tenant_id: created.tenant_id ?? null,
+        name: `${s.type} ${s.gender} ${s.category}`.trim(),
+        type: mapped.type,
+        team_size: mapped.team_size,
+        sport: form.modality,
+        gender: s.gender,
+        level: s.category,
+        max_entries: Number(s.slots) || null,
+        start_time: startTime,
+        status: "open",
+        bracket_format: "single_elimination",
+        phase: "groups_then_ko",
+      };
+    });
+
+    if (modalitiesPayload.length > 0) {
+      const { error: modErr } = await supabase.from("tournament_modalities").insert(modalitiesPayload);
+      if (modErr) {
+        console.error("tournament_modalities insert failed:", modErr);
+        toast({ title: "Aviso", description: "Torneio criado mas categorias falharam. Edite o torneio.", variant: "destructive" });
+      }
+    }
 
     setLoading(false);
-
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Torneio criado!" });
-      navigate("/dashboard");
-    }
+    toast({ title: "Torneio criado!" });
+    navigate("/dashboard");
   };
 
   const update = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));

@@ -19,6 +19,16 @@ interface Athlete {
   name: string;
   email: string;
   whatsapp: string;
+  modality_id?: string;
+}
+
+interface Modality {
+  id: string;
+  name: string;
+  type: string;
+  gender: string | null;
+  level: string | null;
+  max_entries: number | null;
 }
 
 const Payment = () => {
@@ -27,6 +37,7 @@ const Payment = () => {
   const backPath = dashboardPathFor(userRole);
   const navigate = useNavigate();
   const [tournament, setTournament] = useState<any>(null);
+  const [modalities, setModalities] = useState<Modality[]>([]);
   const [athletes, setAthletes] = useState<Athlete[]>([{
     id: crypto.randomUUID(),
     mode: "manual",
@@ -70,6 +81,19 @@ const Payment = () => {
     const fetch = async () => {
       const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).single();
       setTournament(t);
+
+      // Fetch tournament modalities (categories)
+      const { data: mods } = await supabase
+        .from("tournament_modalities")
+        .select("id, name, type, gender, level, max_entries")
+        .eq("tournament_id", id!)
+        .order("created_at");
+      const list = (mods || []) as Modality[];
+      setModalities(list);
+      // Auto-select if only one modality
+      if (list.length === 1) {
+        setAthletes((prev) => prev.map((a) => ({ ...a, modality_id: list[0].id })));
+      }
 
       // Fetch MP public key
       const { data: keyData } = await supabase.functions.invoke("get-mp-public-key");
@@ -140,10 +164,24 @@ const Payment = () => {
   const handlePayment = async () => {
     if (!user || !tournament) return;
 
+    // Block checkout if no modalities exist on the tournament
+    if (modalities.length === 0) {
+      toast({
+        title: "Sem categorias",
+        description: "O organizador ainda não cadastrou categorias para este torneio.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Validate athletes
     for (const a of athletes) {
       if (!a.name.trim()) {
         toast({ title: "Erro", description: "Preencha o nome de todos os atletas.", variant: "destructive" });
+        return;
+      }
+      if (!a.modality_id) {
+        toast({ title: "Erro", description: "Selecione a categoria de cada atleta.", variant: "destructive" });
         return;
       }
     }
@@ -167,6 +205,7 @@ const Payment = () => {
         athlete_name: a.name,
         athlete_email: a.email || null,
         athlete_whatsapp: a.whatsapp || null,
+        modality_id: a.modality_id!,
         status: "pending" as const,
         expires_at: expiresAt.toISOString(),
       }));
@@ -371,6 +410,32 @@ const Payment = () => {
                   >
                     <UserPlus className="h-3 w-3 mr-1" /> Novo
                   </Button>
+                </div>
+
+                {/* Category (modality) selector */}
+                <div>
+                  <Label className="text-xs">Categoria *</Label>
+                  {modalities.length === 0 ? (
+                    <p className="mt-1 text-xs text-destructive">
+                      O organizador ainda não cadastrou categorias.
+                    </p>
+                  ) : (
+                    <Select
+                      value={athlete.modality_id || ""}
+                      onValueChange={(v) => updateAthlete(athlete.id, "modality_id", v)}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Selecione a categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modalities.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {m.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
                 {searchingFor === athlete.id && (

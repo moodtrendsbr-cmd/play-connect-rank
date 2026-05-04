@@ -28,6 +28,7 @@ import { CommandExamplesCard } from "@/components/conversational/CommandExamples
 import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { QrEntryCard } from "@/components/conversational/QrEntryCard";
 import { COMMANDS } from "@/lib/conversationalCommands";
+import MyNextMatchCard from "@/components/athlete/MyNextMatchCard";
 
 // ----- Helpers locais -----
 const SectionHeader = ({
@@ -497,6 +498,8 @@ const AthleteDashboard = () => {
           title="Torneios e jogos"
           subtitle="Sua vida competitiva"
         />
+
+        <MyNextMatchCard />
 
         <div className="grid md:grid-cols-2 gap-4">
           <Card>

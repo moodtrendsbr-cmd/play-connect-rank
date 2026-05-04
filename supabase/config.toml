@@ -57,3 +57,6 @@ verify_jwt = true
 [functions.smoke-test-payment]
 verify_jwt = true
 
+[functions.generate-bracket]
+verify_jwt = true
+
