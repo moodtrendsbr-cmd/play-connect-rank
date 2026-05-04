@@ -2859,6 +2859,7 @@ export type Database = {
           checkin_method: string | null
           checkin_token: string | null
           created_at: string
+          entry_id: string | null
           expires_at: string | null
           id: string
           modality_id: string | null
@@ -2880,6 +2881,7 @@ export type Database = {
           checkin_method?: string | null
           checkin_token?: string | null
           created_at?: string
+          entry_id?: string | null
           expires_at?: string | null
           id?: string
           modality_id?: string | null
@@ -2901,6 +2903,7 @@ export type Database = {
           checkin_method?: string | null
           checkin_token?: string | null
           created_at?: string
+          entry_id?: string | null
           expires_at?: string | null
           id?: string
           modality_id?: string | null
@@ -2913,6 +2916,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "enrollments_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "modality_entries"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "enrollments_tournament_id_fkey"
             columns: ["tournament_id"]
@@ -3894,6 +3904,7 @@ export type Database = {
       modality_matches: {
         Row: {
           arena_id: string | null
+          bracket_side: string | null
           court_id: string | null
           created_at: string
           entry_a_id: string | null
@@ -3906,12 +3917,17 @@ export type Database = {
           scheduled_at: string | null
           score_a: number | null
           score_b: number | null
+          source_a_match_id: string | null
+          source_a_role: string | null
+          source_b_match_id: string | null
+          source_b_role: string | null
           status: string
           tenant_id: string | null
           winner_entry_id: string | null
         }
         Insert: {
           arena_id?: string | null
+          bracket_side?: string | null
           court_id?: string | null
           created_at?: string
           entry_a_id?: string | null
@@ -3924,12 +3940,17 @@ export type Database = {
           scheduled_at?: string | null
           score_a?: number | null
           score_b?: number | null
+          source_a_match_id?: string | null
+          source_a_role?: string | null
+          source_b_match_id?: string | null
+          source_b_role?: string | null
           status?: string
           tenant_id?: string | null
           winner_entry_id?: string | null
         }
         Update: {
           arena_id?: string | null
+          bracket_side?: string | null
           court_id?: string | null
           created_at?: string
           entry_a_id?: string | null
@@ -3942,6 +3963,10 @@ export type Database = {
           scheduled_at?: string | null
           score_a?: number | null
           score_b?: number | null
+          source_a_match_id?: string | null
+          source_a_role?: string | null
+          source_b_match_id?: string | null
+          source_b_role?: string | null
           status?: string
           tenant_id?: string | null
           winner_entry_id?: string | null
@@ -3973,6 +3998,20 @@ export type Database = {
             columns: ["modality_id"]
             isOneToOne: false
             referencedRelation: "tournament_modalities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modality_matches_source_a_match_id_fkey"
+            columns: ["source_a_match_id"]
+            isOneToOne: false
+            referencedRelation: "modality_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modality_matches_source_b_match_id_fkey"
+            columns: ["source_b_match_id"]
+            isOneToOne: false
+            referencedRelation: "modality_matches"
             referencedColumns: ["id"]
           },
           {
