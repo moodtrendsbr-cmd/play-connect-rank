@@ -37,6 +37,7 @@ const Payment = () => {
   const backPath = dashboardPathFor(userRole);
   const navigate = useNavigate();
   const [tournament, setTournament] = useState<any>(null);
+  const [modalities, setModalities] = useState<Modality[]>([]);
   const [athletes, setAthletes] = useState<Athlete[]>([{
     id: crypto.randomUUID(),
     mode: "manual",
