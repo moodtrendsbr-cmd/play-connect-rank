@@ -412,7 +412,32 @@ const Payment = () => {
                   </Button>
                 </div>
 
-                {searchingFor === athlete.id && (
+                {/* Category (modality) selector */}
+                <div>
+                  <Label className="text-xs">Categoria *</Label>
+                  {modalities.length === 0 ? (
+                    <p className="mt-1 text-xs text-destructive">
+                      O organizador ainda não cadastrou categorias.
+                    </p>
+                  ) : (
+                    <Select
+                      value={athlete.modality_id || ""}
+                      onValueChange={(v) => updateAthlete(athlete.id, "modality_id", v)}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Selecione a categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modalities.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {m.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
                   <div className="space-y-2">
                     <Input
                       placeholder="Buscar por nome..."
