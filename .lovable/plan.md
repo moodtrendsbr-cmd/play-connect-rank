@@ -1,57 +1,98 @@
-## Problema
+# Correção do fluxo de inscrição em torneios
 
-Após a migration estrutural, marcar uma `enrollment` como `paid` falha no banco. Dois triggers têm bugs de coluna:
+## Diagnóstico (validado no banco)
 
-1. **`trg_enrollments_create_entry`** (novo, da correção): referencia `profiles.nickname` e `profiles.id = NEW.user_id`. Coluna `nickname` não existe; e `profiles.id ≠ user_id` (FK real é `profiles.user_id`).
-2. **`trg_xp_from_enrollment`** (pré-existente): referencia `NEW.athlete_id`, mas `enrollments` só tem `user_id`. Esse trigger é `AFTER INSERT`, ou seja, hoje qualquer `INSERT` em `enrollments` já estoura — explica por que existem 28 enrollments seed mas nada novo entra.
+- Trigger `trg_enrollments_create_entry` está correto e ativo. Faz early-return quando `modality_id IS NULL` ou `status <> 'paid'`. Nenhum bug nele.
+- Coluna `enrollments.modality_id` existe.
+- **22/22 enrollments `paid` no banco têm `modality_id = NULL` e `entry_id = NULL`.** Nenhum entry/member foi criado.
+- Causas raiz por ponto de entrada:
+  1. `Payment.tsx` (UI web): **já passa `modality_id` corretamente** no insert (linha 208) e bloqueia checkout sem categoria. Esse caminho está OK — desde que o torneio tenha `tournament_modalities`.
+  2. RPC `public.enroll_athlete_in_tournament(_tournament_id, _modality_id)`: **aceita `_modality_id` mas NÃO usa no INSERT.** Por isso toda inscrição via WhatsApp/ORKYM (`moodplay-execute-action` chama essa RPC) entra com `modality_id=NULL`.
+  3. `smoke-test-payment`: cria torneio sem modalidade e enrollment sem `modality_id`. Por isso o teste sempre passou “verde” em ftx/activity/attribution mas falhou em entry/member sem ser detectado.
+  4. `CreateTournament.tsx`: cria modalities a partir de `slot_config`, mas não bloqueia salvar com `slot_config` vazio. Tornei criados antes da feature ficaram com 0 modalities.
+- Webhook `mercadopago-webhook` apenas faz `update enrollments set status='paid'` — preserva `modality_id` (correto, não toca a coluna).
 
-Confirmado por queries reais (não suposição):
-- `information_schema.columns` em `public.profiles` → não tem `nickname`.
-- `information_schema.columns` em `public.enrollments` → não tem `athlete_id`.
-- `SELECT count(*) FILTER (WHERE id = user_id) FROM profiles` → 0 de 7.
+## Mudanças
 
-## Correção (uma migration nova, só recria as 2 funções)
+### 1. RPC `enroll_athlete_in_tournament` (migration)
 
-### 1. `trg_enrollments_create_entry()`
+Recriar para:
+- Persistir `_modality_id` no INSERT.
+- Retornar erro `modality_required` se torneio tem ≥1 modality e `_modality_id` é NULL.
+- Validar que `_modality_id` pertence ao `_tournament_id`.
+- Permitir múltiplas inscrições do mesmo user em modalities diferentes (trocar UNIQUE check de `(tournament_id,user_id)` para `(tournament_id,user_id,modality_id)`).
+- Retornar `modality_id` no JSON.
 
-Trocar bloco de nome para:
+### 2. `moodplay-execute-action` (edge function)
 
+- Em `enroll_in_tournament`: se payload não tem `modality_id`, antes de chamar a RPC consultar `tournament_modalities` do torneio:
+  - 0 modalities → retornar erro estruturado `tournament_has_no_categories`.
+  - 1 modality → auto-selecionar.
+  - ≥2 modalities → retornar `requires_category_choice` + lista (ORKYM já sabe pedir confirmação multi-turn).
+- Encaminhar `modality_id` resolvido para a RPC.
+
+### 3. `smoke-test-payment` (edge function)
+
+Reescrever para refletir o fluxo real e falhar honestamente:
+1. Criar tournament.
+2. Criar **1 `tournament_modality`**.
+3. Inserir enrollment `pending` **com `modality_id`**.
+4. Update para `paid`.
+5. Esperar 600ms.
+6. Reler enrollment + checar:
+   - `enrollment.modality_id NOT NULL`
+   - `enrollment.entry_id NOT NULL`
+   - 1 row em `modality_entries` para esse `modality_id`
+   - 1 row em `modality_entry_members` ligado ao entry
+   - `financial_transactions` paid para o source
+   - `athlete_activities` para o user
+   - `orkym_revenue_attribution` para a enrollment
+7. Se qualquer item falhar: retornar `ok:false` com a lista exata de checks falhos. Sem falso positivo.
+
+### 4. `CreateTournament.tsx`
+
+- Bloquear submit se `slotConfig.length === 0` com toast: “Adicione ao menos uma categoria.”
+- Se o INSERT em `tournament_modalities` falhar, **deletar o torneio recém-criado** (rollback manual) em vez de deixar torneio inscricionável sem categoria.
+
+### 5. Guard de inscrição em `Payment.tsx`
+
+Já existe (linha 168). Reforçar texto: redirecionar para o torneio quando `modalities.length === 0` em vez de só mostrar toast.
+
+### 6. Backfill (RPC admin-only + botão)
+
+Migration cria `public.backfill_orphan_enrollments()` SECURITY DEFINER, restrita a `has_role(auth.uid(),'admin')`:
+- Para cada enrollment `paid` com `modality_id IS NULL`:
+  - Se o tournament tem exatamente 1 modality → seta `modality_id` (UPDATE dispara `trg_enrollments_create_entry_ins`? Não — esse trigger é AFTER UPDATE OF status. Solução: o trigger atual roda em UPDATE; basta garantir que dispara em UPDATE de `modality_id` também. Adicionar `OR UPDATE OF modality_id` na definição do trigger).
+  - Se tem 0 modalities → deixar como está, retornar contagem em `skipped_no_modality`.
+  - Se tem ≥2 → marcar `enrollments.checkin_method = 'needs_category_review'` (campo existente) ou criar coluna leve. Plano: usar campo `payment_id` não — usar nova coluna boolean `needs_category_review` (migration adiciona).
+- Retorna `{linked, skipped_no_modality, needs_review}`.
+- Botão no `AdminControlTower` chama a RPC e mostra resultado.
+
+### 7. Trigger ajuste
+
+Migration: recriar trigger para também acionar em `UPDATE OF modality_id` (além de status), para que o backfill crie o entry sem precisar de update artificial em status.
+
+## Verificação final
+
+Após deploy + backfill, rodar:
 ```sql
-v_entry_name := COALESCE(
-  NULLIF(NEW.athlete_name, ''),
-  (SELECT NULLIF(full_name, '') FROM public.profiles WHERE user_id = NEW.user_id LIMIT 1),
-  'Atleta'
-);
+SELECT id, status, modality_id, entry_id FROM enrollments ORDER BY created_at DESC LIMIT 5;
+SELECT id, modality_id FROM modality_entries ORDER BY created_at DESC LIMIT 5;
+SELECT * FROM modality_entry_members ORDER BY created_at DESC LIMIT 5;
 ```
+E rodar `smoke-test-payment`. Critério de sucesso: enrollment paid mais recente tem `modality_id` e `entry_id`, entry e member existem, smoke retorna `ok:true`.
 
-- Remove referência a `profiles.nickname`.
-- Corrige join para `profiles.user_id = NEW.user_id`.
-- Mantém o `EXCEPTION WHEN OTHERS` para nunca bloquear pagamento.
+## Fora de escopo
 
-### 2. `trg_xp_from_enrollment()`
+- Bracket double-elimination losers routing.
+- Refactor `slot_config` × `tournament_modalities`.
+- Backfill das 78 entries seed sem members (não bloqueia o fluxo novo).
 
-Trocar `NEW.athlete_id` por `NEW.user_id` nas 3 chamadas (`award_xp`, `update_streak`, `evaluate_badges`) e envolver em `EXCEPTION WHEN OTHERS RETURN NEW` para nunca derrubar inserts futuros.
+## Arquivos tocados
 
-```sql
-BEGIN
-  PERFORM public.award_xp(NEW.user_id, 'enrollment', NEW.id, 20, 'Tournament enrollment');
-  PERFORM public.update_streak(NEW.user_id, CURRENT_DATE);
-  PERFORM public.evaluate_badges(NEW.user_id);
-  RETURN NEW;
-EXCEPTION WHEN OTHERS THEN
-  RAISE WARNING 'trg_xp_from_enrollment failed for %: %', NEW.id, SQLERRM;
-  RETURN NEW;
-END;
-```
-
-## Verificação após aplicar
-
-1. Rodar `smoke-test-payment` (já existe como edge function admin) — deve retornar `ok: true` com `enrollment_id` virando `entry_id` populado.
-2. Query: `SELECT count(*) FROM enrollments WHERE entry_id IS NOT NULL` deve passar de 0 após o smoke.
-3. Query: `SELECT count(*) FROM modality_entry_members` deve passar de 0.
-
-## Fora de escopo (não mexer agora)
-
-- Backfill das 28 enrollments antigas e das 78 entries seed sem members. Pode ficar para próximo passo após confirmar smoke verde.
-- Double-elimination losers bracket — segue placeholder.
-- Unificar `tournaments.slot_config` vs `tournament_modalities` — refactor maior.
+- `supabase/migrations/<novo>.sql` — RPC `enroll_athlete_in_tournament`, trigger update, RPC `backfill_orphan_enrollments`, coluna `needs_category_review`.
+- `supabase/functions/smoke-test-payment/index.ts`
+- `supabase/functions/moodplay-execute-action/index.ts`
+- `src/pages/CreateTournament.tsx`
+- `src/pages/Payment.tsx` (guard reforçado)
+- `src/pages/admin/AdminControlTower.tsx` (botão backfill)
