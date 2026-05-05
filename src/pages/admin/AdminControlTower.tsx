@@ -119,6 +119,10 @@ const AdminControlTower = () => {
             <Zap className={`h-4 w-4 mr-2 ${smoking ? "animate-spin" : ""}`} />
             {smoking ? "Testando…" : "Smoke-test pagamento"}
           </Button>
+          <Button size="sm" variant="outline" onClick={backfillEnrollments} disabled={backfilling}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${backfilling ? "animate-spin" : ""}`} />
+            {backfilling ? "Vinculando…" : "Backfill inscrições"}
+          </Button>
           <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
