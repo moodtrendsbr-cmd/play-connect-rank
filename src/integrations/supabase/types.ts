@@ -2851,6 +2851,7 @@ export type Database = {
       enrollments: {
         Row: {
           amount_paid: number | null
+          archived_at: string | null
           athlete_email: string | null
           athlete_name: string | null
           athlete_whatsapp: string | null
@@ -2864,6 +2865,7 @@ export type Database = {
           id: string
           modality_id: string | null
           needs_category_review: boolean
+          orphan_reason: string | null
           payer_id: string | null
           payment_id: string | null
           status: Database["public"]["Enums"]["enrollment_status"]
@@ -2874,6 +2876,7 @@ export type Database = {
         }
         Insert: {
           amount_paid?: number | null
+          archived_at?: string | null
           athlete_email?: string | null
           athlete_name?: string | null
           athlete_whatsapp?: string | null
@@ -2887,6 +2890,7 @@ export type Database = {
           id?: string
           modality_id?: string | null
           needs_category_review?: boolean
+          orphan_reason?: string | null
           payer_id?: string | null
           payment_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
@@ -2897,6 +2901,7 @@ export type Database = {
         }
         Update: {
           amount_paid?: number | null
+          archived_at?: string | null
           athlete_email?: string | null
           athlete_name?: string | null
           athlete_whatsapp?: string | null
@@ -2910,6 +2915,7 @@ export type Database = {
           id?: string
           modality_id?: string | null
           needs_category_review?: boolean
+          orphan_reason?: string | null
           payer_id?: string | null
           payment_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
@@ -7583,6 +7589,7 @@ export type Database = {
         Args: { _featured_id: string; _reason?: string }
         Returns: Json
       }
+      archive_test_orphans: { Args: never; Returns: Json }
       arena_archive_old_events: {
         Args: { _arena_id: string; _older_than_days?: number }
         Returns: number
