@@ -102,6 +102,7 @@ import TenantQR from "./pages/tenant/TenantQR";
 import TenantProducts from "./pages/tenant/TenantProducts";
 import TenantTeam from "./pages/tenant/TenantTeam";
 import AdminControlTower from "./pages/admin/AdminControlTower";
+import AdminInternalTools from "./pages/admin/AdminInternalTools";
 import Explore from "./pages/Explore";
 import AthletesList from "./pages/AthletesList";
 import ArenasList from "./pages/arenas/ArenasList";
@@ -347,6 +348,7 @@ const App = () => (
               <Route path="orkym-actions" element={<AdminOrkymActions />} />
               <Route path="autonomy" element={<AdminAutonomy />} />
               <Route path="control-tower" element={<AdminControlTower />} />
+              <Route path="internal-tools" element={<AdminInternalTools />} />
               <Route path="tenants" element={<AdminArenas />} />
               <Route path="commands" element={<AdminCommands />} />
               <Route path="whatsapp-instances" element={<AdminWhatsAppInstances />} />
