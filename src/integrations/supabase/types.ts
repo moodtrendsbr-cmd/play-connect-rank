@@ -2863,6 +2863,7 @@ export type Database = {
           expires_at: string | null
           id: string
           modality_id: string | null
+          needs_category_review: boolean
           payer_id: string | null
           payment_id: string | null
           status: Database["public"]["Enums"]["enrollment_status"]
@@ -2885,6 +2886,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           modality_id?: string | null
+          needs_category_review?: boolean
           payer_id?: string | null
           payment_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
@@ -2907,6 +2909,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           modality_id?: string | null
+          needs_category_review?: boolean
           payer_id?: string | null
           payment_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
@@ -7680,6 +7683,7 @@ export type Database = {
         }
         Returns: Json
       }
+      backfill_orphan_enrollments: { Args: never; Returns: Json }
       booking_checkin_link_get_or_create: {
         Args: { _booking_id: string }
         Returns: {
