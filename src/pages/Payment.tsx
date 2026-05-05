@@ -171,6 +171,7 @@ const Payment = () => {
         description: "O organizador ainda não cadastrou categorias para este torneio.",
         variant: "destructive",
       });
+      navigate(`/tournament/${id}`);
       return;
     }
 
