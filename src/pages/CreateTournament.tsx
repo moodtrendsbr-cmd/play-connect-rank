@@ -192,6 +192,16 @@ const CreateTournament = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    if (!slotConfig || slotConfig.length === 0) {
+      toast({
+        title: "Adicione ao menos uma categoria",
+        description: "O torneio precisa ter pelo menos uma categoria/modalidade configurada.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     // Derive unique arrays from slotConfig
@@ -266,7 +276,15 @@ const CreateTournament = () => {
       const { error: modErr } = await supabase.from("tournament_modalities").insert(modalitiesPayload);
       if (modErr) {
         console.error("tournament_modalities insert failed:", modErr);
-        toast({ title: "Aviso", description: "Torneio criado mas categorias falharam. Edite o torneio.", variant: "destructive" });
+        // Rollback: torneio sem categoria não pode existir
+        await supabase.from("tournaments").delete().eq("id", created.id);
+        setLoading(false);
+        toast({
+          title: "Falha ao criar categorias",
+          description: `Torneio cancelado. ${modErr.message}`,
+          variant: "destructive",
+        });
+        return;
       }
     }
 

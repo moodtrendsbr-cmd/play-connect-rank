@@ -390,11 +390,46 @@ Deno.serve(async (req) => {
         result = data;
         linkedType = "modality_match"; linkedId = payload.match_id;
       } else if (action_type === "enroll_in_tournament") {
+        // Resolver modality_id quando ausente: 0 → erro; 1 → auto; ≥2 → pedir escolha
+        let modalityId: string | null = payload.modality_id ?? null;
+        if (!modalityId) {
+          const { data: mods } = await admin
+            .from("tournament_modalities")
+            .select("id, name, gender, level")
+            .eq("tournament_id", payload.tournament_id);
+          if (!mods || mods.length === 0) {
+            throw new Error("tournament_has_no_categories");
+          }
+          if (mods.length === 1) {
+            modalityId = mods[0].id;
+          } else {
+            result = {
+              ok: false,
+              requires_category_choice: true,
+              available_modalities: mods,
+            };
+            linkedType = "tournament"; linkedId = payload.tournament_id;
+            // sai sem chamar a RPC
+            err = null;
+            // pula direto para o update do command
+            await admin.from("conversational_commands").update({
+              status: "needs_input",
+              result_payload: result,
+              response_text: `Escolha a categoria: ${mods.map((m: any) => m.name).join(", ")}`,
+              linked_entity_type: linkedType,
+              linked_entity_id: linkedId,
+            }).eq("id", command_id);
+            return new Response(JSON.stringify(result), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
         const { data, error } = await admin.rpc("enroll_athlete_in_tournament", {
           _tournament_id: payload.tournament_id,
-          _modality_id: payload.modality_id ?? null,
+          _modality_id: modalityId,
         });
         if (error) throw error;
+        if (data && (data as any).ok === false) throw new Error((data as any).error ?? "enroll_failed");
         result = data;
         linkedType = "enrollment"; linkedId = (data as any)?.enrollment_id ?? null;
       } else if (action_type === "validate_tournament_checkin") {
