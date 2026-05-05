@@ -26,6 +26,7 @@ const AdminControlTower = () => {
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [smoking, setSmoking] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
 
   const seedPilot = async () => {
     setSeeding(true);
@@ -42,20 +43,31 @@ const AdminControlTower = () => {
     setSmoking(true);
     const { data, error } = await supabase.functions.invoke("smoke-test-payment", { body: {} });
     setSmoking(false);
-    if (error || (data as any)?.ok === false) {
-      toast.error((error?.message ?? (data as any)?.error) || "Falha no smoke-test");
-      console.error("smoke-test", data, error);
+    const d = data as any;
+    if (error || d?.ok === false) {
+      const failed = (d?.failed ?? []).join(", ");
+      toast.error(`Smoke-test falhou${failed ? ` · ${failed}` : ""}: ${error?.message ?? d?.error ?? "erro"}`);
+      console.error("smoke-test", d, error);
       return;
     }
-    const d = data as any;
-    const ftxOk = (d.financial_transactions ?? []).length > 0;
-    const attrOk = (d.revenue_attribution ?? []).length > 0;
-    const queueOk = (d.triggers_queued ?? []).length > 0;
-    const actsOk = (d.athlete_activities ?? []).length > 0;
+    const c = d.checks ?? {};
     toast.success(
-      `Smoke-test OK · activity:${actsOk ? "✓" : "✗"} ftx:${ftxOk ? "✓" : "✗"} attr:${attrOk ? "✓" : "✗"} queue:${queueOk ? "✓" : "✗"}`
+      `Smoke-test OK · entry:${c.entry_created ? "✓" : "✗"} member:${c.member_created ? "✓" : "✗"} ftx:${c.financial_transaction_paid ? "✓" : "✗"} attr:${c.revenue_attribution_created ? "✓" : "✗"}`
     );
     console.log("smoke-test result", d);
+  };
+
+  const backfillEnrollments = async () => {
+    if (!confirm("Vincular categorias automaticamente em inscrições pagas órfãs?")) return;
+    setBackfilling(true);
+    const { data, error } = await (supabase as any).rpc("backfill_orphan_enrollments");
+    setBackfilling(false);
+    const d = data as any;
+    if (error || d?.ok === false) {
+      toast.error(error?.message ?? d?.error ?? "Falha no backfill");
+      return;
+    }
+    toast.success(`Backfill: ${d.linked} vinculadas, ${d.needs_review} para revisão, ${d.skipped_no_modality} sem categoria`);
   };
 
   const load = async () => {
@@ -106,6 +118,10 @@ const AdminControlTower = () => {
           <Button size="sm" variant="outline" onClick={smokeTestPayment} disabled={smoking}>
             <Zap className={`h-4 w-4 mr-2 ${smoking ? "animate-spin" : ""}`} />
             {smoking ? "Testando…" : "Smoke-test pagamento"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={backfillEnrollments} disabled={backfilling}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${backfilling ? "animate-spin" : ""}`} />
+            {backfilling ? "Vinculando…" : "Backfill inscrições"}
           </Button>
           <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
