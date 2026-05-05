@@ -91,6 +91,7 @@ const navGroups: NavGroup[] = [
       { title: "WhatsApp · Conexão de número", url: "/admin/whatsapp-bindings", icon: Phone },
       { title: "WhatsApp · Leads", url: "/admin/whatsapp-leads", icon: Inbox },
       { title: "Conversas (logs)", url: "/admin/commands", icon: MessageCircle },
+      { title: "Ferramentas internas", url: "/admin/internal-tools", icon: Wrench },
     ],
   },
 ];

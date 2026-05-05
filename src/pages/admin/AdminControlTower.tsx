@@ -65,18 +65,6 @@ const AdminControlTower = () => {
           <Gauge className="h-8 w-8 text-primary" /> CONTROL TOWER
         </h1>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={seedPilot} disabled={seeding}>
-            <Sparkles className={`h-4 w-4 mr-2 ${seeding ? "animate-spin" : ""}`} />
-            {seeding ? "Criando piloto…" : "Criar piloto"}
-          </Button>
-          <Button size="sm" variant="outline" onClick={smokeTestPayment} disabled={smoking}>
-            <Zap className={`h-4 w-4 mr-2 ${smoking ? "animate-spin" : ""}`} />
-            {smoking ? "Testando…" : "Smoke-test pagamento"}
-          </Button>
-          <Button size="sm" variant="outline" onClick={backfillEnrollments} disabled={backfilling}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${backfilling ? "animate-spin" : ""}`} />
-            {backfilling ? "Vinculando…" : "Backfill inscrições"}
-          </Button>
           <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
