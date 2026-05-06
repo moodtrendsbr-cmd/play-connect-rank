@@ -39,6 +39,10 @@ const EditTournamentForm = ({ tournament, userId, onSaved }: EditTournamentFormP
   const [loading, setLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const PRESET_MODALITIES = ["Vôlei de Praia", "Beach Tennis", "Futevôlei"];
+  const [customModality, setCustomModality] = useState(
+    !!tournament.modality && !PRESET_MODALITIES.includes(tournament.modality)
+  );
 
   const [form, setForm] = useState({
     name: tournament.name || "",
