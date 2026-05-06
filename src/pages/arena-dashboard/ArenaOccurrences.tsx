@@ -17,6 +17,30 @@ const CATEGORIES = ["court","class","instructor","booking","student","event","ot
 const SEVERITIES = ["low","medium","high","critical"];
 const STATUSES = ["open","in_progress","resolved","closed"];
 
+const CATEGORY_LABELS: Record<string, string> = {
+  court: "Quadra",
+  class: "Aula",
+  instructor: "Instrutor",
+  booking: "Reserva",
+  student: "Aluno",
+  event: "Evento",
+  other: "Outro",
+};
+
+const SEVERITY_LABELS: Record<string, string> = {
+  low: "Baixa",
+  medium: "Média",
+  high: "Alta",
+  critical: "Crítica",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  open: "Aberta",
+  in_progress: "Em andamento",
+  resolved: "Resolvida",
+  closed: "Fechada",
+};
+
 const SEV_BADGE: Record<string, string> = {
   low: "bg-muted text-muted-foreground",
   medium: "bg-blue-500/20 text-blue-400",
