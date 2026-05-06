@@ -159,7 +159,7 @@ const ArenaOccurrences = () => {
                   <Label>Severidade</Label>
                   <Select value={form.severity} onValueChange={(v) => setForm({ ...form, severity: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{SEVERITIES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    <SelectContent>{SEVERITIES.map((s) => <SelectItem key={s} value={s}>{SEVERITY_LABELS[s]}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
