@@ -330,16 +330,34 @@ const CreateTournament = () => {
           />
 
           {/* 2. Modalidade */}
-          <div>
-            <Label>Modalidade</Label>
-            <Select value={form.modality} onValueChange={(v) => update("modality", v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Vôlei de Praia">Vôlei de Praia</SelectItem>
-                <SelectItem value="Vôlei de Quadra">Vôlei de Quadra</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {(() => {
+            const PRESETS = ["Vôlei de Praia", "Beach Tennis", "Futevôlei"];
+            const isPreset = PRESETS.includes(form.modality);
+            const selectValue = isPreset ? form.modality : (form.modality ? "__custom__" : "");
+            return (
+              <div>
+                <Label>Modalidade</Label>
+                <Select
+                  value={selectValue}
+                  onValueChange={(v) => update("modality", v === "__custom__" ? "" : v)}
+                >
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {PRESETS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    <SelectItem value="__custom__">Outra (personalizada)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {selectValue === "__custom__" && (
+                  <Input
+                    className="mt-2"
+                    placeholder="Digite a modalidade"
+                    value={form.modality}
+                    onChange={(e) => update("modality", e.target.value)}
+                  />
+                )}
+              </div>
+            );
+          })()}
 
           {/* 3. Builder Sequencial de Categorias */}
           <div className="rounded-lg border border-border bg-card p-4 space-y-4">
