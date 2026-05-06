@@ -212,9 +212,9 @@ const ArenaOccurrences = () => {
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-foreground text-sm">{o.title}</p>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${SEV_BADGE[o.severity]}`}>{o.severity}</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[o.status]}`}>{o.status}</span>
-                      <span className="text-[10px] text-muted-foreground">• {o.category}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${SEV_BADGE[o.severity]}`}>{SEVERITY_LABELS[o.severity] ?? o.severity}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[o.status]}`}>{STATUS_LABELS[o.status] ?? o.status}</span>
+                      <span className="text-[10px] text-muted-foreground">• {CATEGORY_LABELS[o.category] ?? o.category}</span>
                     </div>
                     {o.description && <p className="text-xs text-muted-foreground">{o.description}</p>}
                     <p className="text-[10px] text-muted-foreground">Aberta em {format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}{o.task_id && " • tarefa vinculada"}</p>
