@@ -39,6 +39,10 @@ const EditTournamentForm = ({ tournament, userId, onSaved }: EditTournamentFormP
   const [loading, setLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const PRESET_MODALITIES = ["Vôlei de Praia", "Beach Tennis", "Futevôlei"];
+  const [customModality, setCustomModality] = useState(
+    !!tournament.modality && !PRESET_MODALITIES.includes(tournament.modality)
+  );
 
   const [form, setForm] = useState({
     name: tournament.name || "",
@@ -227,28 +231,37 @@ const EditTournamentForm = ({ tournament, userId, onSaved }: EditTournamentFormP
 
       {/* Modalidade */}
       {(() => {
-        const PRESETS = ["Vôlei de Praia", "Beach Tennis", "Futevôlei"];
-        const isPreset = PRESETS.includes(form.modality);
-        const selectValue = isPreset ? form.modality : (form.modality ? "__custom__" : "");
+        const isPreset = PRESET_MODALITIES.includes(form.modality);
+        const showCustom = customModality || (!isPreset && !!form.modality);
+        const selectValue = showCustom ? "__custom__" : (isPreset ? form.modality : "");
         return (
           <div>
             <Label>Modalidade</Label>
             <Select
               value={selectValue}
-              onValueChange={(v) => update("modality", v === "__custom__" ? "" : v)}
+              onValueChange={(v) => {
+                if (v === "__custom__") {
+                  setCustomModality(true);
+                  update("modality", "");
+                } else {
+                  setCustomModality(false);
+                  update("modality", v);
+                }
+              }}
             >
               <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {PRESETS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {PRESET_MODALITIES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 <SelectItem value="__custom__">Outra (personalizada)</SelectItem>
               </SelectContent>
             </Select>
-            {selectValue === "__custom__" && (
+            {showCustom && (
               <Input
                 className="mt-2"
                 placeholder="Digite a modalidade"
                 value={form.modality}
                 onChange={(e) => update("modality", e.target.value)}
+                autoFocus
               />
             )}
           </div>
