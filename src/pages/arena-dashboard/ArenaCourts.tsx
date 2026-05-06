@@ -29,24 +29,29 @@ const ArenaCourts = () => {
   const openEdit = (c: any) => { setEditCourt(c); setForm({ name: c.name, price_per_hour: c.price_per_hour?.toString() || "" }); setDialogOpen(true); };
 
   const handleSave = async () => {
-    if (!arena?.id) {
-      toast({ title: "Arena não carregada", description: "Aguarde o carregamento ou conecte uma arena." });
+    if (!arena?.id || (arena as any)?.__demo) {
+      toast({ title: "Arena não encontrada", description: "Cadastre/conecte uma arena vinculada ao seu usuário antes de criar quadras.", variant: "destructive" });
       return;
     }
     const payload = { name: form.name, price_per_hour: form.price_per_hour ? Number(form.price_per_hour) : null, arena_id: arena.id };
-    if (editCourt) {
-      await supabase.from("courts").update(payload).eq("id", editCourt.id);
-      toast({ title: "Quadra atualizada" });
-    } else {
-      await supabase.from("courts").insert(payload);
-      toast({ title: "Quadra criada" });
+    const { error } = editCourt
+      ? await supabase.from("courts").update(payload).eq("id", editCourt.id)
+      : await supabase.from("courts").insert(payload);
+    if (error) {
+      toast({ title: "Erro ao salvar quadra", description: error.message, variant: "destructive" });
+      return;
     }
+    toast({ title: editCourt ? "Quadra atualizada" : "Quadra criada" });
     setDialogOpen(false);
     fetchCourts();
   };
 
   const toggleActive = async (court: any) => {
-    await supabase.from("courts").update({ is_active: !court.is_active }).eq("id", court.id);
+    const { error } = await supabase.from("courts").update({ is_active: !court.is_active }).eq("id", court.id);
+    if (error) {
+      toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+      return;
+    }
     fetchCourts();
   };
 
