@@ -17,6 +17,30 @@ const CATEGORIES = ["court","class","instructor","booking","student","event","ot
 const SEVERITIES = ["low","medium","high","critical"];
 const STATUSES = ["open","in_progress","resolved","closed"];
 
+const CATEGORY_LABELS: Record<string, string> = {
+  court: "Quadra",
+  class: "Aula",
+  instructor: "Instrutor",
+  booking: "Reserva",
+  student: "Aluno",
+  event: "Evento",
+  other: "Outro",
+};
+
+const SEVERITY_LABELS: Record<string, string> = {
+  low: "Baixa",
+  medium: "Média",
+  high: "Alta",
+  critical: "Crítica",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  open: "Aberta",
+  in_progress: "Em andamento",
+  resolved: "Resolvida",
+  closed: "Fechada",
+};
+
 const SEV_BADGE: Record<string, string> = {
   low: "bg-muted text-muted-foreground",
   medium: "bg-blue-500/20 text-blue-400",
@@ -128,14 +152,14 @@ const ArenaOccurrences = () => {
                   <Label>Categoria</Label>
                   <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                    <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{CATEGORY_LABELS[c]}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label>Severidade</Label>
                   <Select value={form.severity} onValueChange={(v) => setForm({ ...form, severity: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{SEVERITIES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    <SelectContent>{SEVERITIES.map((s) => <SelectItem key={s} value={s}>{SEVERITY_LABELS[s]}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
@@ -143,7 +167,7 @@ const ArenaOccurrences = () => {
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               {(form.status === "resolved" || form.status === "closed") && (
@@ -160,14 +184,14 @@ const ArenaOccurrences = () => {
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos status</SelectItem>
-            {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterCat} onValueChange={setFilterCat}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Categorias</SelectItem>
-            {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{CATEGORY_LABELS[c]}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -188,9 +212,9 @@ const ArenaOccurrences = () => {
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-foreground text-sm">{o.title}</p>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${SEV_BADGE[o.severity]}`}>{o.severity}</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[o.status]}`}>{o.status}</span>
-                      <span className="text-[10px] text-muted-foreground">• {o.category}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${SEV_BADGE[o.severity]}`}>{SEVERITY_LABELS[o.severity] ?? o.severity}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[o.status]}`}>{STATUS_LABELS[o.status] ?? o.status}</span>
+                      <span className="text-[10px] text-muted-foreground">• {CATEGORY_LABELS[o.category] ?? o.category}</span>
                     </div>
                     {o.description && <p className="text-xs text-muted-foreground">{o.description}</p>}
                     <p className="text-[10px] text-muted-foreground">Aberta em {format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}{o.task_id && " • tarefa vinculada"}</p>
