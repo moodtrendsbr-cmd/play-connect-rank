@@ -52,6 +52,7 @@ const CreateTournament = () => {
   const [loading, setLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [customModality, setCustomModality] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
