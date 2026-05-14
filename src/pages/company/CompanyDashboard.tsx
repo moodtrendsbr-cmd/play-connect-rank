@@ -10,13 +10,8 @@ import {
   LineChart, Eye, Compass, Rss, ExternalLink, AlertTriangle, MousePointerClick,
   TrendingUp, ArrowRight, Loader2,
 } from "lucide-react";
-import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
-import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
-import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
-import { COMMANDS } from "@/lib/conversationalCommands";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 import { GrowthDashboardPanel } from "@/components/growth/GrowthDashboardPanel";
-import { ControlTowerAIPanel } from "@/components/control-tower/ControlTowerAIPanel";
 
 // ---------- Local helpers (not exported) ----------
 const SectionHeader = ({ id, icon: Icon, title, subtitle, action }: any) => (
@@ -207,12 +202,10 @@ const CompanyDashboard = () => {
 
   return (
     <div className="space-y-8">
-      {/* Phase H — Control Tower AI */}
-      <ControlTowerAIPanel scope={{ type: "company", id: company.id }} tenantId={company.tenant_id ?? undefined} />
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Company Control Tower</p>
+          <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Empresa</p>
           <h1 className="font-display text-3xl md:text-4xl text-foreground leading-tight">{company.name}</h1>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {plan && (
@@ -263,20 +256,8 @@ const CompanyDashboard = () => {
         </div>
       </section>
 
-      {/* CAMADA CONVERSACIONAL */}
-      <OperationModeBanner profile="company" />
-      <CommandExamplesCard
-        title="Operar pelo WhatsApp"
-        subtitle="Comandos rápidos para sua presença comercial"
-        examples={COMMANDS.company}
-      />
-      {user?.id && (
-        <CommandHistoryCard
-          scope="user"
-          scopeId={user.id}
-          seeAllHref="/company/comandos"
-        />
-      )}
+
+
 
       {/* BLOCO 2 — Marketplace */}
       <section>
@@ -439,7 +420,7 @@ const CompanyDashboard = () => {
       {/* FASE 13 — Receita conversacional */}
       {company?.id && (
         <section className="space-y-3">
-          <SectionHeader id="revenue" icon={TrendingUp} title="Vendas via WhatsApp" subtitle="Receita atribuída à ORKYM · 30 dias" />
+          <SectionHeader id="revenue" icon={TrendingUp} title="Vendas via WhatsApp" subtitle="Receita gerada por WhatsApp · 30 dias" />
           <RevenueDashboardPanel scope={{ type: "company", id: company.id }} />
           <GrowthDashboardPanel scope={{ type: "company", id: company.id }} />
         </section>

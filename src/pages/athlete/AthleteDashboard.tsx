@@ -23,11 +23,7 @@ import {
   Flame,
   Clock,
 } from "lucide-react";
-import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
-import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
-import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { QrEntryCard } from "@/components/conversational/QrEntryCard";
-import { COMMANDS } from "@/lib/conversationalCommands";
 import MyNextMatchCard from "@/components/athlete/MyNextMatchCard";
 
 // ----- Helpers locais -----
@@ -400,14 +396,8 @@ const AthleteDashboard = () => {
         </Card>
       </section>
 
-      {/* CAMADA CONVERSACIONAL */}
-      <OperationModeBanner profile="athlete" />
+      {/* Check-in por QR */}
       <div className="grid md:grid-cols-2 gap-4">
-        <CommandExamplesCard
-          title="Pedir pelo WhatsApp"
-          subtitle="Atalhos rápidos para sua vida esportiva"
-          examples={COMMANDS.athlete}
-        />
         <QrEntryCard
           title="Check-in por QR"
           subtitle="Aponte a câmera no QR da arena para confirmar presença"
@@ -415,13 +405,6 @@ const AthleteDashboard = () => {
           ctaLabel="Abrir scanner"
         />
       </div>
-      {user?.id && (
-        <CommandHistoryCard
-          scope="user"
-          scopeId={user.id}
-          seeAllHref="/athlete/comandos"
-        />
-      )}
 
       {/* BLOCO 2 — MEU ESPORTE HOJE */}
       <section className="space-y-3">

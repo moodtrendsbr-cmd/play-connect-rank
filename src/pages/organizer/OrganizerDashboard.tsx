@@ -21,14 +21,9 @@ import {
   ChevronRight,
   TrendingUp,
 } from "lucide-react";
-import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
-import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
-import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
 import { QrEntryCard } from "@/components/conversational/QrEntryCard";
-import { COMMANDS } from "@/lib/conversationalCommands";
 import PromoteCampaignDialog from "@/components/featured/PromoteCampaignDialog";
 import { Rocket } from "lucide-react";
-import { ControlTowerAIPanel } from "@/components/control-tower/ControlTowerAIPanel";
 
 // ----- Helpers (locais, não exportados) -----
 const SectionHeader = ({
@@ -286,13 +281,11 @@ const OrganizerDashboard = () => {
 
   return (
     <div className="space-y-8 max-w-7xl">
-      {/* Phase H — Control Tower AI */}
-      <ControlTowerAIPanel scope={{ type: "organizer", id: user!.id }} />
       {/* HEADER */}
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            Event Control Tower
+            Organizador
           </p>
           <h1 className="text-2xl md:text-3xl font-bold leading-tight">
             Operação de eventos
@@ -379,14 +372,7 @@ const OrganizerDashboard = () => {
         )}
       </section>
 
-      {/* CAMADA CONVERSACIONAL */}
-      <OperationModeBanner profile="organizer" />
       <div className="grid md:grid-cols-2 gap-4">
-        <CommandExamplesCard
-          title="Operar pelo WhatsApp"
-          subtitle="Comandos rápidos para gerir seus eventos"
-          examples={COMMANDS.organizer}
-        />
         <QrEntryCard
           title="Check-in dos eventos"
           subtitle="Confirme presença de atletas via QR"
@@ -394,13 +380,6 @@ const OrganizerDashboard = () => {
           ctaLabel="Abrir check-in dos jogos"
         />
       </div>
-      {user?.id && (
-        <CommandHistoryCard
-          scope="user"
-          scopeId={user.id}
-          seeAllHref="/organizer/dashboard/comandos"
-        />
-      )}
 
       {/* BLOCO 2 — MEUS EVENTOS */}
       <section className="space-y-3">
