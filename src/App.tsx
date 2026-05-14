@@ -233,10 +233,6 @@ const App = () => (
               <Route path="assinaturas" element={<ArenaSubscriptions />} />
               <Route path="cobrancas" element={<ArenaBilling />} />
               <Route path="ocorrencias" element={<ArenaOccurrences />} />
-              <Route path="acoes-ia" element={<ArenaActions />} />
-              <Route path="autonomia" element={<ArenaAutonomy />} />
-              <Route path="control-tower" element={<ArenaControlTower />} />
-              <Route path="comandos" element={<ArenaCommands />} />
               <Route path="mensagens-wa" element={<ArenaMessages />} />
               <Route path="perfil" element={<ArenaProfile />} />
               <Route path="qr" element={<ArenaQR />} />
@@ -274,7 +270,6 @@ const App = () => (
               <Route path="historico" element={<AthleteDashboard />} />
               <Route path="descobrir" element={<Explore />} />
               <Route path="mensagens" element={<Messages />} />
-              <Route path="comandos" element={<AthleteCommands />} />
             </Route>
             {/* Phase 11.6 — Company Commercial Profile */}
             <Route path="/company" element={<CompanyShell />}>
@@ -286,7 +281,6 @@ const App = () => (
               <Route path="campanhas" element={<CompanyDashboard />} />
               <Route path="performance" element={<CompanyDashboard />} />
               <Route path="visibilidade" element={<CompanyDashboard />} />
-              <Route path="comandos" element={<CompanyCommands />} />
               {/* Sponsor bridge: provides `company` via Outlet context */}
               <Route path="sponsor" element={<CompanySponsorBridge />}>
                 <Route path="torneios" element={<SponsorTournaments />} />
