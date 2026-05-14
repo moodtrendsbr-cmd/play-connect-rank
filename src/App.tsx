@@ -88,9 +88,6 @@ import AdminAdCampaigns from "./pages/admin/AdminAdCampaigns";
 import AdminOrkymMonitor from "./pages/admin/AdminOrkymMonitor";
 import AdminOrkymActions from "./pages/admin/AdminOrkymActions";
 import AdminAutonomy from "./pages/admin/AdminAutonomy";
-import ArenaActions from "./pages/arena-dashboard/ArenaActions";
-import ArenaAutonomy from "./pages/arena-dashboard/ArenaAutonomy";
-import ArenaControlTower from "./pages/arena-dashboard/ArenaControlTower";
 import ArenaProfile from "./pages/arena-dashboard/ArenaProfile";
 import ArenaQR from "./pages/arena-dashboard/ArenaQR";
 import ArenaProducts from "./pages/arena-dashboard/ArenaProducts";
@@ -127,11 +124,7 @@ import CompanyShell from "./layouts/CompanyShell";
 import CompanyDashboard from "./pages/company/CompanyDashboard";
 import CompanySponsorBridge from "./pages/company/CompanySponsorBridge";
 import AdminCommands from "./pages/admin/AdminCommands";
-import ArenaCommands from "./pages/arena-dashboard/ArenaCommands";
-import TenantCommands from "./pages/tenant/TenantCommands";
-import OrganizerCommands from "./pages/organizer/OrganizerCommands";
-import CompanyCommands from "./pages/company/CompanyCommands";
-import AthleteCommands from "./pages/athlete/AthleteCommands";
+import OnboardingPending from "./pages/onboarding/OnboardingPending";
 import AdminWhatsAppInstances from "./pages/admin/AdminWhatsAppInstances";
 import AdminWhatsAppMessages from "./pages/admin/AdminWhatsAppMessages";
 import AdminWhatsAppBindings from "./pages/admin/AdminWhatsAppBindings";
@@ -167,6 +160,7 @@ const App = () => (
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/onboarding/:kind" element={<OnboardingPending />} />
             {/* Phase 13 — WhatsApp connection (outside shells to avoid gate redirect loop) */}
             <Route path="/connect-whatsapp" element={<ConnectWhatsApp />} />
             <Route path="/tenant/connect-whatsapp" element={<TenantConnectWhatsApp />} />
@@ -233,10 +227,6 @@ const App = () => (
               <Route path="assinaturas" element={<ArenaSubscriptions />} />
               <Route path="cobrancas" element={<ArenaBilling />} />
               <Route path="ocorrencias" element={<ArenaOccurrences />} />
-              <Route path="acoes-ia" element={<ArenaActions />} />
-              <Route path="autonomia" element={<ArenaAutonomy />} />
-              <Route path="control-tower" element={<ArenaControlTower />} />
-              <Route path="comandos" element={<ArenaCommands />} />
               <Route path="mensagens-wa" element={<ArenaMessages />} />
               <Route path="perfil" element={<ArenaProfile />} />
               <Route path="qr" element={<ArenaQR />} />
@@ -248,12 +238,7 @@ const App = () => (
             {/* Phase 11.4 — Organizer Event Engine (additive shell) */}
             <Route path="/organizer/dashboard" element={<OrganizerShell />}>
               <Route index element={<OrganizerDashboard />} />
-              <Route path="eventos" element={<OrganizerDashboard />} />
-              <Route path="inscricoes" element={<OrganizerDashboard />} />
-              <Route path="jogos" element={<OrganizerDashboard />} />
-              <Route path="performance" element={<OrganizerDashboard />} />
               <Route path="financeiro" element={<OrganizerFinance />} />
-              <Route path="comandos" element={<OrganizerCommands />} />
               <Route path="mensagens-wa" element={<OrganizerMessages />} />
             </Route>
             <Route path="/organizer" element={<OrganizerLayout />}>
@@ -279,7 +264,6 @@ const App = () => (
               <Route path="historico" element={<AthleteDashboard />} />
               <Route path="descobrir" element={<Explore />} />
               <Route path="mensagens" element={<Messages />} />
-              <Route path="comandos" element={<AthleteCommands />} />
             </Route>
             {/* Phase 11.6 — Company Commercial Profile */}
             <Route path="/company" element={<CompanyShell />}>
@@ -291,7 +275,6 @@ const App = () => (
               <Route path="campanhas" element={<CompanyDashboard />} />
               <Route path="performance" element={<CompanyDashboard />} />
               <Route path="visibilidade" element={<CompanyDashboard />} />
-              <Route path="comandos" element={<CompanyCommands />} />
               {/* Sponsor bridge: provides `company` via Outlet context */}
               <Route path="sponsor" element={<CompanySponsorBridge />}>
                 <Route path="torneios" element={<SponsorTournaments />} />
@@ -305,16 +288,11 @@ const App = () => (
             <Route path="/tenant" element={<TenantShell />}>
               <Route index element={<Navigate to="/tenant/dashboard" replace />} />
               <Route path="dashboard" element={<TenantDashboard />} />
-              <Route path="overview" element={<OrganizerSettings />} />
               <Route path="arenas" element={<OrganizerArenas />} />
               <Route path="membros" element={<OrganizerMembers />} />
-              <Route path="empresas" element={<OrganizerArenas />} />
               <Route path="financeiro" element={<OrganizerFinance />} />
               <Route path="pagamento" element={<OrganizerPayment />} />
-              <Route path="branding" element={<OrganizerSettings />} />
               <Route path="dominios" element={<OrganizerDomains />} />
-              <Route path="autonomia" element={<AdminAutonomy />} />
-              <Route path="comandos" element={<TenantCommands />} />
               <Route path="whatsapp-routing" element={<TenantWhatsAppRouting />} />
               <Route path="mensagens-wa" element={<TenantMessages />} />
               <Route path="tournaments" element={<TenantTournaments />} />

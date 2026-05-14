@@ -19,45 +19,22 @@ const ArenaShell = () => {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      // 1) Try owned arena
-      let { data } = await supabase
+      // Only load arenas owned by this user. NO fallback to other arenas.
+      const { data } = await supabase
         .from("arenas")
         .select("*")
         .eq("owner_user_id", user.id)
         .limit(1)
         .maybeSingle();
 
-      // 2) Fall back to any arena (admin / testing navigation)
-      if (!data) {
-        const fallback = await supabase
-          .from("arenas")
-          .select("*")
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        data = fallback.data;
-      }
-
-      // 3) Last-resort demo stub so all arena pages render & can be navigated for testing
-      if (!data) {
-        data = {
-          id: "00000000-0000-0000-0000-000000000000",
-          name: "Arena Demo",
-          slug: "arena-demo",
-          tenant_id: null,
-          owner_user_id: user.id,
-          __demo: true,
-        } as any;
-      }
-
-      setArena(data);
-      setArenaId(data.id);
-      setTenantId((data as any).tenant_id ?? null);
+      setArena(data ?? null);
+      setArenaId(data?.id ?? null);
+      setTenantId((data as any)?.tenant_id ?? null);
       setResolved(true);
     })();
   }, [user, userRole]);
 
-  const scope = arenaId && !(arena as any)?.__demo
+  const scope = arenaId
     ? { scope_type: "arena" as const, arena_id: arenaId, tenant_id: tenantId }
     : null;
   const { loading: waLoading, connected } = useWhatsAppConnectionStatus(scope);
@@ -71,11 +48,15 @@ const ArenaShell = () => {
   }
   if (!user) return <Navigate to="/login" replace />;
 
-  // Gate: arena owners must connect WhatsApp before using the dashboard.
-  // Super admin and demo-stub arenas bypass so all pages remain navigable for testing.
   const isAdmin = userRole === "admin";
-  const isDemo = (arena as any)?.__demo === true;
-  if (!isAdmin && !isDemo && resolved && arenaId && !waLoading && !connected) {
+
+  // No arena owned: send to onboarding (admin goes back to /admin)
+  if (resolved && !arenaId) {
+    return <Navigate to={isAdmin ? "/admin" : "/onboarding/arena"} replace />;
+  }
+
+  // Gate: arena owners must connect WhatsApp before using the dashboard.
+  if (!isAdmin && resolved && arenaId && !waLoading && !connected) {
     return <Navigate to="/arena/connect-whatsapp" replace state={{ from: location.pathname }} />;
   }
 
