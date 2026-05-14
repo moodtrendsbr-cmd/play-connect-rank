@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Eye, EyeOff, Users, Trophy, Building2, Briefcase, Loader2, ArrowLeft } from "lucide-react";
+import { resolveLandingPath } from "@/lib/loginDispatch";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA",
@@ -94,13 +95,14 @@ const Register = () => {
         const userId = signUpData.user.id;
 
         // Update profile
-        await supabase.from("profiles").update({
+        const profileRes = await supabase.from("profiles").update({
           city: form.city,
           state: form.state,
           gender: selectedRole === "athlete" || selectedRole === "organizer" ? form.gender : null,
           whatsapp: form.whatsapp,
           arena: selectedRole === "arena" ? form.arenaName : null,
         } as any).eq("user_id", userId);
+        if (profileRes.error) throw profileRes.error;
 
         // Create arena record
         if (selectedRole === "arena") {
@@ -111,7 +113,7 @@ const Register = () => {
             .replace(/(^-|-$)/g, "")
             + "-" + Date.now().toString(36);
 
-          await supabase.from("arenas").insert({
+          const arenaRes = await supabase.from("arenas").insert({
             owner_user_id: userId,
             name: form.arenaName,
             slug,
@@ -122,11 +124,12 @@ const Register = () => {
             contact_email: form.email,
             contact_whatsapp: form.whatsapp,
           } as any);
+          if (arenaRes.error) throw arenaRes.error;
         }
 
         // Create company record if empresa
         if (selectedRole === "company") {
-          await supabase.from("companies").insert({
+          const companyRes = await supabase.from("companies").insert({
             owner_user_id: userId,
             name: form.companyName,
             cnpj: form.cnpj || null,
@@ -138,13 +141,31 @@ const Register = () => {
             address: form.address,
             zip_code: form.zipCode.replace(/\D/g, ""),
           } as any);
+          if (companyRes.error) throw companyRes.error;
         }
       }
 
-      toast({ title: "Conta criada!", description: "Verifique seu email para confirmar o cadastro." });
-      navigate("/feed");
+      // Detect whether session is active (email-confirm OFF) or not (ON).
+      const { data: sessionRes } = await supabase.auth.getSession();
+      if (sessionRes.session?.user) {
+        toast({ title: "Conta criada!", description: "Bem-vindo." });
+        const dest = await resolveLandingPath(sessionRes.session.user.id);
+        navigate(dest, { replace: true });
+      } else {
+        toast({
+          title: "Conta criada!",
+          description: "Verifique seu email para confirmar antes de entrar.",
+        });
+        navigate("/login", { replace: true });
+      }
     } catch (err: any) {
-      toast({ title: "Erro inesperado", description: err.message, variant: "destructive" });
+      // Rollback friendly: sign the half-created session out so the form can be retried.
+      try { await supabase.auth.signOut(); } catch { /* ignore */ }
+      toast({
+        title: "Erro ao criar conta",
+        description: err?.message ?? "Tente novamente em instantes.",
+        variant: "destructive",
+      });
     }
 
     setLoading(false);
