@@ -21,7 +21,7 @@ export function RevenueCard({ data, loading, days = 30 }: { data: RevenueKpis | 
           <>
             <div className="text-3xl font-bold tracking-tight">{fmtBRL(total)}</div>
             <div className="text-sm">
-              Via ORKYM: <span className="font-semibold text-[#2BFF88]">{fmtBRL(orkym)}</span>{" "}
+              Via WhatsApp: <span className="font-semibold text-[#2BFF88]">{fmtBRL(orkym)}</span>{" "}
               <span className="text-muted-foreground">({share.toFixed(1)}%)</span>
             </div>
           </>
