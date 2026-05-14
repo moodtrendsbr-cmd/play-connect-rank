@@ -127,11 +127,7 @@ import CompanyShell from "./layouts/CompanyShell";
 import CompanyDashboard from "./pages/company/CompanyDashboard";
 import CompanySponsorBridge from "./pages/company/CompanySponsorBridge";
 import AdminCommands from "./pages/admin/AdminCommands";
-import ArenaCommands from "./pages/arena-dashboard/ArenaCommands";
-import TenantCommands from "./pages/tenant/TenantCommands";
-import OrganizerCommands from "./pages/organizer/OrganizerCommands";
-import CompanyCommands from "./pages/company/CompanyCommands";
-import AthleteCommands from "./pages/athlete/AthleteCommands";
+import OnboardingPending from "./pages/onboarding/OnboardingPending";
 import AdminWhatsAppInstances from "./pages/admin/AdminWhatsAppInstances";
 import AdminWhatsAppMessages from "./pages/admin/AdminWhatsAppMessages";
 import AdminWhatsAppBindings from "./pages/admin/AdminWhatsAppBindings";
@@ -167,6 +163,7 @@ const App = () => (
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/onboarding/:kind" element={<OnboardingPending />} />
             {/* Phase 13 — WhatsApp connection (outside shells to avoid gate redirect loop) */}
             <Route path="/connect-whatsapp" element={<ConnectWhatsApp />} />
             <Route path="/tenant/connect-whatsapp" element={<TenantConnectWhatsApp />} />
