@@ -16,13 +16,8 @@ import {
   type TenantTier, type UsageSummary,
 } from "@/lib/autonomyTier";
 import { UsageMeter } from "@/components/autonomy/UsageMeter";
-import { OperationModeBanner } from "@/components/conversational/OperationModeBanner";
-import { CommandExamplesCard } from "@/components/conversational/CommandExamplesCard";
-import { CommandHistoryCard } from "@/components/conversational/CommandHistoryCard";
-import { COMMANDS } from "@/lib/conversationalCommands";
 import { RevenueDashboardPanel } from "@/components/revenue/RevenueDashboardPanel";
 import { GrowthDashboardPanel } from "@/components/growth/GrowthDashboardPanel";
-import { ControlTowerAIPanel } from "@/components/control-tower/ControlTowerAIPanel";
 import { DollarSign as RevDollar } from "lucide-react";
 
 // ─────────────── helpers locais (não exportados) ───────────────
@@ -286,10 +281,6 @@ const TenantDashboard = () => {
         </Button>
       </div>
 
-      {/* Phase H — Control Tower AI */}
-      <ControlTowerAIPanel scope={{ type: "tenant", id: tenant.id }} />
-
-
 
       {/* BLOCO 1 — CONTROL TOWER (DOMINANTE) */}
       <section className="rounded-xl border-l-2 border-primary bg-primary/5 p-5 space-y-4">
@@ -333,24 +324,11 @@ const TenantDashboard = () => {
           <KpiCard label="Arenas" value={arenaCount.total} icon={<Building2 className="h-4 w-4" />} hint={`${arenaCount.active} ativas`} />
           <KpiCard label="Organizadores" value={memberCount} icon={<Users className="h-4 w-4" />} />
           <KpiCard label="Receita 30d" value={fmtBRL(revenue.total)} icon={<DollarSign className="h-4 w-4" />} hint={`${fmtBRL(revenue.settled)} liquidado`} />
-          <KpiCard label="Chamadas IA" value={(usage?.total_calls ?? 0).toLocaleString("pt-BR")} icon={<Phone className="h-4 w-4" />} hint="este mês" />
-          <KpiCard label="Auto-execuções" value={(usage?.total_auto_executed ?? 0).toLocaleString("pt-BR")} icon={<Zap className="h-4 w-4" />} hint="este mês" />
+          <KpiCard label="Mensagens" value={(usage?.total_calls ?? 0).toLocaleString("pt-BR")} icon={<Phone className="h-4 w-4" />} hint="este mês" />
+          <KpiCard label="Ações automáticas" value={(usage?.total_auto_executed ?? 0).toLocaleString("pt-BR")} icon={<Zap className="h-4 w-4" />} hint="este mês" />
           <KpiCard label="Alertas abertos" value={openOccurrences + overdueCount} icon={<AlertTriangle className="h-4 w-4" />} hint={`${openOccurrences} ocorrências`} />
         </div>
       </section>
-
-      {/* CAMADA CONVERSACIONAL */}
-      <OperationModeBanner profile="tenant" />
-      <CommandExamplesCard
-        title="Operar pelo WhatsApp"
-        subtitle="Comandos executivos para sua rede"
-        examples={COMMANDS.tenant}
-      />
-      <CommandHistoryCard
-        scope="tenant"
-        scopeId={tenant.id}
-        seeAllHref="/tenant/comandos"
-      />
 
       {/* BLOCO 2 — REDE */}
       <section id="rede">
@@ -509,8 +487,8 @@ const TenantDashboard = () => {
       <section id="autonomia">
         <SectionHeader
           icon={<Sparkles className="h-4 w-4" />}
-          title="IA / Autonomia"
-          subtitle="Uso da ORKYM e políticas ativas na rede"
+          title="Automações"
+          subtitle="Uso de mensagens e políticas ativas na rede"
           accent="violet"
         />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -519,7 +497,7 @@ const TenantDashboard = () => {
               {usage && (
                 <>
                   <UsageMeter
-                    label="Chamadas ORKYM"
+                    label="Mensagens"
                     used={usage.total_calls}
                     limit={usage.calls_limit}
                     projected={usage.projected_calls_eom}
@@ -554,7 +532,7 @@ const TenantDashboard = () => {
                 </Badge>
               </CardContent>
             </Card>
-            <ShortcutLink to="/tenant/autonomia" icon={<Sparkles className="h-4 w-4" />} label="IA / Autonomia" />
+            <ShortcutLink to="/tenant/autonomia" icon={<Sparkles className="h-4 w-4" />} label="Automações" />
             <ShortcutLink to="/tenant/dominios" icon={<Globe className="h-4 w-4" />} label="Domínios" />
           </div>
         </div>
@@ -564,9 +542,9 @@ const TenantDashboard = () => {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <RevDollar className="h-4 w-4 text-[#2BFF88]" />
-          <h2 className="font-display text-xl tracking-wide">Receita via ORKYM</h2>
+          <h2 className="font-display text-xl tracking-wide">Receita automatizada</h2>
         </div>
-        <p className="text-xs text-muted-foreground">Atribuição de receita gerada pelo WhatsApp · 30 dias</p>
+        <p className="text-xs text-muted-foreground">Receita gerada via WhatsApp · 30 dias</p>
         {tenant?.id && <RevenueDashboardPanel scope={{ type: "tenant", id: tenant.id }} />}
         {tenant?.id && <GrowthDashboardPanel scope={{ type: "tenant", id: tenant.id }} />}
       </section>
