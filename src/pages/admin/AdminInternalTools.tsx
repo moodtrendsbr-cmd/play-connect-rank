@@ -33,7 +33,26 @@ const bucketBadge: Record<BackfillItem["bucket"], { label: string; cls: string }
   unrecoverable_no_category: { label: "Irrecuperável", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
 };
 
+const INTERNAL_TOOLS_ENABLED = import.meta.env.VITE_ENABLE_INTERNAL_TOOLS === "true";
+
 const AdminInternalTools = () => {
+  if (!INTERNAL_TOOLS_ENABLED) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-3xl font-display text-foreground flex items-center gap-3">
+          <Wrench className="h-7 w-7 text-muted-foreground" />
+          Ferramentas internas
+        </h1>
+        <Alert className="border-muted-foreground/40 bg-muted/30">
+          <ShieldAlert className="h-4 w-4 text-muted-foreground" />
+          <AlertDescription className="text-foreground">
+            Indisponível neste ambiente. Defina <code>VITE_ENABLE_INTERNAL_TOOLS=true</code> para habilitar.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   const [seeding, setSeeding] = useState(false);
   const [smoking, setSmoking] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
