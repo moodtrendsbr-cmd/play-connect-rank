@@ -270,7 +270,7 @@ const Profile = () => {
         onAvatarUpdate={(url) => setProfile({ ...profile, avatar_url: url })}
       />
 
-      {/* WhatsApp da ORKYM (Phase 12) */}
+      {/* WhatsApp da plataforma */}
       <WaIdentityPanel userId={user!.id} />
 
       {/* Edit form */}

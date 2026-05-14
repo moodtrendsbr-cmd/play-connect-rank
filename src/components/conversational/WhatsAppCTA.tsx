@@ -32,7 +32,7 @@ export const WhatsAppCTA = ({
     e.preventDefault();
     e.stopPropagation();
     if (!isWaConfigured()) {
-      toast.message("WhatsApp da ORKYM ainda não configurado", {
+      toast.message("WhatsApp da plataforma ainda não configurado", {
         description: "Configure VITE_ORKYM_WHATSAPP nas integrações.",
       });
       return;

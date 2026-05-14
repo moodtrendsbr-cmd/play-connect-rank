@@ -73,7 +73,7 @@ const ManageTournament = () => {
       toast({ title: "Falha ao enfileirar lembrete", description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Lembrete enfileirado", description: `ORKYM enviará no WhatsApp para ${getName(enrollment)}.` });
+    toast({ title: "Lembrete enfileirado", description: `Será enviado por WhatsApp para ${getName(enrollment)}.` });
   };
 
   if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
