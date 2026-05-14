@@ -275,4 +275,4 @@ const AdminInternalTools = () => {
   );
 };
 
-export default AdminInternalTools;
+export default INTERNAL_TOOLS_ENABLED ? AdminInternalTools : InternalToolsDisabled;
