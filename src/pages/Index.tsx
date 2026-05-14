@@ -416,7 +416,7 @@ const Index = () => {
               <p className="mt-1 text-sm text-muted-foreground">Onde jogos viram ranking.</p>
             </div>
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-              {["Atletas", "Organizadores", "Arenas", "Empresas", "Termos", "Privacidade"].map((l) => (
+              {["Atletas", "Organizadores", "Arenas", "Empresas"].map((l) => (
                 <button
                   key={l}
                   className="hover:text-foreground transition-colors"
