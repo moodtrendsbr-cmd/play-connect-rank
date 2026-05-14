@@ -248,12 +248,7 @@ const App = () => (
             {/* Phase 11.4 — Organizer Event Engine (additive shell) */}
             <Route path="/organizer/dashboard" element={<OrganizerShell />}>
               <Route index element={<OrganizerDashboard />} />
-              <Route path="eventos" element={<OrganizerDashboard />} />
-              <Route path="inscricoes" element={<OrganizerDashboard />} />
-              <Route path="jogos" element={<OrganizerDashboard />} />
-              <Route path="performance" element={<OrganizerDashboard />} />
               <Route path="financeiro" element={<OrganizerFinance />} />
-              <Route path="comandos" element={<OrganizerCommands />} />
               <Route path="mensagens-wa" element={<OrganizerMessages />} />
             </Route>
             <Route path="/organizer" element={<OrganizerLayout />}>
@@ -305,16 +300,11 @@ const App = () => (
             <Route path="/tenant" element={<TenantShell />}>
               <Route index element={<Navigate to="/tenant/dashboard" replace />} />
               <Route path="dashboard" element={<TenantDashboard />} />
-              <Route path="overview" element={<OrganizerSettings />} />
               <Route path="arenas" element={<OrganizerArenas />} />
               <Route path="membros" element={<OrganizerMembers />} />
-              <Route path="empresas" element={<OrganizerArenas />} />
               <Route path="financeiro" element={<OrganizerFinance />} />
               <Route path="pagamento" element={<OrganizerPayment />} />
-              <Route path="branding" element={<OrganizerSettings />} />
               <Route path="dominios" element={<OrganizerDomains />} />
-              <Route path="autonomia" element={<AdminAutonomy />} />
-              <Route path="comandos" element={<TenantCommands />} />
               <Route path="whatsapp-routing" element={<TenantWhatsAppRouting />} />
               <Route path="mensagens-wa" element={<TenantMessages />} />
               <Route path="tournaments" element={<TenantTournaments />} />
