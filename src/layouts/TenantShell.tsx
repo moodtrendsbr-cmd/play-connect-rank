@@ -26,15 +26,16 @@ const TenantShell = () => {
   if (!user) return <Navigate to="/login" replace />;
 
   const isSuperAdmin = userRole === "admin";
-  // Admin bypass: allow navigation through tenant pages even without a tenant (for testing).
-  if (!isSuperAdmin && !tenant) return <Navigate to="/organizer/onboarding" replace />;
+  // Admin sem tenant volta para /admin (sem dados fake).
+  if (isSuperAdmin && !tenant) return <Navigate to="/admin" replace />;
+  if (!tenant) return <Navigate to="/organizer/onboarding" replace />;
   if (!isSuperAdmin && !isTenantAdmin) return <Navigate to="/organizer/onboarding" replace />;
 
   if (!isSuperAdmin && tenant && !waLoading && !connected) {
     return <Navigate to="/tenant/connect-whatsapp" replace state={{ from: location.pathname }} />;
   }
 
-  const displayTenant = tenant ?? { id: "demo", name: "Tenant Demo" };
+  const displayTenant = tenant;
 
   return (
     <SidebarProvider>

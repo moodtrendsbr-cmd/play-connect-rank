@@ -50,9 +50,9 @@ const ArenaShell = () => {
 
   const isAdmin = userRole === "admin";
 
-  // No arena owned: send to onboarding (admin can navigate but sees empty banner)
-  if (!isAdmin && resolved && !arenaId) {
-    return <Navigate to="/onboarding/arena" replace />;
+  // No arena owned: send to onboarding (admin goes back to /admin)
+  if (resolved && !arenaId) {
+    return <Navigate to={isAdmin ? "/admin" : "/onboarding/arena"} replace />;
   }
 
   // Gate: arena owners must connect WhatsApp before using the dashboard.
