@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { OrganizerSidebar } from "./sidebars/OrganizerSidebar";
 import { Loader2 } from "lucide-react";
@@ -9,8 +11,23 @@ import { WhatsAppStatusBadge } from "@/components/conversational/WhatsAppStatusB
 const OrganizerShell = () => {
   const { user, userRole, loading } = useAuth();
   const location = useLocation();
+  const [hasEntity, setHasEntity] = useState<boolean | null>(null);
   const scope = user ? { scope_type: "organizer" as const, organizer_user_id: user.id } : null;
   const { loading: waLoading, connected } = useWhatsAppConnectionStatus(scope);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      // organizer "entity" = membership owner/admin in any tenant other than default
+      const { data } = await supabase
+        .from("tenant_members" as any)
+        .select("tenant_id, role")
+        .eq("user_id", user.id)
+        .in("role", ["owner", "admin"])
+        .limit(1);
+      setHasEntity(!!(data && data.length > 0));
+    })();
+  }, [user]);
 
   if (loading) {
     return (
@@ -25,6 +42,9 @@ const OrganizerShell = () => {
   }
 
   const isSuperAdmin = userRole === "admin";
+  if (!isSuperAdmin && hasEntity === false) {
+    return <Navigate to="/organizer/onboarding" replace />;
+  }
   if (!isSuperAdmin && !waLoading && !connected) {
     return <Navigate to="/organizer/connect-whatsapp" replace state={{ from: location.pathname }} />;
   }

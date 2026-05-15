@@ -42,6 +42,12 @@ const CompanyShell = () => {
   if (!user) return <Navigate to="/login" replace />;
 
   const isSuperAdmin = userRole === "admin";
+  if (resolved && !companyId && !isSuperAdmin) {
+    return <Navigate to="/onboarding/company" replace />;
+  }
+  if (isSuperAdmin && resolved && !companyId) {
+    return <Navigate to="/admin" replace />;
+  }
   if (!isSuperAdmin && resolved && companyId && !waLoading && !connected) {
     return <Navigate to="/company/connect-whatsapp" replace state={{ from: location.pathname }} />;
   }
