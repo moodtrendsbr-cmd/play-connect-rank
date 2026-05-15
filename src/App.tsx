@@ -125,6 +125,14 @@ import CompanyDashboard from "./pages/company/CompanyDashboard";
 import CompanySponsorBridge from "./pages/company/CompanySponsorBridge";
 import AdminCommands from "./pages/admin/AdminCommands";
 import OnboardingPending from "./pages/onboarding/OnboardingPending";
+import ArenaOnboarding from "./pages/onboarding/ArenaOnboarding";
+import CompanyOnboarding from "./pages/onboarding/CompanyOnboarding";
+import OrganizerEvents from "./pages/organizer/OrganizerEvents";
+import OrganizerEnrollments from "./pages/organizer/OrganizerEnrollments";
+import OrganizerGames from "./pages/organizer/OrganizerGames";
+import TenantCompanies from "./pages/tenant/TenantCompanies";
+import AdminTenants from "./pages/admin/AdminTenants";
+import CompanyMessages from "./pages/company/CompanyMessages";
 import AdminWhatsAppInstances from "./pages/admin/AdminWhatsAppInstances";
 import AdminWhatsAppMessages from "./pages/admin/AdminWhatsAppMessages";
 import AdminWhatsAppBindings from "./pages/admin/AdminWhatsAppBindings";
@@ -160,6 +168,8 @@ const App = () => (
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/onboarding/arena" element={<ArenaOnboarding />} />
+            <Route path="/onboarding/company" element={<CompanyOnboarding />} />
             <Route path="/onboarding/:kind" element={<OnboardingPending />} />
             {/* Phase 13 — WhatsApp connection (outside shells to avoid gate redirect loop) */}
             <Route path="/connect-whatsapp" element={<ConnectWhatsApp />} />
@@ -238,6 +248,9 @@ const App = () => (
             {/* Phase 11.4 — Organizer Event Engine (additive shell) */}
             <Route path="/organizer/dashboard" element={<OrganizerShell />}>
               <Route index element={<OrganizerDashboard />} />
+              <Route path="eventos" element={<OrganizerEvents />} />
+              <Route path="inscricoes" element={<OrganizerEnrollments />} />
+              <Route path="jogos" element={<OrganizerGames />} />
               <Route path="financeiro" element={<OrganizerFinance />} />
               <Route path="mensagens-wa" element={<OrganizerMessages />} />
             </Route>
@@ -275,6 +288,7 @@ const App = () => (
               <Route path="campanhas" element={<CompanyDashboard />} />
               <Route path="performance" element={<CompanyDashboard />} />
               <Route path="visibilidade" element={<CompanyDashboard />} />
+              <Route path="mensagens-wa" element={<CompanyMessages />} />
               {/* Sponsor bridge: provides `company` via Outlet context */}
               <Route path="sponsor" element={<CompanySponsorBridge />}>
                 <Route path="torneios" element={<SponsorTournaments />} />
@@ -289,6 +303,7 @@ const App = () => (
               <Route index element={<Navigate to="/tenant/dashboard" replace />} />
               <Route path="dashboard" element={<TenantDashboard />} />
               <Route path="arenas" element={<OrganizerArenas />} />
+              <Route path="empresas" element={<TenantCompanies />} />
               <Route path="membros" element={<OrganizerMembers />} />
               <Route path="financeiro" element={<OrganizerFinance />} />
               <Route path="pagamento" element={<OrganizerPayment />} />
@@ -327,7 +342,7 @@ const App = () => (
               <Route path="autonomy" element={<AdminAutonomy />} />
               <Route path="control-tower" element={<AdminControlTower />} />
               <Route path="internal-tools" element={<AdminInternalTools />} />
-              <Route path="tenants" element={<AdminArenas />} />
+              <Route path="tenants" element={<AdminTenants />} />
               <Route path="commands" element={<AdminCommands />} />
               <Route path="whatsapp-instances" element={<AdminWhatsAppInstances />} />
               <Route path="whatsapp-messages" element={<AdminWhatsAppMessages />} />
