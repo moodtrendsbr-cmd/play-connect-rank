@@ -32,7 +32,7 @@ const CompanyShell = () => {
   const scope = companyId ? { scope_type: "company" as const, company_id: companyId } : null;
   const { loading: waLoading, connected } = useWhatsAppConnectionStatus(scope);
 
-  if (loading) {
+  if (loading || !resolved) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
