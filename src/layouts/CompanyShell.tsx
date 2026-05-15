@@ -32,7 +32,7 @@ const CompanyShell = () => {
   const scope = companyId ? { scope_type: "company" as const, company_id: companyId } : null;
   const { loading: waLoading, connected } = useWhatsAppConnectionStatus(scope);
 
-  if (loading || !resolved) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -40,6 +40,13 @@ const CompanyShell = () => {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+  if (!resolved) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const isSuperAdmin = userRole === "admin";
   if (resolved && !companyId && !isSuperAdmin) {
