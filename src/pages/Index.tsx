@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { resolveLandingPath } from "@/lib/loginDispatch";
 
 const scrollTo = (id: string) => {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -84,9 +85,9 @@ const profiles = [
 ];
 
 const socialProof = [
-  { value: "1.200+", label: "Atletas cadastrados" },
-  { value: "80+", label: "Torneios realizados" },
-  { value: "25+", label: "Cidades ativas" },
+  { value: "Beta", label: "Junte-se aos primeiros" },
+  { value: "Aberto", label: "Para sua cidade" },
+  { value: "Grátis", label: "Para começar" },
 ];
 
 
@@ -97,7 +98,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!loading && user && userRole !== "admin") {
-      navigate("/feed", { replace: true });
+      resolveLandingPath(user.id).then((path) => navigate(path, { replace: true }));
     }
   }, [loading, user, userRole, navigate]);
 

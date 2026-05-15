@@ -1,160 +1,123 @@
-# Productization Sprint P0 — MoodPlay
+# Sprint P0.5 — MoodPlay
 
-Sem features novas. Sem IA nova. Sem migrations. Foco em limpeza, blindagem, UX, navegação e onboarding.
+Foco: fechar vazamentos de UX/navegação para liberar beta fechado pago. Sem features novas, sem IA, sem dashboards novos.
 
----
+## 1. Links mortos (sidebars)
 
-## Fase 1 — Login dispatcher (P0)
-**Arquivo:** `src/pages/Login.tsx`
+**Organizer** (`OrganizerSidebar`): `dashboard/eventos`, `dashboard/inscricoes`, `dashboard/jogos` não existem em `App.tsx`.
+- Ação: criar **stubs honestos** em `src/pages/organizer/` (`OrganizerEvents`, `OrganizerEnrollments`, `OrganizerGames`) e registrar rotas filhas dentro de `<Route path="/organizer/dashboard">`.
+- Cada stub usa o mesmo padrão (seção 2).
 
-Substituir `navigate("/dashboard")` por dispatcher:
-1. Após `signInWithPassword`, buscar `userRole` (via `user_roles`) e tenant/arena/company ownership.
-2. Roteamento:
-   - `admin` → `/admin`
-   - `tenant_admin` (tem registro em `tenants` como owner) → `/tenant/dashboard`
-   - `arena` (tem `arenas.owner_user_id = uid`) → `/arena/dashboard`
-   - `organizer` → `/organizer/dashboard`
-   - `company` (tem `companies` própria) → `/company/dashboard`
-   - `athlete` (default) → `/athlete/feed`
-3. Se perfil incompleto (sem `profiles.full_name` ou registro de entidade ausente para o role): mandar para onboarding correspondente da Fase 8.
-4. Centralizar lógica em `src/lib/loginDispatch.ts` (pura, testável). `dashboardPathFor` continua sendo o fallback estático.
+**Company** (`CompanySidebar`): `/company/mensagens-wa` não existe.
+- Ação: criar rota `mensagens-wa` dentro de `<Route path="/company">` reusando `ScopedMessages` com escopo `company` (já existe em `src/pages/conversational/ScopedMessages.tsx`). Se reuso não for trivial, usar stub.
 
----
+**Tenant** (`TenantSidebar`): item `/tenant/empresas` aparece no sidebar mas não há rota.
+- Ação: criar stub `TenantCompanies` em `src/pages/tenant/` e rota filha `empresas`.
 
-## Fase 2 — Remover fallbacks dev (P0)
-**Arquivos:** `src/layouts/ArenaShell.tsx`, `src/layouts/TenantShell.tsx`
+Regra: nenhum item de sidebar pode levar a 404 ou tela branca após esta sprint.
 
-ArenaShell:
-- Remover passos 2 ("primeira arena do banco") e 3 ("Arena Demo").
-- Se `userRole === 'admin'` e não houver arena própria: permitir bypass mas mostrar banner "Modo admin — sem arena vinculada" e NÃO setar `arena` com dados de outra entidade.
-- Caso contrário, sem arena → `<Navigate to="/arena/onboarding" replace />`.
+## 2. Stub honesto padrão
 
-TenantShell:
-- Remover `displayTenant = tenant ?? { id: "demo", ... }`.
-- Sem tenant + não-admin → `/tenant/onboarding` (já redireciona para onboarding do organizer; ajustar para fluxo tenant-específico).
-- Admin sem tenant → banner "Modo admin", sem dados fake.
+Criar componente reutilizável `src/components/common/ComingSoonPage.tsx`:
+- Props: `title`, `description`, `backTo` (default = dashboard do role via `dashboardPathFor`), `ctaLabel?`, `ctaTo?`
+- Layout: ícone, título, descrição clara, badge "Em preparação", botão "Voltar".
+- Sem loading, sem placeholder fake, sem componente vazio.
 
----
+Cada stub criado na seção 1 é uma página de 6-10 linhas que renderiza `<ComingSoonPage ... />`.
 
-## Fase 3 + 5 — Esconder engenharia dos clientes
-Remover dos shells/dashboards de Arena, Organizer, Company, Tenant, Athlete:
-- `ControlTowerAIPanel`
-- `MemoryTransparencyCard`
-- `OperationModeBanner`
-- `CommandExamplesCard`, `CommandHistoryCard`
-- `OrkymActionsCard` (substituir por nada ou por "Ações automáticas recentes" só com label genérico)
-- Páginas `*Commands.tsx` (Arena/Organizer/Company/Tenant/Athlete) → remover do menu (sidebars) e tirar rota do `App.tsx`.
-- `ArenaControlTower.tsx` e `AdminControlTower` (cliente) → renomear visualmente para "Visão geral" ou esconder atrás de feature flag `VITE_ENABLE_INTERNAL_TOOLS`.
+## 3. Guard CompanyShell
 
-Athlete: remover qualquer item "Comandos" do `AthleteSidebar`/`AthleteBottomNav`.
+`CompanyShell` hoje cai em fallback "MoodPlay" se não houver company.
+- Adicionar: após `resolved && !companyId && !isSuperAdmin` → `<Navigate to="/onboarding/company" replace />`.
+- Admin sem company permanece (ou volta para `/admin`), espelhando padrão de `TenantShell`.
 
----
+## 4. Guard OrganizerShell
 
-## Fase 4 — Renomeação de copy
-Buscar e substituir em componentes/sidebars de cliente (não admin/internal):
-- "Control Tower" → "Visão geral"
-- "Bindings" → "Conexões WhatsApp"
-- "Receita via ORKYM" → "Receita automatizada"
-- "Auto-execuções" → "Ações automáticas"
-- "Chamadas IA" / "Chamadas ORKYM" → remover card
-- "WhatsApp da ORKYM" → "WhatsApp da plataforma"
-- "ORKYM enviará..." → "Lembrete enviado por WhatsApp"
-- "A ORKYM aprende..." → "O sistema personaliza recomendações"
-- Qualquer string `ORKYM` voltada ao cliente → remover.
+`OrganizerShell` hoje só checa role. Sem onboarding feito, dashboard fica vazio.
+- Adicionar consulta ao `tenants`/`organizers` por `owner_user_id` (ou flag de `organizer_onboarded` em `profiles`).
+- Sem entidade + não-admin → `<Navigate to="/organizer/onboarding" replace />`.
 
-Centralizar via `src/lib/controlTowerCopy.ts` (já existe) — auditar e ajustar.
+## 5. Onboarding real (substituir `OnboardingPending`)
 
----
+Remover comportamento "voltar para `/register`". Criar formulários mínimos:
 
-## Fase 6 — Rotas falsas/duplicadas
-**Arquivo:** `src/App.tsx` + sidebars.
+- `src/pages/onboarding/ArenaOnboarding.tsx` — campos: nome, slug (auto), telefone WhatsApp. Insere em `arenas` com `owner_user_id = user.id`. Após sucesso → `/arena/dashboard`.
+- `src/pages/onboarding/CompanyOnboarding.tsx` — campos: nome, categoria. Insere em `companies` com `owner_user_id = user.id`. Após sucesso → `/company/dashboard`.
+- Organizer: já existe `OrganizerOnboarding` — manter; apenas garantir guard usa `/organizer/onboarding`.
+- Tenant: já existe — manter.
 
-Organizer: `/eventos`, `/inscricoes`, `/jogos`, `/performance` que renderizam o mesmo componente → remover do `OrganizerSidebar` e do router. Manter só rotas com página real.
+Atualizar `App.tsx`:
+- `/onboarding/arena` → `<ArenaOnboarding />`
+- `/onboarding/company` → `<CompanyOnboarding />`
+- Manter `/onboarding/:kind` como fallback genérico (ou deletar).
 
-Tenant: `overview`, `branding`, `empresas` que reutilizam `OrganizerSettings` fake → remover do `TenantSidebar`/router.
+`resolveLandingPath` já aponta para esses paths — alinhado.
 
-Resultado: menus só mostram itens com página própria.
+## 6. Index redirect
 
----
+`src/pages/Index.tsx` linha 100: `navigate("/feed", ...)`.
+- Trocar por `resolveLandingPath(user.id)` (importar de `@/lib/loginDispatch`).
+- Manter o early-return enquanto resolve.
 
-## Fase 7 — Unificar /dashboard
-**Arquivo:** `src/pages/Dashboard.tsx` + `App.tsx`
+## 7. Athlete unificado
 
-- Converter `/dashboard` em dispatcher puro: detecta role e `<Navigate>` para o shell correto (mesma lógica da Fase 1).
-- Remover qualquer UI legada de `Dashboard.tsx`.
+Hoje `/feed`, `/profile`, `/ranking`, `/messages`, `/tournaments` usam `AppLayout` (com `FeedBottomNav`), enquanto `/athlete/*` usa `AthleteShell` (com `AthleteBottomNav`). Dois chromes diferentes.
 
----
+- Decisão: **AthleteShell é o canônico** (já memorizado).
+- Para usuários com role `athlete` autenticados, redirecionar legado:
+  - Adicionar guard simples em `AppLayout` (ou wrappers nas rotas) que, se `userRole === "athlete"`, redireciona `/feed`→`/athlete/feed`, `/profile`→`/athlete/perfil`, `/ranking`→`/athlete/ranking`, `/messages`→`/athlete/mensagens`, `/tournaments`→`/athlete/torneios`.
+- Não-atletas (admin/organizador navegando feed público) continuam acessando rotas legadas — não mexer.
 
-## Fase 8 — Onboarding mínimo por perfil
-Criar páginas leves (sem novas tabelas, só checklists baseados em dados existentes):
-- `src/pages/onboarding/ArenaOnboarding.tsx` — passos: WhatsApp, perfil, QR, primeira quadra.
-- `src/pages/onboarding/OrganizerOnboarding.tsx` — perfil + 1º torneio. (Já existe `OrganizerOnboarding.tsx` — reaproveitar e simplificar.)
-- `src/pages/onboarding/CompanyOnboarding.tsx` — empresa + 1º produto.
-- `src/pages/onboarding/TenantOnboarding.tsx` — domínio + 1ª arena.
-- `src/pages/onboarding/AthleteOnboarding.tsx` — perfil + esportes.
+## 8. Landing — métricas
 
-Componente compartilhado `OnboardingChecklist` com itens marcáveis (estado derivado de queries existentes). Sem termos técnicos.
+`src/pages/Index.tsx` array `socialProof` tem números falsos.
+- Substituir seção inteira por linguagem qualitativa (sem números) ou marcar "Em beta — junte-se aos primeiros". Manter visual.
 
-Rotas: `/arena/onboarding`, `/organizer/onboarding`, `/company/onboarding`, `/tenant/onboarding`, `/athlete/onboarding`.
+## 9. Admin `/admin/tenants`
 
----
+`App.tsx` linha 330 mapeia `tenants` → `<AdminArenas />` (errado).
+- Criar stub `AdminTenants` em `src/pages/admin/` usando `ComingSoonPage` ou listar tenants reais via query simples a `tenants`. P0.5 = stub honesto.
 
-## Fase 9 — Register
-**Arquivo:** `src/pages/Register.tsx`
+## 10. QA manual
 
-- `try/catch` em todos os inserts (`profiles`, `user_roles`, entidade do role).
-- Se signup OK mas insert falhar: `signOut` + toast claro + permanecer na página.
-- Detectar `supabase.auth` setting de email confirmation: se ON → mensagem "Verifique seu email"; se OFF → redirecionar via dispatcher (Fase 1). Verificar via tentativa de `getSession()` pós-signup.
-- Após sucesso, redirecionar para onboarding do role (Fase 8).
+Após implementação, rodar fluxo por role:
+- ADMIN, TENANT, ARENA, ORGANIZER, COMPANY, ATHLETE
+- Para cada: login → redirect correto → sidebar sem links mortos → onboarding (se sem entidade) → voltar/logout → mobile.
 
----
+Verificar build TS sem erros.
 
-## Fase 10 — Admin
-- Manter `/admin/internal-tools` (já existe) com `VITE_ENABLE_INTERNAL_TOOLS` + super_admin.
-- Mover quaisquer botões técnicos remanescentes (smoke, seed, debug) de `AdminDashboard`, `AdminControlTower`, etc. para `AdminInternalTools.tsx`.
-- `AdminLayout` sidebar: agrupar itens de produto (financeiro, usuários, arenas, campanhas) e separar "Ferramentas internas" no fim, atrás de flag.
+## Detalhes técnicos
 
----
+**Arquivos criados:**
+- `src/components/common/ComingSoonPage.tsx`
+- `src/pages/organizer/OrganizerEvents.tsx`, `OrganizerEnrollments.tsx`, `OrganizerGames.tsx`
+- `src/pages/tenant/TenantCompanies.tsx`
+- `src/pages/admin/AdminTenants.tsx`
+- `src/pages/onboarding/ArenaOnboarding.tsx`
+- `src/pages/onboarding/CompanyOnboarding.tsx`
 
-## Fase 11 — Athlete UX unificado
-- Decidir: Athlete sempre usa `AthleteShell` mobile-first com `AthleteBottomNav`.
-- Remover uso de `AppLayout` para rotas de Athlete; redirecionar `/feed`, `/profile` etc. para `/athlete/feed`, `/athlete/profile` ou montá-las dentro de `AthleteShell`.
-- `App.tsx`: garantir que toda rota athlete passa pelo mesmo shell.
+**Arquivos editados:**
+- `src/App.tsx` — adicionar rotas de stubs, onboarding real, mensagens-wa company, corrigir `/admin/tenants`.
+- `src/layouts/CompanyShell.tsx` — guard sem company.
+- `src/layouts/OrganizerShell.tsx` — guard sem entidade.
+- `src/layouts/AthleteShell.tsx` ou `src/components/layout/AppLayout.tsx` — redirect athlete para `/athlete/*`.
+- `src/pages/Index.tsx` — `resolveLandingPath` + remover métricas falsas.
+- `src/pages/onboarding/OnboardingPending.tsx` — opcional manter como fallback ou deletar.
 
----
+**Sem mexer em:** edge functions, migrations, RLS, IA/ORKYM, Admin shell legado.
 
-## Fase 12 — Landing / copy
-**Arquivo:** `src/pages/Index.tsx` + footer/landing components.
-- Remover métricas/estatísticas hardcoded fake.
-- Termos/Privacidade: se não há páginas, esconder links (não deixar 404).
-- Auditar CTAs duplicados; unificar para `Cadastre-se`.
+## Critério de sucesso
 
----
+- Zero 404 ao clicar em qualquer item de sidebar nos 6 roles.
+- Login sempre cai no destino correto.
+- CompanyShell/OrganizerShell nunca abrem vazios.
+- Onboarding real cria entidade e leva ao dashboard.
+- Athlete tem uma única navegação.
+- Landing sem números fake.
+- Build TS limpo.
 
-## Fase 13 — QA visual
-Após implementação, abrir preview e validar manualmente:
-- Login → cada role cai no lugar certo.
-- Mobile (375x812) e desktop em cada shell.
-- Empty states de Arena/Tenant sem dados (sem fallback fake).
-- Rotas órfãs retornam 404 ou redirecionam.
+## Status alvo após sprint
 
----
-
-## Fase 14 — Segurança
-- Confirmar que após Fase 2 nenhuma página de Arena/Tenant carrega dados de outra entidade.
-- Rodar `supabase--linter` e `security--run_security_scan` para conferir RLS pós-mudanças.
-- Conferir que páginas públicas (QR, arena pública) continuam funcionando sem auth.
-
----
-
-## Fase 15 — Relatório final
-Ao fim da sprint, entregar lista com: P0 corrigidos, componentes removidos, termos renomeados, rotas removidas, onboardings criados, vazamentos fechados, status do build TS, pendências.
-
----
-
-## Detalhes técnicos relevantes
-- Sem migrations. Sem mexer em edge functions. Sem mexer em `client.ts`/`types.ts`.
-- Toda lógica de role-routing centralizada em `src/lib/loginDispatch.ts` (novo) reutilizado por `Login.tsx`, `Dashboard.tsx` e `Register.tsx`.
-- Feature flag `VITE_ENABLE_INTERNAL_TOOLS` já existe — usar em qualquer card técnico que sobrar visível.
-- Ordem de execução sugerida: 2 → 1 → 7 → 9 → 3/5 → 4 → 6 → 11 → 8 → 10 → 12 → 13/14 → 15.
-- Estimativa: ~15-20 arquivos editados, ~5 arquivos novos (onboardings + dispatch lib), 0 migrations.
+- Beta fechado pago: ✅
+- Piloto pago controlado: ✅
+- Venda pública: ainda não (depende de conteúdo real e métricas reais)

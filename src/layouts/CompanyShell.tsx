@@ -40,8 +40,21 @@ const CompanyShell = () => {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+  if (!resolved) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const isSuperAdmin = userRole === "admin";
+  if (resolved && !companyId && !isSuperAdmin) {
+    return <Navigate to="/onboarding/company" replace />;
+  }
+  if (isSuperAdmin && resolved && !companyId) {
+    return <Navigate to="/admin" replace />;
+  }
   if (!isSuperAdmin && resolved && companyId && !waLoading && !connected) {
     return <Navigate to="/company/connect-whatsapp" replace state={{ from: location.pathname }} />;
   }
