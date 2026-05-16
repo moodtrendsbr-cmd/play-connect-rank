@@ -25,6 +25,8 @@ import { dashboardPathFor } from "@/lib/dashboardPath";
 import {
   deriveStage, nextActionFor, type NextAction,
 } from "@/lib/tournamentStage";
+import TabResumo from "@/components/tournament/TabResumo";
+import { useTournamentPermission } from "@/hooks/useTournamentPermission";
 
 const MOOD_COMMISSION_PERCENT = 10;
 const isValidUUID = (s: string) =>
@@ -35,6 +37,8 @@ type TabKey = "resumo" | "inscritos" | "checkin" | "grupos" | "jogos" | "chave" 
 const ManageTournament = () => {
   const { id } = useParams();
   const { user, userRole, loading: authLoading } = useAuth();
+  const perm = useTournamentPermission(id);
+  const canManage = perm.canManage;
   const [params, setParams] = useSearchParams();
   const backPath = dashboardPathFor(userRole);
 
@@ -101,10 +105,12 @@ const ManageTournament = () => {
 
   const paid = enrollments.filter((e) => e.status === "paid");
   const pending = enrollments.filter((e) => e.status === "pending");
+  const orphansCount = enrollments.filter((e: any) => e.status === "paid" && !e.modality_id && !e.archived_at).length;
+  const notCheckedInCount = enrollments.filter((e: any) => e.status === "paid" && e.modality_id && !e.checked_in_at && !e.archived_at).length;
 
   const stageInfo = useMemo(() => {
     if (!tournament) return null;
-    const id = deriveStage({
+    const inputs = {
       status: tournament.status,
       startDate: tournament.start_date,
       endDate: tournament.end_date,
@@ -112,17 +118,11 @@ const ManageTournament = () => {
       maxSlots: Number(tournament.max_slots) || 0,
       hasEntries, hasGroups, hasMatches,
       hasFinishedFinal: hasChampion,
-    });
-    return { id, next: nextActionFor(id, {
-      status: tournament.status,
-      startDate: tournament.start_date,
-      endDate: tournament.end_date,
-      paidCount: paid.length,
-      maxSlots: Number(tournament.max_slots) || 0,
-      hasEntries, hasGroups, hasMatches,
-      hasFinishedFinal: hasChampion,
-    }) as NextAction };
-  }, [tournament, paid.length, hasEntries, hasGroups, hasMatches, hasChampion]);
+      hasOrphans: orphansCount > 0,
+    };
+    const sid = deriveStage(inputs);
+    return { id: sid, next: nextActionFor(sid, inputs) as NextAction };
+  }, [tournament, paid.length, hasEntries, hasGroups, hasMatches, hasChampion, orphansCount]);
 
   const shareTournament = async () => {
     if (!tournament) return;
