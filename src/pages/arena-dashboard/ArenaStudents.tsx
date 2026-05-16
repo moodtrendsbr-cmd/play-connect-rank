@@ -164,24 +164,43 @@ const ArenaStudents = () => {
         <Input className="pl-9" placeholder="Buscar por nome ou email" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
+      <div className="flex gap-1.5">
+        <Button size="sm" variant={crmFilter === "all" ? "default" : "outline"} className="h-7 text-xs" onClick={() => setCrmFilter("all")}>Todos</Button>
+        <Button size="sm" variant={crmFilter === "frequent" ? "default" : "outline"} className="h-7 text-xs" onClick={() => setCrmFilter("frequent")}>Frequentes</Button>
+        <Button size="sm" variant={crmFilter === "inactive" ? "default" : "outline"} className="h-7 text-xs" onClick={() => setCrmFilter("inactive")}>Inativos &gt; 21d</Button>
+      </div>
+
       <div className="space-y-2">
         {filtered.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-8">Nenhum aluno cadastrado</p>
+          <p className="text-sm text-muted-foreground text-center py-8">Nenhum aluno encontrado</p>
         )}
-        {filtered.map(s => (
-          <Card key={s.id} className="bg-card border-border">
-            <CardContent className="p-3 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center"><User className="h-5 w-5 text-primary" /></div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{s.full_name}</p>
-                <p className="text-xs text-muted-foreground truncate">{s.email || s.phone || "—"}</p>
-              </div>
-              <Badge variant={s.status === "active" ? "default" : "secondary"} className="text-xs">{s.status === "active" ? "Ativo" : "Inativo"}</Badge>
-              <Button size="icon" variant="ghost" onClick={() => openEdit(s)}><Pencil className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" onClick={() => remove(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-            </CardContent>
-          </Card>
-        ))}
+        {filtered.map(s => {
+          const phoneKey = (s.phone || "").replace(/\D/g, "");
+          const info = crm[phoneKey];
+          const days = info?.last ? Math.floor((Date.now() - new Date(info.last).getTime()) / 86400_000) : null;
+          return (
+            <Card key={s.id} className="bg-card border-border">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center"><User className="h-5 w-5 text-primary" /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{s.full_name}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {info ? `${info.visits} visita${info.visits === 1 ? "" : "s"} · ${days === 0 ? "hoje" : days === 1 ? "ontem" : days != null ? `há ${days}d` : "—"}` : (s.email || s.phone || "—")}
+                  </p>
+                </div>
+                <Badge variant={s.status === "active" ? "default" : "secondary"} className="text-xs">{s.status === "active" ? "Ativo" : "Inativo"}</Badge>
+                {s.phone && (
+                  <a href={`https://wa.me/${phoneKey}`} target="_blank" rel="noreferrer"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-primary">
+                    <Phone className="h-4 w-4" />
+                  </a>
+                )}
+                <Button size="icon" variant="ghost" onClick={() => openEdit(s)}><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => remove(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
