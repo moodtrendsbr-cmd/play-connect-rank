@@ -253,6 +253,7 @@ const App = () => (
             <Route path="/organizer/dashboard" element={<OrganizerShell />}>
               <Route index element={<OrganizerDashboard />} />
               <Route path="eventos" element={<OrganizerEvents />} />
+              <Route path="eventos/:id" element={<RedirectToManage />} />
               <Route path="inscricoes" element={<OrganizerEnrollments />} />
               <Route path="jogos" element={<OrganizerGames />} />
               <Route path="financeiro" element={<OrganizerFinance />} />
