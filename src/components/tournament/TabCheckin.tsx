@@ -24,7 +24,7 @@ const TabCheckin = ({ tournamentId }: Props) => {
       .from("enrollments")
       .select("*")
       .eq("tournament_id", tournamentId)
-      .eq("status", "paid")
+      .is("archived_at", null)
       .order("created_at");
     const list = data || [];
     setEnrollments(list);
@@ -45,7 +45,12 @@ const TabCheckin = ({ tournamentId }: Props) => {
   useEffect(() => { load(); }, [tournamentId]);
 
   const toggleCheckin = async (e: any) => {
+    // Idempotent: if already checked-in and click is "Reverter", clear. Else set.
     const newValue = e.checked_in_at ? null : new Date().toISOString();
+    if (newValue && e.checked_in_at) {
+      // already checked-in, no-op
+      return;
+    }
     const { error } = await supabase
       .from("enrollments")
       .update({ checked_in_at: newValue })
