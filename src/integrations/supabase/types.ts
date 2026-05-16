@@ -5258,6 +5258,9 @@ export type Database = {
           city: string | null
           created_at: string
           display_name: string
+          hide_activity: boolean
+          hide_checkins: boolean
+          hide_ranking: boolean
           id: string
           identity_id: string
           level: string | null
@@ -5274,6 +5277,9 @@ export type Database = {
           city?: string | null
           created_at?: string
           display_name: string
+          hide_activity?: boolean
+          hide_checkins?: boolean
+          hide_ranking?: boolean
           id?: string
           identity_id: string
           level?: string | null
@@ -5290,6 +5296,9 @@ export type Database = {
           city?: string | null
           created_at?: string
           display_name?: string
+          hide_activity?: boolean
+          hide_checkins?: boolean
+          hide_ranking?: boolean
           id?: string
           identity_id?: string
           level?: string | null

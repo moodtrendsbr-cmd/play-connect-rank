@@ -10,6 +10,8 @@ import { toast } from "@/hooks/use-toast";
 import { Store, Settings, ArrowLeft, Share2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import MyNextMatchCard from "@/components/athlete/MyNextMatchCard";
+import { SocialActivityFeed } from "@/components/social/SocialActivityFeed";
+import { LiveBadge } from "@/components/social/LiveBadge";
 
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 
@@ -342,6 +344,15 @@ const TournamentDetail = () => {
             </div>
           </div>
         )}
+
+        {/* Atividade do torneio */}
+        <div className="mt-8">
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="font-display text-lg text-foreground">ATIVIDADE</h3>
+            <LiveBadge variant="starting_soon" count={tournament?.start_date && new Date(tournament.start_date).getTime() - Date.now() < 2 * 3600 * 1000 && new Date(tournament.start_date).getTime() > Date.now() ? 1 : 0} />
+          </div>
+          <SocialActivityFeed tournamentId={id} limit={15} title="" realtime />
+        </div>
       </main>
     </div>
   );

@@ -5,6 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Grid3X3, Video, Instagram, Map, Globe, ExternalLink, ArrowLeft } from "lucide-react";
+import { SocialActivityFeed } from "@/components/social/SocialActivityFeed";
+import { LiveBadge } from "@/components/social/LiveBadge";
 
 const ICON_MAP: Record<string, any> = {
   video: Video,
@@ -77,8 +79,10 @@ const ArenaPublic = () => {
             <MapPin className="h-3.5 w-3.5 text-primary" />
             <span className="text-sm text-muted-foreground">{arena.address ? `${arena.address}, ` : ""}{arena.city}, {arena.state}</span>
           </div>
-          <div className="flex items-center gap-3 mt-1">
+          <div className="flex items-center gap-3 mt-1 flex-wrap">
             <span className="text-xs text-muted-foreground">{courts.length} quadra{courts.length !== 1 ? "s" : ""}</span>
+            <LiveBadge variant="playing_now" arenaId={arena.id} />
+            <LiveBadge variant="busy_arena" arenaId={arena.id} />
           </div>
         </div>
       </div>
@@ -86,6 +90,14 @@ const ArenaPublic = () => {
       <Link to={`/arenas/${arenaSlug}/reservar`}>
         <Button className="w-full h-12 text-lg font-bold">Reservar quadra</Button>
       </Link>
+
+      {/* Atividade da arena */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2"><CardTitle className="text-base">Atividade</CardTitle></CardHeader>
+        <CardContent>
+          <SocialActivityFeed arenaId={arena.id} limit={10} title="" realtime />
+        </CardContent>
+      </Card>
 
       {/* Sobre */}
       {arena.description && (
