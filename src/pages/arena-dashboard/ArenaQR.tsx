@@ -159,6 +159,18 @@ const ArenaQR = () => {
         </Dialog>
       </div>
 
+      {items.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <Button size="sm" variant={filter === "all" ? "default" : "outline"} className="h-7 text-xs shrink-0" onClick={() => setFilter("all")}>Todos</Button>
+          {QR_KINDS.map((k) => (
+            <Button key={k.value} size="sm" variant={filter === k.value ? "default" : "outline"}
+              className="h-7 text-xs shrink-0" onClick={() => setFilter(k.value)}>
+              {k.label.replace(/^QR (de |da )?/, "")}
+            </Button>
+          ))}
+        </div>
+      )}
+
       {items.length === 0 ? (
         <Card className="bg-card border-border border-dashed">
           <CardContent className="p-10 text-center space-y-3">
@@ -170,7 +182,7 @@ const ArenaQR = () => {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {items.map((it) => (
+          {items.filter((it) => filter === "all" || (it.kind || it.intent) === filter).map((it) => (
             <Card key={it.id} className={`bg-card border-border ${!it.is_active ? "opacity-60" : ""}`}>
               <CardContent className="p-4 flex items-start gap-4">
                 <div className="bg-white p-2 rounded-md shrink-0">
@@ -186,6 +198,7 @@ const ArenaQR = () => {
                     {!it.is_active && " · Inativo"}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setFullscreen(it)}><Maximize2 className="h-3 w-3" /> Tela cheia</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handlePrint(it)}><Printer className="h-3 w-3" /> Imprimir</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleDownload(it)}><Download className="h-3 w-3" /> Baixar</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleShare(it)}><Share2 className="h-3 w-3" /> Compartilhar</Button>
@@ -196,6 +209,17 @@ const ArenaQR = () => {
             </Card>
           ))}
         </div>
+      )}
+
+      {fullscreen && (
+        <FullscreenQRDialog
+          open={!!fullscreen}
+          onClose={() => setFullscreen(null)}
+          value={buildTargetUrl(fullscreen.token, fullscreen.kind || fullscreen.intent)}
+          title={(fullscreen.label || kindLabel(fullscreen.kind || fullscreen.intent)).toUpperCase()}
+          subtitle={kindLabel(fullscreen.kind || fullscreen.intent)}
+          arenaName={arena?.name}
+        />
       )}
 
       {/* Preview after create */}
