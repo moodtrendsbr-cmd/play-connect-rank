@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, User, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, User, Pencil, Trash2, Phone } from "lucide-react";
 import { toast } from "sonner";
 
 type Student = {
@@ -33,6 +33,8 @@ const ArenaStudents = () => {
   const [editing, setEditing] = useState<Student | null>(null);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+  const [crm, setCrm] = useState<Record<string, { last: string | null; visits: number }>>({});
+  const [crmFilter, setCrmFilter] = useState<"all" | "frequent" | "inactive">("all");
 
   const load = async () => {
     if (!arena) return;
@@ -43,6 +45,24 @@ const ArenaStudents = () => {
       .order("created_at", { ascending: false });
     if (error) { toast.error("Erro ao carregar alunos"); return; }
     setStudents((data as Student[]) || []);
+
+    // CRM: aggregate arena_checkins by normalized phone (last 30d)
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString();
+    const { data: ci } = await supabase
+      .from("arena_checkins")
+      .select("phone_e164, created_at")
+      .eq("arena_id", arena.id)
+      .gte("created_at", since);
+    const map: Record<string, { last: string | null; visits: number }> = {};
+    ((ci as any[]) || []).forEach((c) => {
+      const k = (c.phone_e164 || "").replace(/\D/g, "");
+      if (!k) return;
+      const cur = map[k] || { last: null, visits: 0 };
+      cur.visits += 1;
+      if (!cur.last || c.created_at > cur.last) cur.last = c.created_at;
+      map[k] = cur;
+    });
+    setCrm(map);
   };
 
   useEffect(() => { load(); }, [arena]);
@@ -91,10 +111,17 @@ const ArenaStudents = () => {
     load();
   };
 
-  const filtered = students.filter(s =>
-    s.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    (s.email || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = students.filter(s => {
+    const matchText = s.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      (s.email || "").toLowerCase().includes(search.toLowerCase());
+    if (!matchText) return false;
+    const phoneKey = (s.phone || "").replace(/\D/g, "");
+    const info = crm[phoneKey];
+    const days = info?.last ? Math.floor((Date.now() - new Date(info.last).getTime()) / 86400_000) : 999;
+    if (crmFilter === "frequent") return (info?.visits || 0) >= 4;
+    if (crmFilter === "inactive") return days > 21;
+    return true;
+  });
 
   return (
     <div className="space-y-4">
