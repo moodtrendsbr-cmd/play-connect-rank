@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Wrench, Sparkles, Zap, RefreshCw, Archive, ShieldAlert } from "lucide-react";
+import { Wrench, Sparkles, Zap, RefreshCw, Archive, ShieldAlert, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -54,10 +54,25 @@ const AdminInternalTools = () => {
 
   const [seeding, setSeeding] = useState(false);
   const [smoking, setSmoking] = useState(false);
+  const [flowSmoking, setFlowSmoking] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [smokeResult, setSmokeResult] = useState<any>(null);
+  const [flowResult, setFlowResult] = useState<any>(null);
   const [backfillResult, setBackfillResult] = useState<BackfillResult | null>(null);
+
+  const smokeFlow = async () => {
+    setFlowSmoking(true);
+    setFlowResult(null);
+    const { data, error } = await supabase.functions.invoke("smoke-tournament-flow", { body: {} });
+    setFlowSmoking(false);
+    setFlowResult(data ?? { error: error?.message });
+    if (error || (data as any)?.ok === false) {
+      toast.error(`Smoke do fluxo falhou em "${(data as any)?.step ?? "?"}": ${error?.message ?? (data as any)?.error ?? "erro"}`);
+      return;
+    }
+    toast.success("Smoke do fluxo completo OK · pódio gerado");
+  };
 
   const seedPilot = async () => {
     setSeeding(true);
