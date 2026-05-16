@@ -17,6 +17,7 @@ const PAGE_SIZE = 20;
 
 const Feed = () => {
   const { user } = useAuth();
+  const [tab, setTab] = useState<"activity" | "following">("activity");
   const [posts, setPosts] = useState<PostData[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
