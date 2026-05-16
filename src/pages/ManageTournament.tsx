@@ -308,10 +308,8 @@ const ManageTournament = () => {
             <TabResumo
               tournamentId={id!}
               stageLabel={stageInfo?.id}
-              hasModalities={true}
               orphansCount={orphansCount}
-              pendingResultsCount={enrollments.length ? 0 : 0}
-              completePaidCount={paid.length - orphansCount}
+              completePaidCount={Math.max(0, paid.length - orphansCount)}
               notCheckedInCount={notCheckedInCount}
               hasGroups={hasGroups}
               hasMatches={hasMatches}

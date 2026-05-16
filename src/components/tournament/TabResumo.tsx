@@ -7,9 +7,7 @@ import { AlertTriangle, Calendar, Layers, ClipboardList, Trophy, ArrowRight } fr
 interface Props {
   tournamentId: string;
   stageLabel?: string;
-  hasModalities: boolean;
   orphansCount: number;
-  pendingResultsCount: number;
   completePaidCount: number;
   notCheckedInCount: number;
   hasGroups: boolean;
@@ -36,9 +34,7 @@ const fmt = (iso: string | null) => {
 const TabResumo = ({
   tournamentId,
   stageLabel,
-  hasModalities,
   orphansCount,
-  pendingResultsCount,
   completePaidCount,
   notCheckedInCount,
   hasGroups,
@@ -47,6 +43,8 @@ const TabResumo = ({
   onEditConfig,
 }: Props) => {
   const [upcoming, setUpcoming] = useState<UpcomingMatch[]>([]);
+  const [hasModalities, setHasModalities] = useState<boolean>(true);
+  const [pendingResultsCount, setPendingResultsCount] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -58,7 +56,16 @@ const TabResumo = ({
       const modNames: Record<string, string> = {};
       (mods || []).forEach((m: any) => { modNames[m.id] = m.name; });
 
-      if (modIds.length === 0) { setUpcoming([]); return; }
+      setHasModalities(modIds.length > 0);
+
+      if (modIds.length === 0) { setUpcoming([]); setPendingResultsCount(0); return; }
+
+      const { count: pendingCount } = await supabase
+        .from("modality_matches")
+        .select("id", { count: "exact", head: true })
+        .in("modality_id", modIds)
+        .neq("status", "finished");
+      setPendingResultsCount(pendingCount || 0);
 
       const { data: matches } = await supabase
         .from("modality_matches")
