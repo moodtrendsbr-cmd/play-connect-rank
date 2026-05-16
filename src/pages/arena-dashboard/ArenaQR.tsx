@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Printer, Download, Share2, Power, QrCode } from "lucide-react";
+import { ArrowLeft, Plus, Printer, Download, Share2, Power, QrCode, Maximize2 } from "lucide-react";
 import { QRGenerator, qrToDataUrl } from "@/components/arena/QRGenerator";
 import { printQRSheet } from "@/components/arena/QRPrintSheet";
+import { FullscreenQRDialog } from "@/components/arena/reception/FullscreenQRDialog";
 
 const QR_KINDS = [
   { value: "arena",       label: "QR da arena",            hint: "Abre o WhatsApp da arena" },
@@ -20,6 +21,7 @@ const QR_KINDS = [
   { value: "class",       label: "QR de aula",             hint: "Para banners e folders de aula" },
   { value: "product",     label: "QR de produto / bar",    hint: "Cola no balcão e nas mesas" },
   { value: "promo",       label: "QR de promoção",         hint: "Para campanhas e flyers" },
+  { value: "campaign",    label: "QR de campanha",         hint: "Mídia paga e ativações específicas" },
 ];
 
 const kindLabel = (k?: string) => QR_KINDS.find((x) => x.value === k)?.label || "QR";
@@ -30,6 +32,8 @@ const ArenaQR = () => {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ label: "", kind: "arena" });
   const [previewItem, setPreviewItem] = useState<any>(null);
+  const [fullscreen, setFullscreen] = useState<any>(null);
+  const [filter, setFilter] = useState<string>("all");
 
   const fetchItems = async () => {
     if (!arena?.id) return;
