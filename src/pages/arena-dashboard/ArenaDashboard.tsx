@@ -1,276 +1,355 @@
-import { useEffect, useState } from "react";
-import { useOutletContext, Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  CalendarCheck, DollarSign, ArrowRight, Users, CalendarClock, Receipt,
-  Trophy, TrendingUp, Activity, Wallet, QrCode, MessageCircle, CheckCircle2,
-} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import { format } from "date-fns";
-import { toast } from "sonner";
-import { QrEntryCard } from "@/components/conversational/QrEntryCard";
-import { cn } from "@/lib/utils";
+import { ptBR } from "date-fns/locale";
+import { RefreshCw } from "lucide-react";
+
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 import { NextStepsCard } from "@/components/arena/NextStepsCard";
+import { QuickActionsBar } from "@/components/arena/QuickActionsBar";
+import { NowBlock } from "@/components/arena/NowBlock";
+import { NextHoursBlock, type AgendaItem } from "@/components/arena/NextHoursBlock";
+import { AttentionBlock, type AttentionItem } from "@/components/arena/AttentionBlock";
 import { useWhatsAppConnectionStatus } from "@/hooks/useWhatsAppConnection";
 
-// ---------- Local UI helpers ----------
-
-const SectionHeader = ({
-  icon: Icon, title, subtitle, accent = "text-primary",
-}: { icon: any; title: string; subtitle?: string; accent?: string }) => (
-  <div className="flex items-end justify-between gap-3">
-    <div className="flex items-center gap-2">
-      <Icon className={cn("h-5 w-5", accent)} />
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">{title}</h2>
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
-      </div>
-    </div>
-  </div>
-);
-
-const KpiCard = ({
-  icon: Icon, label, value, color = "text-primary", to,
-}: { icon: any; label: string; value: string | number; color?: string; to?: string }) => {
-  const inner = (
-    <Card className="bg-card border-border hover:border-primary/40 transition-colors h-full">
-      <CardContent className="p-4 flex items-center gap-3">
-        <Icon className={cn("h-7 w-7 shrink-0", color)} />
-        <div className="min-w-0">
-          <p className="text-[11px] text-muted-foreground truncate">{label}</p>
-          <p className="text-lg font-bold text-foreground truncate">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-  return to ? <Link to={to}>{inner}</Link> : inner;
-};
-
-const ShortcutLink = ({ to, label }: { to: string; label: string }) => (
-  <Link
-    to={to}
-    className="flex items-center justify-between p-3 rounded-xl bg-card border border-border hover:border-primary/40 transition-colors"
-  >
-    <span className="text-sm font-medium text-foreground">{label}</span>
-    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-  </Link>
-);
-
-const fmtBRL = (n: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n || 0);
-
-// ---------- Page ----------
+const hhmm = (t: string) => String(t).slice(0, 5);
+const isoHHMM = (iso: string) => format(new Date(iso), "HH:mm");
 
 const ArenaDashboard = () => {
   const { arena } = useOutletContext<{ arena: any }>();
-  const wa = useWhatsAppConnectionStatus(arena?.id ? { scope_type: "arena", arena_id: arena.id } : null);
-  const [stats, setStats] = useState({
-    today: 0, week: 0, revenue: 0, students: 0, classesToday: 0,
-    dueSoon: 0, overdue: 0, activeTournaments: 0, monthRevenue: 0,
+  const wa = useWhatsAppConnectionStatus(
+    arena?.id ? { scope_type: "arena", arena_id: arena.id } : null,
+  );
+
+  const [nowData, setNowData] = useState({
+    occupiedCourts: [] as { id: string; court: string; customer: string; endTime: string }[],
+    totalCourts: 0,
+    liveClasses: [] as { id: string; title: string; instructor?: string }[],
+    recentCheckins: 0,
+    nextBooking: null as { court: string; startTime: string; customer: string } | null,
   });
-  const [upcoming, setUpcoming] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [agenda, setAgenda] = useState<AgendaItem[]>([]);
+  const [attention, setAttention] = useState<AttentionItem[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = async () => {
-    if (!arena) return;
-    const today = format(new Date(), "yyyy-MM-dd");
-    const weekEnd = format(new Date(Date.now() + 7 * 86400000), "yyyy-MM-dd");
-    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const load = useCallback(async () => {
+    if (!arena?.id) return;
+    setRefreshing(true);
+
+    const now = new Date();
+    const today = format(now, "yyyy-MM-dd");
+    const nowTime = format(now, "HH:mm:ss");
+    const in60min = new Date(now.getTime() + 60 * 60 * 1000);
+    const in6h = new Date(now.getTime() + 6 * 60 * 60 * 1000);
+    const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const last30min = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+    const last21d = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000).toISOString();
     const dayEnd = new Date(); dayEnd.setHours(23, 59, 59, 999);
-    const sevenDaysAhead = new Date(Date.now() + 7 * 86400000).toISOString();
-    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
 
-    const [todayRes, weekRes, upcomingRes, studentsRes, classesTodayRes, dueSoonRes, overdueRes, tasksListRes, activeTournRes, monthRevRes] = await Promise.all([
-      supabase.from("bookings").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("booking_date", today).neq("status", "canceled"),
-      supabase.from("bookings").select("id,amount", { count: "exact" }).eq("arena_id", arena.id).gte("booking_date", today).lte("booking_date", weekEnd).neq("status", "canceled"),
-      supabase.from("bookings").select("*, courts(name)").eq("arena_id", arena.id).gte("booking_date", today).neq("status", "canceled").order("booking_date").order("start_time").limit(5),
-      supabase.from("arena_students").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("status", "active"),
-      supabase.from("arena_classes").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).gte("start_at", dayStart.toISOString()).lte("start_at", dayEnd.toISOString()),
-      supabase.from("arena_billing_cycles").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("status", "pending").lte("due_at", sevenDaysAhead),
-      supabase.from("arena_billing_cycles").select("id", { count: "exact", head: true }).eq("arena_id", arena.id).eq("status", "overdue"),
-      supabase.from("arena_operational_tasks").select("*").eq("arena_id", arena.id).eq("status", "open").order("priority").order("created_at", { ascending: false }).limit(1),
-      supabase.from("tournaments").select("id", { count: "exact", head: true }).eq("arena", arena.name).gte("end_date", today),
-      supabase.from("financial_transactions").select("total_amount").eq("arena_id", arena.id).eq("status", "paid").gte("paid_at", monthStart.toISOString()),
+    const [
+      todayBookingsRes, courtsRes, liveClassesRes, recentCheckinsRes,
+      todayClassesRes, todayTournRes, overdueRes, dueSoonRes, pendingBookingsRes,
+      upcomingTournRes, studentsActiveRes, recentAttRes,
+    ] = await Promise.all([
+      supabase
+        .from("bookings")
+        .select("id,booking_date,start_time,end_time,customer_name,status,courts(name)")
+        .eq("arena_id", arena.id)
+        .eq("booking_date", today)
+        .neq("status", "canceled")
+        .order("start_time"),
+      supabase.from("courts").select("id", { count: "exact", head: true }).eq("arena_id", arena.id),
+      supabase
+        .from("arena_classes")
+        .select("id,title,instructor_id,start_at,end_at,arena_instructors(full_name)")
+        .eq("arena_id", arena.id)
+        .lte("start_at", now.toISOString())
+        .gte("end_at", now.toISOString())
+        .limit(10),
+      supabase
+        .from("arena_attendance")
+        .select("id", { count: "exact", head: true })
+        .eq("arena_id", arena.id)
+        .gte("checked_in_at", last30min),
+      supabase
+        .from("arena_classes")
+        .select("id,title,start_at,end_at")
+        .eq("arena_id", arena.id)
+        .gt("start_at", now.toISOString())
+        .lte("start_at", in6h.toISOString())
+        .order("start_at")
+        .limit(8),
+      supabase
+        .from("tournaments")
+        .select("id,name,start_date")
+        .eq("arena", arena.name)
+        .eq("start_date", today)
+        .limit(5),
+      supabase
+        .from("arena_billing_cycles")
+        .select("id", { count: "exact", head: true })
+        .eq("arena_id", arena.id)
+        .eq("status", "overdue"),
+      supabase
+        .from("arena_billing_cycles")
+        .select("id", { count: "exact", head: true })
+        .eq("arena_id", arena.id)
+        .eq("status", "pending")
+        .lte("due_at", in48h.toISOString()),
+      supabase
+        .from("bookings")
+        .select("id,created_at,status,booking_date")
+        .eq("arena_id", arena.id)
+        .eq("status", "pending_payment")
+        .eq("booking_date", today)
+        .lte("created_at", new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString())
+        .limit(5),
+      supabase
+        .from("tournaments")
+        .select("id,name,start_date,max_slots")
+        .eq("arena", arena.name)
+        .gte("start_date", today)
+        .lte("start_date", format(in7d, "yyyy-MM-dd"))
+        .limit(10),
+      supabase
+        .from("arena_students")
+        .select("id", { count: "exact", head: true })
+        .eq("arena_id", arena.id)
+        .eq("status", "active"),
+      supabase
+        .from("arena_attendance")
+        .select("student_id")
+        .eq("arena_id", arena.id)
+        .gte("checked_in_at", last21d),
     ]);
 
-    const weekRevenue = (weekRes.data || []).reduce((sum: number, b: any) => sum + Number(b.amount || 0), 0);
-    const monthRevenue = (monthRevRes.data || []).reduce((sum: number, t: any) => sum + Number(t.total_amount || 0), 0);
+    // ===== AGORA =====
+    const allToday = todayBookingsRes.data || [];
+    const occupied = allToday
+      .filter((b: any) => hhmm(b.start_time) <= nowTime.slice(0, 5) && hhmm(b.end_time) > nowTime.slice(0, 5))
+      .map((b: any) => ({
+        id: b.id,
+        court: b.courts?.name || "Quadra",
+        customer: b.customer_name || "Reserva",
+        endTime: hhmm(b.end_time),
+      }));
 
-    setStats({
-      today: todayRes.count || 0,
-      week: weekRes.count || 0,
-      revenue: weekRevenue,
-      students: studentsRes.count || 0,
-      classesToday: classesTodayRes.count || 0,
-      dueSoon: dueSoonRes.count || 0,
-      overdue: overdueRes.count || 0,
-      activeTournaments: activeTournRes.count || 0,
-      monthRevenue,
+    const upcomingNext = allToday.find(
+      (b: any) => hhmm(b.start_time) > nowTime.slice(0, 5) && new Date(`${today}T${b.start_time}`) <= in60min,
+    );
+
+    setNowData({
+      occupiedCourts: occupied,
+      totalCourts: courtsRes.count || 0,
+      liveClasses: (liveClassesRes.data || []).map((c: any) => ({
+        id: c.id,
+        title: c.title,
+        instructor: c.arena_instructors?.full_name,
+      })),
+      recentCheckins: recentCheckinsRes.count || 0,
+      nextBooking: upcomingNext
+        ? {
+            court: (upcomingNext as any).courts?.name || "Quadra",
+            startTime: hhmm((upcomingNext as any).start_time),
+            customer: (upcomingNext as any).customer_name || "Reserva",
+          }
+        : null,
     });
-    setUpcoming(upcomingRes.data || []);
-    setTasks(tasksListRes.data || []);
-  };
 
-  useEffect(() => { load(); }, [arena]);
+    // ===== PRÓXIMAS HORAS =====
+    const futureBookings: AgendaItem[] = allToday
+      .filter((b: any) => hhmm(b.start_time) > nowTime.slice(0, 5) && new Date(`${today}T${b.start_time}`) <= in6h)
+      .map((b: any) => ({
+        id: b.id,
+        kind: "booking",
+        time: hhmm(b.start_time),
+        title: b.courts?.name || "Quadra",
+        subtitle: b.customer_name,
+        to: "/arena/dashboard/reservas",
+      }));
 
-  const updateTask = async (id: string, status: "done" | "dismissed") => {
-    const { error } = await supabase.from("arena_operational_tasks").update({
-      status, resolved_at: new Date().toISOString(),
-    }).eq("id", id);
-    if (error) { toast.error(error.message); return; }
-    toast.success(status === "done" ? "Tarefa concluída" : "Tarefa dispensada");
+    const futureClasses: AgendaItem[] = (todayClassesRes.data || []).map((c: any) => ({
+      id: c.id,
+      kind: "class",
+      time: isoHHMM(c.start_at),
+      title: c.title,
+      to: "/arena/dashboard/aulas",
+    }));
+
+    const todayTournaments: AgendaItem[] = (todayTournRes.data || []).map((t: any) => ({
+      id: t.id,
+      kind: "tournament",
+      time: "—",
+      title: t.name,
+      subtitle: "começa hoje",
+      to: `/manage-tournament/${t.id}`,
+    }));
+
+    const merged = [...futureBookings, ...futureClasses, ...todayTournaments]
+      .sort((a, b) => a.time.localeCompare(b.time))
+      .slice(0, 8);
+    setAgenda(merged);
+
+    // ===== ATENÇÃO =====
+    const items: AttentionItem[] = [];
+
+    const overdue = overdueRes.count || 0;
+    if (overdue > 0) {
+      items.push({
+        key: "overdue",
+        severity: "alert",
+        title: `${overdue} cobrança${overdue > 1 ? "s" : ""} em atraso`,
+        context: "Pagamentos não recebidos no vencimento.",
+        actionLabel: "Ver cobranças",
+        to: "/arena/dashboard/financeiro",
+      });
+    }
+
+    const dueSoon = dueSoonRes.count || 0;
+    if (dueSoon > 0) {
+      items.push({
+        key: "due-soon",
+        severity: "warn",
+        title: `${dueSoon} cobrança${dueSoon > 1 ? "s" : ""} vence${dueSoon > 1 ? "m" : ""} em 48h`,
+        context: "Avise os alunos para evitar atrasos.",
+        actionLabel: "Revisar",
+        to: "/arena/dashboard/financeiro",
+      });
+    }
+
+    const pendingBookings = pendingBookingsRes.data || [];
+    if (pendingBookings.length > 0) {
+      items.push({
+        key: "pending-bookings",
+        severity: "warn",
+        title: `${pendingBookings.length} reserva${pendingBookings.length > 1 ? "s" : ""} pendente${pendingBookings.length > 1 ? "s" : ""} de pagamento`,
+        context: "Criada há mais de 2h sem confirmação.",
+        actionLabel: "Revisar reservas",
+        to: "/arena/dashboard/reservas",
+      });
+    }
+
+    // Torneios com risco
+    if ((upcomingTournRes.data || []).length > 0) {
+      const tIds = (upcomingTournRes.data || []).map((t: any) => t.id);
+      const { data: enrollCounts } = await supabase
+        .from("enrollments")
+        .select("tournament_id")
+        .in("tournament_id", tIds);
+      const countMap = new Map<string, number>();
+      (enrollCounts || []).forEach((e: any) => {
+        countMap.set(e.tournament_id, (countMap.get(e.tournament_id) || 0) + 1);
+      });
+      const risky = (upcomingTournRes.data || []).find((t: any) => {
+        const cap = Number(t.max_slots || 0);
+        if (!cap) return false;
+        const pct = (countMap.get(t.id) || 0) / cap;
+        return pct < 0.3;
+      });
+      if (risky) {
+        items.push({
+          key: "tournament-low",
+          severity: "warn",
+          title: `Torneio com poucas inscrições`,
+          context: `"${risky.name}" começa em breve e está abaixo de 30%.`,
+          actionLabel: "Divulgar",
+          to: `/manage-tournament/${risky.id}`,
+        });
+      }
+    }
+
+    // Buraco em horário nobre
+    const occupiedSlots = allToday
+      .filter((b: any) => hhmm(b.start_time) >= "18:00" && hhmm(b.start_time) < "22:00")
+      .map((b: any) => ({ s: hhmm(b.start_time), e: hhmm(b.end_time) }));
+    if (now.getHours() < 22 && occupiedSlots.length < 3 && (courtsRes.count || 0) > 0) {
+      items.push({
+        key: "prime-gap",
+        severity: "warn",
+        title: "Horário nobre com vagas",
+        context: "Entre 18h e 22h ainda há espaço — bom momento para divulgar.",
+        actionLabel: "Promover horário",
+        to: "/arena/dashboard/horarios",
+      });
+    }
+
+    // Alunos inativos
+    const activeStudents = studentsActiveRes.count || 0;
+    if (activeStudents > 0) {
+      const recentSet = new Set((recentAttRes.data || []).map((a: any) => a.student_id));
+      const inactive = activeStudents - recentSet.size;
+      if (inactive > 0 && inactive >= Math.max(3, activeStudents * 0.2)) {
+        items.push({
+          key: "inactive-students",
+          severity: "warn",
+          title: `${inactive} aluno${inactive > 1 ? "s" : ""} sem frequência`,
+          context: "Não aparecem há 21 dias.",
+          actionLabel: "Reativar",
+          to: "/arena/dashboard/alunos",
+        });
+      }
+    }
+
+    // WhatsApp desconectado
+    if (wa && !wa.connected && wa.status !== "active") {
+      items.push({
+        key: "wa-disconnected",
+        severity: "warn",
+        title: "WhatsApp desconectado",
+        context: "Conecte para receber avisos e responder pelo celular.",
+        actionLabel: "Conectar",
+        to: "/arena/connect-whatsapp",
+      });
+    }
+
+    setAttention(items);
+    setRefreshing(false);
+  }, [arena, wa?.connected, wa?.status]);
+
+  useEffect(() => {
     load();
-  };
+    const interval = setInterval(load, 60_000);
+    return () => clearInterval(interval);
+  }, [load]);
 
   if (!arena) {
     return <p className="text-sm text-muted-foreground">Carregando arena…</p>;
   }
 
-  const nextTask = tasks[0];
-  const waConnected = wa.connected || wa.status === "active";
+  const subtitle = format(new Date(), "EEEE · HH'h'mm", { locale: ptBR });
 
   return (
-    <div className="space-y-8">
-      {/* HEADER */}
+    <div className="space-y-6">
       <header className="flex items-end justify-between gap-3 border-b border-border pb-4">
-        <div>
-          <h1 className="text-2xl font-display text-foreground">
-            Sua arena{arena?.name ? ` · ${arena.name}` : ""}
+        <div className="min-w-0">
+          <h1 className="text-2xl font-display text-foreground truncate">
+            {arena?.name || "Sua arena"}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Resumo de hoje</p>
+          <p className="text-sm text-muted-foreground mt-1 capitalize">{subtitle}</p>
         </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => load()}
+          disabled={refreshing}
+          className="h-9 w-9 p-0 shrink-0"
+          aria-label="Atualizar"
+        >
+          <RefreshCw className={refreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+        </Button>
       </header>
 
+      <QuickActionsBar />
+
+      <NowBlock data={nowData} />
+
+      <NextHoursBlock items={agenda} />
+
+      <AttentionBlock items={attention} />
+
       {arena?.id && <NextStepsCard arenaId={arena.id} />}
-
-      {/* [1] HOJE NA SUA ARENA */}
-      <section className="space-y-3">
-        <SectionHeader icon={Activity} title="Hoje na sua arena" subtitle="O que está rolando agora" accent="text-blue-400" />
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard icon={CalendarCheck} label="Reservas hoje"   value={stats.today}             color="text-primary"     to="/arena/dashboard/agenda" />
-          <KpiCard icon={CalendarClock} label="Aulas hoje"      value={stats.classesToday}      color="text-blue-400"    to="/arena/dashboard/aulas" />
-          <KpiCard icon={QrCode}        label="Check-ins"       value="Abrir"                   color="text-cyan-400"    to="/arena/checkin" />
-          <KpiCard icon={Trophy}        label="Torneios ativos" value={stats.activeTournaments} color="text-purple-400"  to="/arena/dashboard/torneios" />
-        </div>
-
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-medium">Próximas reservas</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {upcoming.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma reserva próxima</p>}
-            {upcoming.map((b) => (
-              <div key={b.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{b.courts?.name} — {b.customer_name}</p>
-                  <p className="text-xs text-muted-foreground">{format(new Date(b.booking_date), "dd/MM")} • {String(b.start_time).slice(0, 5)} - {String(b.end_time).slice(0, 5)}</p>
-                </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${b.status === "confirmed" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
-                  {b.status === "confirmed" ? "Confirmada" : b.status === "completed" ? "Concluída" : b.status}
-                </span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* [2] SEU DINHEIRO */}
-      <section className="space-y-3">
-        <SectionHeader icon={Wallet} title="Seu dinheiro" subtitle="Como está o caixa" accent="text-emerald-400" />
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard icon={TrendingUp} label="Receita do mês" value={fmtBRL(stats.monthRevenue)} color="text-emerald-400" to="/arena/dashboard/financeiro" />
-          <KpiCard icon={DollarSign} label="Recebimentos 7d" value={fmtBRL(stats.revenue)}      color="text-amber-400"   to="/arena/dashboard/transacoes" />
-          <KpiCard icon={Receipt}    label="Vencimentos 7d"  value={stats.dueSoon}              color="text-amber-400"   to="/arena/dashboard/cobrancas" />
-          <KpiCard icon={Receipt}    label="Pendências"      value={stats.overdue}              color="text-destructive" to="/arena/dashboard/cobrancas" />
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <ShortcutLink to="/arena/dashboard/cobrancas"   label="Cobranças" />
-          <ShortcutLink to="/arena/dashboard/assinaturas" label="Assinaturas" />
-          <ShortcutLink to="/arena/dashboard/transacoes"  label="Transações" />
-        </div>
-      </section>
-
-      {/* [3] MOVIMENTO DA ARENA */}
-      <section className="space-y-3">
-        <SectionHeader icon={Users} title="Movimento da arena" subtitle="Quem está com você" accent="text-emerald-400" />
-
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KpiCard icon={Users}         label="Alunos ativos" value={stats.students}     color="text-emerald-400" to="/arena/dashboard/alunos" />
-          <KpiCard icon={CalendarClock} label="Aulas hoje"    value={stats.classesToday} color="text-blue-400"    to="/arena/dashboard/aulas" />
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <ShortcutLink to="/arena/dashboard/alunos"     label="Alunos" />
-          <ShortcutLink to="/arena/dashboard/aulas"      label="Aulas" />
-          <ShortcutLink to="/arena/dashboard/matriculas" label="Matrículas" />
-        </div>
-      </section>
-
-      {/* [4] O QUE FAZER AGORA */}
-      <section className="space-y-3">
-        <SectionHeader icon={CheckCircle2} title="O que fazer agora" subtitle="Uma coisa de cada vez" accent="text-primary" />
-
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            {!nextTask ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                Tudo em dia por aqui.
-              </div>
-            ) : (
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1 flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground">{nextTask.title}</p>
-                  {nextTask.description && (
-                    <p className="text-xs text-muted-foreground line-clamp-2">{nextTask.description}</p>
-                  )}
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  <Button size="sm" variant="default" className="h-8 text-xs" onClick={() => updateTask(nextTask.id, "done")}>Feito</Button>
-                  <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => updateTask(nextTask.id, "dismissed")}>Dispensar</Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* [5] GERENCIE PELO WHATSAPP */}
-      <section className="space-y-3">
-        <SectionHeader icon={MessageCircle} title="Gerencie pelo WhatsApp" subtitle="Tudo na palma da mão" accent="text-[#2BFF88]" />
-
-        <Card className="bg-card border-border">
-          <CardContent className="p-5 flex items-center justify-between gap-3 flex-wrap">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">
-                {waConnected ? "WhatsApp conectado" : "Receba alertas e gerencie sua arena pelo WhatsApp"}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {waConnected ? "Você recebe avisos e pode responder direto pelo celular." : "Conecte seu número para receber resumos e responder rápido."}
-              </p>
-            </div>
-            <Link to="/arena/connect-whatsapp">
-              <Button size="sm" variant={waConnected ? "outline" : "default"} className="shrink-0">
-                {waConnected ? "Gerenciar conexão" : "Conectar agora"}
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* [6] ENTRADA VIA QR */}
-      <section className="space-y-3">
-        <QrEntryCard
-          title="Entrada via QR"
-          subtitle="Check-in rápido em aulas, torneios e quadras"
-          ctaTo="/arena/checkin"
-          ctaLabel="Abrir check-in"
-        />
-      </section>
     </div>
   );
 };
