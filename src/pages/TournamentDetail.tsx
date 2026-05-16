@@ -172,6 +172,12 @@ const TournamentDetail = () => {
       <main className="container max-w-2xl py-8 pb-24">
         <h1 className="text-4xl font-display text-foreground">🏐 {tournament.name}</h1>
 
+        {user && alreadyEnrolled && (
+          <div className="mt-4">
+            <MyNextMatchCard />
+          </div>
+        )}
+
         <div className="mt-6 space-y-3 text-foreground">
           <p>📍 {tournament.city} - {tournament.state}</p>
           <p>📅 {tournament.start_date} a {tournament.end_date}</p>
