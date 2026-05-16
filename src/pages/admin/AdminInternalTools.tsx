@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Wrench, Sparkles, Zap, RefreshCw, Archive, ShieldAlert } from "lucide-react";
+import { Wrench, Sparkles, Zap, RefreshCw, Archive, ShieldAlert, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -54,10 +54,25 @@ const AdminInternalTools = () => {
 
   const [seeding, setSeeding] = useState(false);
   const [smoking, setSmoking] = useState(false);
+  const [flowSmoking, setFlowSmoking] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [smokeResult, setSmokeResult] = useState<any>(null);
+  const [flowResult, setFlowResult] = useState<any>(null);
   const [backfillResult, setBackfillResult] = useState<BackfillResult | null>(null);
+
+  const smokeFlow = async () => {
+    setFlowSmoking(true);
+    setFlowResult(null);
+    const { data, error } = await supabase.functions.invoke("smoke-tournament-flow", { body: {} });
+    setFlowSmoking(false);
+    setFlowResult(data ?? { error: error?.message });
+    if (error || (data as any)?.ok === false) {
+      toast.error(`Smoke do fluxo falhou em "${(data as any)?.step ?? "?"}": ${error?.message ?? (data as any)?.error ?? "erro"}`);
+      return;
+    }
+    toast.success("Smoke do fluxo completo OK · pódio gerado");
+  };
 
   const seedPilot = async () => {
     setSeeding(true);
@@ -177,6 +192,51 @@ const AdminInternalTools = () => {
               <Sparkles className={`h-4 w-4 mr-2 ${seeding ? "animate-spin" : ""}`} />
               {seeding ? "Criando…" : "Criar piloto"}
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* Smoke do fluxo completo */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-primary" /> Smoke do fluxo completo
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Cria torneio [SMOKE] com 4 atletas, gera bracket, registra placares e confere o pódio (entry → matches → advance → placements).
+            </p>
+            <Button size="sm" onClick={smokeFlow} disabled={flowSmoking}>
+              <Trophy className={`h-4 w-4 mr-2 ${flowSmoking ? "animate-spin" : ""}`} />
+              {flowSmoking ? "Executando…" : "Rodar smoke do fluxo"}
+            </Button>
+            {flowResult && (
+              <div className="space-y-2 pt-2 border-t border-border">
+                <div className="text-xs">
+                  <span className={flowResult.ok ? "text-emerald-400" : "text-red-400"}>
+                    {flowResult.ok ? "OK" : `Falhou em ${flowResult.step}`}
+                  </span>
+                  {flowResult.tournament_id && (
+                    <span className="text-muted-foreground"> · {String(flowResult.tournament_id).slice(0, 8)}</span>
+                  )}
+                </div>
+                {flowResult.checks && (
+                  <div className="grid grid-cols-2 gap-1 text-xs">
+                    {Object.entries(flowResult.checks).map(([k, v]) => (
+                      <div key={k} className="flex items-center gap-2">
+                        <span className={v ? "text-emerald-400" : "text-red-400"}>{v ? "✓" : "✗"}</span>
+                        <span className="text-muted-foreground truncate">{k}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {flowResult.summary && (
+                  <pre className="text-[10px] text-muted-foreground bg-muted/30 p-2 rounded overflow-auto">
+                    {JSON.stringify(flowResult.summary, null, 2)}
+                  </pre>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
