@@ -133,29 +133,30 @@ const PublicCheckin = () => {
             <div className="space-y-3 text-left">
               <div className="space-y-1.5">
                 <Label htmlFor="phone">Seu WhatsApp</Label>
-                <Input id="phone" type="tel" inputMode="numeric" placeholder="(11) 99999-9999"
+                <Input id="phone" type="tel" inputMode="numeric" placeholder="(11) 99999-9999" autoFocus
                   value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="name">Como podemos te chamar?</Label>
-                <Input id="name" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />
+                <Label htmlFor="name">Seu nome</Label>
+                <Input id="name" placeholder="Como podemos te chamar" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
-              <Button className="w-full" disabled={phone.replace(/\D/g, "").length < 8}
-                onClick={() => setStep("sport")}>
-                Continuar
-              </Button>
-            </div>
-          )}
-
-          {step === "sport" && (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Qual esporte hoje?</p>
-              <div className="grid grid-cols-2 gap-2">
-                {sports.map((s) => (
-                  <Button key={s} variant="outline" onClick={() => { setSport(s); submit(s); }}>
-                    {s}
-                  </Button>
-                ))}
+              <div className="space-y-1.5">
+                <p className="text-sm text-muted-foreground">Qual esporte hoje?</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {sports.map((s) => (
+                    <Button
+                      key={s}
+                      variant="outline"
+                      disabled={phone.replace(/\D/g, "").length < 8}
+                      onClick={() => { setSport(s); submit(s); }}
+                    >
+                      {s}
+                    </Button>
+                  ))}
+                </div>
+                {phone.replace(/\D/g, "").length < 8 && (
+                  <p className="text-xs text-muted-foreground text-center pt-1">Digite o WhatsApp para liberar</p>
+                )}
               </div>
             </div>
           )}

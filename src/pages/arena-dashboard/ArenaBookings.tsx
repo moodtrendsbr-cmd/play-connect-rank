@@ -5,7 +5,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Phone } from "lucide-react";
+import { Phone, Share2 } from "lucide-react";
+import { BookingGroupShareDialog } from "@/components/arena/BookingGroupShareDialog";
 
 const STATUS_MAP: Record<string, { label: string; class: string }> = {
   pending_payment: { label: "Pend. pagamento", class: "bg-amber-500/20 text-amber-400" },
@@ -17,6 +18,7 @@ const STATUS_MAP: Record<string, { label: string; class: string }> = {
 const ArenaBookings = () => {
   const { arena } = useOutletContext<{ arena: any }>();
   const [bookings, setBookings] = useState<any[]>([]);
+  const [shareId, setShareId] = useState<string | null>(null);
 
   const fetchBookings = async () => {
     const { data } = await supabase
@@ -71,6 +73,9 @@ const ArenaBookings = () => {
                 </div>
                 {(b.status === "confirmed") && (
                   <div className="flex gap-2 pt-1">
+                    <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShareId(b.id)}>
+                      <Share2 className="h-3 w-3" /> Link do grupo
+                    </Button>
                     <Button size="sm" variant="outline" className="text-xs" onClick={() => updateStatus(b.id, "completed")}>Concluir</Button>
                     <Button size="sm" variant="destructive" className="text-xs" onClick={() => updateStatus(b.id, "canceled")}>Cancelar</Button>
                   </div>
@@ -80,6 +85,9 @@ const ArenaBookings = () => {
           );
         })}
       </div>
+      {shareId && (
+        <BookingGroupShareDialog bookingId={shareId} open={!!shareId} onClose={() => setShareId(null)} />
+      )}
     </div>
   );
 };

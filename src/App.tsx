@@ -93,6 +93,7 @@ import ArenaQR from "./pages/arena-dashboard/ArenaQR";
 import ArenaProducts from "./pages/arena-dashboard/ArenaProducts";
 import ArenaTeam from "./pages/arena-dashboard/ArenaTeam";
 import ArenaCheckinList from "./pages/arena-dashboard/ArenaCheckinList";
+import ArenaReception from "./pages/arena-dashboard/ArenaReception";
 import PublicCheckin from "./pages/PublicCheckin";
 import TenantArenaProfiles from "./pages/tenant/TenantArenaProfiles";
 import TenantQR from "./pages/tenant/TenantQR";
@@ -243,6 +244,7 @@ const App = () => (
               <Route path="produtos" element={<ArenaProducts />} />
               <Route path="equipe" element={<ArenaTeam />} />
               <Route path="entradas" element={<ArenaCheckinList />} />
+              <Route path="recepcao" element={<ArenaReception />} />
             </Route>
             <Route path="/organizer/onboarding" element={<OrganizerOnboarding />} />
             {/* Phase 11.4 — Organizer Event Engine (additive shell) */}

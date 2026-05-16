@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Printer, Download, Share2, Power, QrCode } from "lucide-react";
+import { ArrowLeft, Plus, Printer, Download, Share2, Power, QrCode, Maximize2 } from "lucide-react";
 import { QRGenerator, qrToDataUrl } from "@/components/arena/QRGenerator";
 import { printQRSheet } from "@/components/arena/QRPrintSheet";
+import { FullscreenQRDialog } from "@/components/arena/reception/FullscreenQRDialog";
 
 const QR_KINDS = [
   { value: "arena",       label: "QR da arena",            hint: "Abre o WhatsApp da arena" },
@@ -20,6 +21,7 @@ const QR_KINDS = [
   { value: "class",       label: "QR de aula",             hint: "Para banners e folders de aula" },
   { value: "product",     label: "QR de produto / bar",    hint: "Cola no balcão e nas mesas" },
   { value: "promo",       label: "QR de promoção",         hint: "Para campanhas e flyers" },
+  { value: "campaign",    label: "QR de campanha",         hint: "Mídia paga e ativações específicas" },
 ];
 
 const kindLabel = (k?: string) => QR_KINDS.find((x) => x.value === k)?.label || "QR";
@@ -30,6 +32,8 @@ const ArenaQR = () => {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ label: "", kind: "arena" });
   const [previewItem, setPreviewItem] = useState<any>(null);
+  const [fullscreen, setFullscreen] = useState<any>(null);
+  const [filter, setFilter] = useState<string>("all");
 
   const fetchItems = async () => {
     if (!arena?.id) return;
@@ -155,6 +159,18 @@ const ArenaQR = () => {
         </Dialog>
       </div>
 
+      {items.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <Button size="sm" variant={filter === "all" ? "default" : "outline"} className="h-7 text-xs shrink-0" onClick={() => setFilter("all")}>Todos</Button>
+          {QR_KINDS.map((k) => (
+            <Button key={k.value} size="sm" variant={filter === k.value ? "default" : "outline"}
+              className="h-7 text-xs shrink-0" onClick={() => setFilter(k.value)}>
+              {k.label.replace(/^QR (de |da )?/, "")}
+            </Button>
+          ))}
+        </div>
+      )}
+
       {items.length === 0 ? (
         <Card className="bg-card border-border border-dashed">
           <CardContent className="p-10 text-center space-y-3">
@@ -166,7 +182,7 @@ const ArenaQR = () => {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {items.map((it) => (
+          {items.filter((it) => filter === "all" || (it.kind || it.intent) === filter).map((it) => (
             <Card key={it.id} className={`bg-card border-border ${!it.is_active ? "opacity-60" : ""}`}>
               <CardContent className="p-4 flex items-start gap-4">
                 <div className="bg-white p-2 rounded-md shrink-0">
@@ -182,6 +198,7 @@ const ArenaQR = () => {
                     {!it.is_active && " · Inativo"}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setFullscreen(it)}><Maximize2 className="h-3 w-3" /> Tela cheia</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handlePrint(it)}><Printer className="h-3 w-3" /> Imprimir</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleDownload(it)}><Download className="h-3 w-3" /> Baixar</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleShare(it)}><Share2 className="h-3 w-3" /> Compartilhar</Button>
@@ -192,6 +209,17 @@ const ArenaQR = () => {
             </Card>
           ))}
         </div>
+      )}
+
+      {fullscreen && (
+        <FullscreenQRDialog
+          open={!!fullscreen}
+          onClose={() => setFullscreen(null)}
+          value={buildTargetUrl(fullscreen.token, fullscreen.kind || fullscreen.intent)}
+          title={(fullscreen.label || kindLabel(fullscreen.kind || fullscreen.intent)).toUpperCase()}
+          subtitle={kindLabel(fullscreen.kind || fullscreen.intent)}
+          arenaName={arena?.name}
+        />
       )}
 
       {/* Preview after create */}

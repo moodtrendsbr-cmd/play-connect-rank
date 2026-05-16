@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, User, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, User, Pencil, Trash2, Phone } from "lucide-react";
 import { toast } from "sonner";
 
 type Student = {
@@ -33,6 +33,8 @@ const ArenaStudents = () => {
   const [editing, setEditing] = useState<Student | null>(null);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+  const [crm, setCrm] = useState<Record<string, { last: string | null; visits: number }>>({});
+  const [crmFilter, setCrmFilter] = useState<"all" | "frequent" | "inactive">("all");
 
   const load = async () => {
     if (!arena) return;
@@ -43,6 +45,24 @@ const ArenaStudents = () => {
       .order("created_at", { ascending: false });
     if (error) { toast.error("Erro ao carregar alunos"); return; }
     setStudents((data as Student[]) || []);
+
+    // CRM: aggregate arena_checkins by normalized phone (last 30d)
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString();
+    const { data: ci } = await supabase
+      .from("arena_checkins")
+      .select("phone_e164, created_at")
+      .eq("arena_id", arena.id)
+      .gte("created_at", since);
+    const map: Record<string, { last: string | null; visits: number }> = {};
+    ((ci as any[]) || []).forEach((c) => {
+      const k = (c.phone_e164 || "").replace(/\D/g, "");
+      if (!k) return;
+      const cur = map[k] || { last: null, visits: 0 };
+      cur.visits += 1;
+      if (!cur.last || c.created_at > cur.last) cur.last = c.created_at;
+      map[k] = cur;
+    });
+    setCrm(map);
   };
 
   useEffect(() => { load(); }, [arena]);
@@ -91,10 +111,17 @@ const ArenaStudents = () => {
     load();
   };
 
-  const filtered = students.filter(s =>
-    s.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    (s.email || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = students.filter(s => {
+    const matchText = s.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      (s.email || "").toLowerCase().includes(search.toLowerCase());
+    if (!matchText) return false;
+    const phoneKey = (s.phone || "").replace(/\D/g, "");
+    const info = crm[phoneKey];
+    const days = info?.last ? Math.floor((Date.now() - new Date(info.last).getTime()) / 86400_000) : 999;
+    if (crmFilter === "frequent") return (info?.visits || 0) >= 4;
+    if (crmFilter === "inactive") return days > 21;
+    return true;
+  });
 
   return (
     <div className="space-y-4">
@@ -137,24 +164,43 @@ const ArenaStudents = () => {
         <Input className="pl-9" placeholder="Buscar por nome ou email" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
+      <div className="flex gap-1.5">
+        <Button size="sm" variant={crmFilter === "all" ? "default" : "outline"} className="h-7 text-xs" onClick={() => setCrmFilter("all")}>Todos</Button>
+        <Button size="sm" variant={crmFilter === "frequent" ? "default" : "outline"} className="h-7 text-xs" onClick={() => setCrmFilter("frequent")}>Frequentes</Button>
+        <Button size="sm" variant={crmFilter === "inactive" ? "default" : "outline"} className="h-7 text-xs" onClick={() => setCrmFilter("inactive")}>Inativos &gt; 21d</Button>
+      </div>
+
       <div className="space-y-2">
         {filtered.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-8">Nenhum aluno cadastrado</p>
+          <p className="text-sm text-muted-foreground text-center py-8">Nenhum aluno encontrado</p>
         )}
-        {filtered.map(s => (
-          <Card key={s.id} className="bg-card border-border">
-            <CardContent className="p-3 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center"><User className="h-5 w-5 text-primary" /></div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{s.full_name}</p>
-                <p className="text-xs text-muted-foreground truncate">{s.email || s.phone || "—"}</p>
-              </div>
-              <Badge variant={s.status === "active" ? "default" : "secondary"} className="text-xs">{s.status === "active" ? "Ativo" : "Inativo"}</Badge>
-              <Button size="icon" variant="ghost" onClick={() => openEdit(s)}><Pencil className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" onClick={() => remove(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-            </CardContent>
-          </Card>
-        ))}
+        {filtered.map(s => {
+          const phoneKey = (s.phone || "").replace(/\D/g, "");
+          const info = crm[phoneKey];
+          const days = info?.last ? Math.floor((Date.now() - new Date(info.last).getTime()) / 86400_000) : null;
+          return (
+            <Card key={s.id} className="bg-card border-border">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center"><User className="h-5 w-5 text-primary" /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{s.full_name}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {info ? `${info.visits} visita${info.visits === 1 ? "" : "s"} · ${days === 0 ? "hoje" : days === 1 ? "ontem" : days != null ? `há ${days}d` : "—"}` : (s.email || s.phone || "—")}
+                  </p>
+                </div>
+                <Badge variant={s.status === "active" ? "default" : "secondary"} className="text-xs">{s.status === "active" ? "Ativo" : "Inativo"}</Badge>
+                {s.phone && (
+                  <a href={`https://wa.me/${phoneKey}`} target="_blank" rel="noreferrer"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-primary">
+                    <Phone className="h-4 w-4" />
+                  </a>
+                )}
+                <Button size="icon" variant="ghost" onClick={() => openEdit(s)}><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => remove(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
