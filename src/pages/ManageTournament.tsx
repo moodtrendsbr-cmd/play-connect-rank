@@ -92,7 +92,7 @@ const ManageTournament = () => {
       if (!t) return;
 
       const [enrollRes, profileRes] = await Promise.all([
-        supabase.from("enrollments").select("id, status, amount_paid").eq("tournament_id", id!),
+        supabase.from("enrollments").select("id, status, amount_paid, modality_id, checked_in_at, archived_at").eq("tournament_id", id!),
         supabase.from("profiles").select("mp_collector_id").eq("user_id", t.organizer_id).single(),
       ]);
       setEnrollments(enrollRes.data || []);
