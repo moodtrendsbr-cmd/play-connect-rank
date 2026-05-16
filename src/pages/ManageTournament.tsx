@@ -339,7 +339,7 @@ const ManageTournament = () => {
               emptyTitle="O chaveamento aparece quando os jogos forem criados."
             >
               {(m) => (
-                <TabBracketView modalityId={m.id} />
+                <TabBracketView modalityId={m.id} isOrganizer={true} />
               )}
             </ModalityPicker>
           </TabsContent>
