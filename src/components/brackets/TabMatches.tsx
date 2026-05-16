@@ -167,14 +167,54 @@ const TabMatches = ({ modalityId, tournamentId, isOrganizer }: TabMatchesProps) 
             </p>
           )}
           {isOrganizer && m.status !== "finished" && (
-            <Button size="sm" variant="outline" onClick={() => setEditingMatch(m)} className="mt-2 h-7 text-xs">
-              Editar
-            </Button>
+            <div className="flex flex-col gap-1.5 items-end mt-2">
+              <Button size="sm" variant="outline" onClick={() => setEditingMatch(m)} className="h-7 text-xs">
+                Editar
+              </Button>
+              {(m.entry_a_id && m.entry_b_id) && (
+                <Button size="sm" variant="ghost" onClick={() => notifyPlayers(m)} className="h-7 text-xs gap-1">
+                  📲 Avisar jogadores
+                </Button>
+              )}
+            </div>
           )}
         </div>
       </div>
     </div>
   );
+
+  const notifyPlayers = async (m: any) => {
+    const entryIds = [m.entry_a_id, m.entry_b_id].filter(Boolean);
+    const { data: members } = await supabase
+      .from("modality_entry_members")
+      .select("user_id")
+      .in("entry_id", entryIds);
+    const userIds = [...new Set((members || []).map((x: any) => x.user_id))];
+    if (userIds.length === 0) {
+      window.alert("Sem contatos de jogadores cadastrados para este jogo.");
+      return;
+    }
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("user_id, whatsapp")
+      .in("user_id", userIds);
+    const phones = (profs || [])
+      .map((p: any) => (p.whatsapp || "").replace(/\D/g, ""))
+      .filter(Boolean);
+    if (phones.length === 0) {
+      window.alert("Nenhum jogador tem WhatsApp cadastrado.");
+      return;
+    }
+    const link = `${window.location.origin}/tournaments/${tournamentId}`;
+    const text = encodeURIComponent(
+      `Seu jogo começa em breve. Confira horário e quadra: ${link}`,
+    );
+    phones.forEach((phone, i) => {
+      setTimeout(() => {
+        window.open(`https://wa.me/${phone}?text=${text}`, "_blank", "noopener");
+      }, i * 250);
+    });
+  };
 
   // Group matches
   const groupMatches = matches.filter((m) => m.group_id);
