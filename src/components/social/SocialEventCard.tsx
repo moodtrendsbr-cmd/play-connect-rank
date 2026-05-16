@@ -44,7 +44,7 @@ const META: Record<string, { icon: JSX.Element; accent?: boolean; label?: string
 
 const ctaFor = (item: SocialFeedItem): { to: string; label: string } | null => {
   const tid = item.payload?.tournament_id;
-  if (tid && ["tournament_join","match_win","tournament_won","tournament_podium","tournament_created"].includes(item.event_type)) {
+  if (tid && ["tournament_join","match_win","tournament_won","tournament_podium","tournament_created","tournament_advance"].includes(item.event_type)) {
     return { to: `/tournaments/${tid}`, label: "Ver torneio" };
   }
   if (item.arena_name) return { to: `#`, label: "Ver arena" };
