@@ -108,7 +108,7 @@ const ArenaDashboard = () => {
         .limit(5),
       supabase
         .from("tournaments")
-        .select("id,name,start_date,max_participants")
+        .select("id,name,start_date,max_slots")
         .eq("arena", arena.name)
         .gte("start_date", today)
         .lte("start_date", format(in7d, "yyyy-MM-dd"))
@@ -243,7 +243,7 @@ const ArenaDashboard = () => {
         countMap.set(e.tournament_id, (countMap.get(e.tournament_id) || 0) + 1);
       });
       const risky = (upcomingTournRes.data || []).find((t: any) => {
-        const cap = Number(t.max_participants || 0);
+        const cap = Number(t.max_slots || 0);
         if (!cap) return false;
         const pct = (countMap.get(t.id) || 0) / cap;
         return pct < 0.3;
