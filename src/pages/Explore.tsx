@@ -145,6 +145,50 @@ export default function Explore() {
         ) : (
           <>
             <AdSlot code="home.hero" />
+
+            {/* Acontecendo agora */}
+            {liveMatches > 0 && (
+              <section className="rounded-xl p-4" style={{ background: "linear-gradient(135deg, rgba(43,255,136,0.08), transparent)", border: "1px solid rgba(43,255,136,0.2)" }}>
+                <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                  <Flame className="h-4 w-4" style={{ color: "#2BFF88" }} /> Acontecendo agora
+                </h2>
+                <LiveBadge variant="playing_now" count={liveMatches} />
+              </section>
+            )}
+
+            {/* Próximos torneios */}
+            {upcomingTournaments.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-foreground flex items-center gap-2"><Clock className="h-4 w-4" /> Próximos torneios</h2>
+                  <Link to="/tournaments" className="text-xs text-primary">Ver todos</Link>
+                </div>
+                <div className="space-y-2">
+                  {upcomingTournaments.map((t) => (
+                    <Link key={t.id} to={`/tournaments/${t.id}`} className="block p-3 rounded-lg bg-card hover:bg-accent">
+                      <p className="text-sm font-medium text-foreground">{t.name}</p>
+                      <p className="text-xs text-muted-foreground">{t.start_date} · {t.city}/{t.state}</p>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Arenas movimentadas */}
+            {busyArenas.length > 0 && (
+              <section>
+                <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Flame className="h-4 w-4" /> Arenas movimentadas</h2>
+                <div className="grid grid-cols-2 gap-2">
+                  {busyArenas.map((a) => (
+                    <Link key={a.id} to={`/arenas/${a.slug}`} className="block p-3 rounded-lg bg-card hover:bg-accent">
+                      <p className="text-sm font-medium text-foreground truncate">{a.name}</p>
+                      <p className="text-xs text-muted-foreground">{a.checkins} check-ins hoje</p>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-foreground flex items-center gap-2"><Users className="h-4 w-4" /> Atletas em alta</h2>
@@ -161,6 +205,12 @@ export default function Explore() {
                   </Link>
                 ))}
               </div>
+            </section>
+
+            {/* Atividade global */}
+            <section>
+              <h2 className="text-sm font-semibold text-foreground mb-3">Movimento da rede</h2>
+              <SocialActivityFeed limit={10} title="" realtime />
             </section>
           </>
         )}
