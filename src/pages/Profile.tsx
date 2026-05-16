@@ -20,6 +20,7 @@ import TournamentMemories from "@/components/profile/TournamentMemories";
 import GamificationPanel from "@/components/gamification/GamificationPanel";
 import { SocialPrivacyToggle } from "@/components/social/SocialPrivacyToggle";
 import { WaIdentityPanel } from "@/components/conversational/WaIdentityPanel";
+import MyNextMatchCard from "@/components/athlete/MyNextMatchCard";
 
 const Profile = () => {
   const { user, signOut, loading: authLoading } = useAuth();
