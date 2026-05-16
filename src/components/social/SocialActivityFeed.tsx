@@ -35,12 +35,41 @@ export const SocialActivityFeed = ({
     setItems(rows);
   };
 
+  // Incremental merge: fetch the single new row from the view and prepend it,
+  // respecting filters and dedup by event_id. Avoids a global refetch per event.
+  const mergeOne = async (newEventId: string) => {
+    let q = (supabase as any)
+      .from("social_feed_public_v2")
+      .select("event_id,event_type,occurred_at,profile_id,username,display_name,avatar_url,arena_name,tenant_name,description,payload,arena_id,tenant_id")
+      .eq("event_id", newEventId)
+      .limit(1);
+    if (profileId) q = q.eq("profile_id", profileId);
+    if (tenantId) q = q.eq("tenant_id", tenantId);
+    if (arenaId) q = q.eq("arena_id", arenaId);
+    const { data } = await q;
+    const row = (data as SocialFeedItem[] | null)?.[0];
+    if (!row) return;
+    if (tournamentId && row.payload?.tournament_id !== tournamentId) return;
+    setItems((prev) => {
+      const base = prev ?? [];
+      if (base.some((r) => r.event_id === row.event_id)) return base;
+      return [row, ...base].slice(0, limit);
+    });
+  };
+
   useEffect(() => {
     load();
     if (!realtime) return;
     const channel = (supabase as any)
-      .channel(`social-feed-${arenaId || tournamentId || "global"}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "social_events" }, () => load())
+      .channel(`social-feed-${arenaId || tournamentId || profileId || "global"}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "social_events" },
+        (payload: any) => {
+          const id = payload?.new?.id;
+          if (id) mergeOne(id);
+        }
+      )
       .subscribe();
     return () => { (supabase as any).removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
