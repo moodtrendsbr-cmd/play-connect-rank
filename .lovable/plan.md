@@ -1,93 +1,141 @@
-## Tournament Closure Validation Sprint
+# Plano — Feed & Social Activation
 
-Validar e corrigir o fechamento completo de um torneio até campeão, pódio e reflexos no sistema. Sem features novas, sem novo bracket engine, sem refatoração.
+Transformar o Feed em timeline esportiva viva, alimentada por eventos reais (check-ins, torneios, vitórias, XP, pódio), sem depender de posts manuais. Reutilizar 100% da infraestrutura existente (`social_events`, `athlete_activities`, `xp_events`, `athlete_xp`, `athlete_streaks`, `social_feed_public_v2`, `feed_unified_v`). Sem nova rede social, sem stories, sem reels.
 
----
+## Escopo (o que mudar)
 
-### 1. Execução do smoke (evidência real)
+### 1. Fontes de eventos (preencher lacunas — só triggers)
+Migração única adicionando emissão de `social_events` + `athlete_activities` para tipos que hoje não chegam ao feed:
 
-- Rodar `smoke-tournament-flow` via `AdminInternalTools` (ou `supabase--curl_edge_functions`).
-- Capturar saída JSON (`tournament_id`, summary, checklist por etapa).
-- Critério: 4 enrollments paid, 4 entries, 8 members, 3 matches (2 semis + 1 final), 2 placements (1º e 2º).
+- `arena_attendance` → `class_attendance` (social_events já existe via athlete_activities; garantir trigger `social_from_activity` cobre)
+- `bookings` paid → `booking`
+- `modality_matches` final concluída (winner do final) → `tournament_won` (hoje só placement gera)
+- `modality_matches` por rodada (SF, Final) → novo evento `tournament_advance` (payload: `phase`, `tournament_name`)
+- `modality_placements` insert → `tournament_podium` (posições 2/3)
+- `xp_events` quando `lifetime_xp` cruza limiar de nível → `level_up`
+- `athlete_streaks` quando `current_streak` % 7 == 0 → `streak_milestone`
+- `athlete_badges` insert → `badge_earned`
 
-### 2. Queries de evidência (`supabase--read_query`)
+Estender `social_event_description` com os novos `event_type` (frases curtas, esportivas, PT-BR).
 
-Executar no `tournament_id` retornado pelo smoke:
+Nada de tabelas novas. Tudo reaproveita `social_events` + `social_feed_public_v2`.
 
-1. `modality_matches` — fase, status, winner_entry_id, score por round
-2. `modality_placements` — position, entry_id (1º, 2º; 3º se aplicável)
-3. `athlete_activities` — eventos `tournament.enrolled` e qualquer `match.*` / `tournament.won` gerado
-4. `xp_events` + `athlete_xp.lifetime_xp` dos 4 atletas — confirmar bônus de match/campeão
-5. `social_feed_public_v2` filtrado pelos profile_ids — confirmar evento de campeão no feed
+### 2. Cards visuais premium (frontend)
+Criar `src/components/social/cards/`:
 
-### 3. Edge cases (apenas leitura/diagnóstico)
+- `CheckinCard.tsx`
+- `MatchWinCard.tsx`
+- `ChampionCard.tsx` (destaque verde #2BFF88, troféu grande)
+- `PodiumCard.tsx`
+- `LevelUpCard.tsx`
+- `StreakCard.tsx`
+- `BadgeCard.tsx`
+- `TournamentLifecycleCard.tsx` (created/advance/final)
+- `BookingCard.tsx`
 
-- WO (winner sem placar) — checar se `trg_matches_advance` ainda propaga
-- Reescrita de placar pós-final — checar se `modality_placements` mantém integridade
-- Bye em SE de 4 — confirmar comportamento atual
-- 3º lugar em SE de 4 — verificar se trigger gera position 3 a partir dos perdedores das semis
+`SocialEventCard.tsx` vira **dispatcher** que escolhe o card por `event_type`. Mantém o atual como fallback. Cada card: avatar, nome, modalidade, arena, horário relativo, CTA contextual (Ver torneio / Ver arena / Ver perfil).
 
-### 4. Classificação 🟢/🟡/🔴
+### 3. Feed global (`/feed`)
+Em `src/pages/Feed.tsx` adicionar aba/toggle no topo:
+- **Atividade** (novo, default para usuários sem follows) — usa `social_feed_public_v2`
+- **Seguindo** (atual, posts) — mantém comportamento
 
-Por área, com evidência apontada:
-- Avanço automático (semi → final)
-- Finalização (winner_entry_id → status=finished)
-- `modality_placements` (1º, 2º, 3º)
-- Campeão exposto na Central (TabPlacements)
-- Feed reflete campeão
-- XP / ranking atualiza (`athlete_xp.lifetime_xp`)
-- `get_my_next_match` zera pós-final
-- `MyNextMatchCard` esconde corretamente
-- Auto-refresh do TabPlacements
+Sem stories, sem reels. Manter injeção de boosts via `feed_unified_v` (cap já existente).
 
-### 5. Correções (somente se a evidência apontar gap)
+### 4. Feed da Arena
+Nova rota pública `/arenas/:slug` (ou aba dentro de `ArenaPublic.tsx`) com:
+- Live: "X pessoas com check-in nas últimas 2h" (count de `arena_attendance`)
+- Timeline de `social_feed_public_v2` filtrada por `arena_id`
+- Próximos torneios da arena
 
-Aplicar apenas o que falhar nas queries, na menor cirurgia possível:
+### 5. Feed do Torneio
+Em `ManageTournament` / `TournamentDetail` adicionar aba **Atividade** consumindo `social_feed_public_v2` filtrada via `payload->>'tournament_id'` (adicionar `tournament_id` ao payload nos triggers acima).
 
-- **XP de campeão ausente** → ligar `trg_xp_from_match` ao evento certo (match concluído e/ou placement inserido) via migração mínima. Sem nova tabela.
-- **3º lugar não gerado** → ajustar `trg_matches_finalize_podium` para inserir position 3 a partir dos perdedores das semis em SE.
-- **Idempotência do pódio** → `ON CONFLICT (modality_id, position) DO UPDATE` em `modality_placements`.
-- **Feed sem evento de campeão** → inserir `athlete_activities` tipo `tournament.won` via trigger em `modality_placements` (position=1), respeitando `social_feed_public_v2`.
-- **TabPlacements sem auto-refresh** → adicionar canal realtime em `src/components/brackets/TabPlacements.tsx` ouvindo `modality_placements` por `modality_id`.
-- **MyNextMatchCard persistindo pós-final** → garantir que `get_my_next_match` retorna null e o card oculta.
+### 6. Perfil esportivo vivo
+Refinar `SocialProfile.tsx` / `UserProfile.tsx`:
+- Topo: avatar + nome + ranking global (de `ranking_global`) + nível (de `athlete_xp`) + streak
+- Strip de esportes praticados (derivar de `enrollments.modality.sport`)
+- Arenas frequentes (top 3 por `arena_attendance` count)
+- `GamificationPanel` já existente (XP/Streak/Badges/Rank)
+- Timeline pessoal: `SocialActivityFeed` com `profileId`
 
-Cada correção:
-- migração mínima OU patch frontend pontual
-- re-rodar smoke
-- re-rodar as 5 queries
-- registrar antes/depois no relatório
+### 7. Explore — descoberta esportiva
+Refinar `Explore.tsx`:
+- Seção "Acontecendo agora" — torneios com matches `in_progress` ou check-ins recentes
+- "Arenas movimentadas" — top arenas por check-ins últimas 24h
+- "Próximos torneios" — `tournaments` com `start_date >= now()` ordenado
+- "Atletas em destaque" — top `ranking_global` semanal
+- Manter busca atual (`search_global`)
 
-### 6. Veredito final em chat
+### 8. Social proof badges
+Componente `<LiveBadge />` reutilizável:
+- "🟢 X jogando agora" (count matches in_progress)
+- "🔥 Arena movimentada" (>10 check-ins/24h)
+- "⚡ Torneio começando" (start_date < 2h)
 
-Responder objetivamente, com evidência colada:
-1. Torneio termina sozinho?
-2. Campeão gerado automaticamente?
-3. Pódio funciona (1º, 2º, 3º quando aplicável)?
-4. Feed reflete resultado?
-5. Ranking/XP atualiza?
-6. Algum passo manual/técnico restante?
-7. Pronto para piloto real?
+Aplicar em cards de arena, torneio e no Explore.
 
----
+### 9. Privacidade
+`SocialPrivacyToggle` já existe (público/privado global). Adicionar em `/profile/settings`:
+- Toggle "Ocultar meus check-ins"
+- Toggle "Ocultar minha posição no ranking"
+- Toggle "Ocultar minha atividade do feed"
 
-### Critério de sucesso
+Implementar via novas colunas em `social_profiles` (`hide_checkins`, `hide_ranking`, `hide_activity`) + filtros nos triggers de emissão (`social_events.visibility = 'private'` quando flag ligada).
 
-- Smoke 100% verde
-- `modality_placements` populado e idempotente
-- `athlete_xp.lifetime_xp` muda para os 4 atletas (com bônus para o campeão)
-- `social_feed_public_v2` contém evento de campeão
-- Central muda para "Encerrado" e mostra pódio sem refresh manual
-- `get_my_next_match` retorna vazio após a final
-- Build TypeScript limpo
+### 10. Mobile-first
+- Cards full-width, padding 12px, radius 16px
+- Lazy load via Intersection Observer (já existe padrão no Feed)
+- Skeleton no `SocialActivityFeed` (já existe)
+- Realtime: subscription em `social_events` no `/feed` aba Atividade (insert → prepend)
 
-### Out of scope
+## Detalhes técnicos
 
-ORKYM, IA, gamificação nova, monetização, novo bracket engine, dupla eliminação, refator de UI, novos endpoints sociais.
+**Migração (única):**
+```sql
+-- Estender social_event_description com novos tipos
+-- Trigger trg_social_event_from_xp (level_up)
+-- Trigger trg_social_event_from_streak (streak milestone)
+-- Trigger trg_social_event_from_badge
+-- Trigger trg_social_event_from_placement (podium 2/3)
+-- Trigger trg_social_event_from_match_phase (SF/F advance + champion)
+-- Trigger trg_social_event_from_booking
+-- ALTER TABLE social_profiles ADD hide_checkins/hide_ranking/hide_activity bool default false
+-- Atualizar trg_social_from_activity para respeitar flags
+```
 
-### Arquivos potencialmente tocados (apenas se a evidência exigir)
+**Arquivos frontend novos:**
+- `src/components/social/cards/*` (9 cards + index)
+- `src/components/social/LiveBadge.tsx`
+- `src/hooks/useArenaFeed.ts`
+- `src/hooks/useTournamentFeed.ts`
+- `src/hooks/useLiveCounts.ts` (X jogando agora etc.)
 
-- `supabase/migrations/<nova>.sql` — ajustes em `trg_matches_finalize_podium`, `trg_xp_from_match`, idempotência
-- `src/components/brackets/TabPlacements.tsx` — realtime
-- `src/components/athlete/MyNextMatchCard.tsx` — guarda pós-final
+**Arquivos editados:**
+- `src/components/social/SocialEventCard.tsx` (dispatcher)
+- `src/pages/Feed.tsx` (toggle Atividade/Seguindo + realtime)
+- `src/pages/Explore.tsx` (seções acontecendo agora / movimentadas / próximos)
+- `src/pages/arenas/ArenaPublic.tsx` (aba Atividade + LiveBadge)
+- `src/pages/TournamentDetail.tsx` / `ManageTournament.tsx` (aba Atividade)
+- `src/pages/SocialProfile.tsx` / `UserProfile.tsx` (perfil esportivo)
+- `src/pages/Profile.tsx` (toggles de privacidade granulares)
 
-Nenhuma alteração será feita sem evidência prévia das queries.
+## Fora de escopo (não fazer)
+Stories, reels, chat novo, influencer/creator economy, posts longos, feed manual, novo engine, IA local, refator de bracket/auth, novos endpoints ORKYM.
+
+## Critério de sucesso
+1. Feed mostra eventos reais mesmo com 0 posts manuais.
+2. Cada `event_type` (10+) tem card visual próprio.
+3. Arena e torneio têm timeline própria.
+4. Explore prioriza "acontecendo agora".
+5. Perfil mostra XP/streak/ranking/arenas/esportes/conquistas.
+6. Privacidade granular respeitada nos triggers.
+7. Realtime no `/feed` (novos eventos aparecem sem refresh).
+8. Mobile fluido, sem regressão de build.
+
+## Relatório final entregará
+- Lista de event_types ativos + contagem
+- Cards criados (screenshots)
+- Antes/depois de Explore e Perfil
+- Verificação de XP/streak/badge emitindo eventos
+- Smoke: criar check-in → ver no feed em <2s
