@@ -34,6 +34,7 @@ const META: Record<string, { icon: JSX.Element; accent?: boolean; label?: string
   class_attendance:   { icon: <Activity className="h-4 w-4" style={{ color: ACCENT }} /> },
   tournament_won:     { icon: <Trophy className="h-5 w-5" style={{ color: ACCENT }} />, accent: true, label: "CAMPEÃO" },
   tournament_podium:  { icon: <Medal className="h-4 w-4" style={{ color: ACCENT }} />, label: "PÓDIO" },
+  tournament_advance: { icon: <ChevronsUp className="h-4 w-4" style={{ color: ACCENT }} />, label: "AVANÇOU" },
   level_up:           { icon: <TrendingUp className="h-4 w-4" style={{ color: ACCENT }} />, label: "NÍVEL" },
   streak_milestone:   { icon: <Flame className="h-4 w-4" style={{ color: "#FF6A00" }} />, label: "SEQUÊNCIA" },
   badge_earned:       { icon: <Award className="h-4 w-4" style={{ color: ACCENT }} />, label: "CONQUISTA" },
