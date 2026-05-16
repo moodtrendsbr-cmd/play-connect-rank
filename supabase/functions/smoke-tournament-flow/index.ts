@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
         max_entries: 4,
         status: "open",
         bracket_format: "single_elimination",
-        phase: "knockout",
+        phase: "ko_only",
       })
       .select("id")
       .single();
