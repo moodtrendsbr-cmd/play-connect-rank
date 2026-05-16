@@ -239,6 +239,8 @@ const Profile = () => {
         <Button variant="ghost" size="sm" onClick={signOut} style={{ color: "#9CA3AF" }}>Sair</Button>
       </div>
 
+      <MyNextMatchCard />
+
       <ProfileHeader
         profileUserId={user!.id}
         currentUserId={user?.id}
