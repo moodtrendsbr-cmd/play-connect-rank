@@ -194,6 +194,51 @@ const AdminInternalTools = () => {
             </Button>
           </CardContent>
         </Card>
+
+        {/* Smoke do fluxo completo */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-primary" /> Smoke do fluxo completo
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Cria torneio [SMOKE] com 4 atletas, gera bracket, registra placares e confere o pódio (entry → matches → advance → placements).
+            </p>
+            <Button size="sm" onClick={smokeFlow} disabled={flowSmoking}>
+              <Trophy className={`h-4 w-4 mr-2 ${flowSmoking ? "animate-spin" : ""}`} />
+              {flowSmoking ? "Executando…" : "Rodar smoke do fluxo"}
+            </Button>
+            {flowResult && (
+              <div className="space-y-2 pt-2 border-t border-border">
+                <div className="text-xs">
+                  <span className={flowResult.ok ? "text-emerald-400" : "text-red-400"}>
+                    {flowResult.ok ? "OK" : `Falhou em ${flowResult.step}`}
+                  </span>
+                  {flowResult.tournament_id && (
+                    <span className="text-muted-foreground"> · {String(flowResult.tournament_id).slice(0, 8)}</span>
+                  )}
+                </div>
+                {flowResult.checks && (
+                  <div className="grid grid-cols-2 gap-1 text-xs">
+                    {Object.entries(flowResult.checks).map(([k, v]) => (
+                      <div key={k} className="flex items-center gap-2">
+                        <span className={v ? "text-emerald-400" : "text-red-400"}>{v ? "✓" : "✗"}</span>
+                        <span className="text-muted-foreground truncate">{k}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {flowResult.summary && (
+                  <pre className="text-[10px] text-muted-foreground bg-muted/30 p-2 rounded overflow-auto">
+                    {JSON.stringify(flowResult.summary, null, 2)}
+                  </pre>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Backfill + relatório */}
