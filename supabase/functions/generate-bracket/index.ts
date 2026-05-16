@@ -47,21 +47,17 @@ function nextPow2(n: number): number {
 }
 
 function seedingOrder(size: number): number[] {
-  let rounds: number[][] = [[1, 2]];
-  while (rounds[0].length < size) {
-    const next: number[][] = [];
-    const pairs = rounds[0];
-    const total = pairs.length * 2 * 2;
-    const flat: number[] = [];
-    for (const s of pairs) flat.push(s);
-    const out: number[] = [];
-    for (const s of flat) {
-      out.push(s);
-      out.push(total + 1 - s);
+  let out: number[] = [1, 2];
+  while (out.length < size) {
+    const nextSize = out.length * 2;
+    const next: number[] = [];
+    for (const s of out) {
+      next.push(s);
+      next.push(nextSize + 1 - s);
     }
-    rounds = [out];
+    out = next;
   }
-  return rounds[0];
+  return out;
 }
 
 serve(async (req) => {
