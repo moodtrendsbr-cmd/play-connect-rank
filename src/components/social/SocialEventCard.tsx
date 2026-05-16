@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import {
   Trophy, MapPin, Users, Activity, CalendarPlus, Medal, CheckCircle2,
-  Flame, Star, Zap, Award, TrendingUp,
+  Flame, Star, Zap, Award, TrendingUp, ChevronsUp,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
