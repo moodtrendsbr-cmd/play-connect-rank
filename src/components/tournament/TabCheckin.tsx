@@ -1,22 +1,26 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { CheckCircle2, Clock, UserCheck, QrCode } from "lucide-react";
+import { Clock, UserCheck, QrCode } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
+import AthleteCheckinQR from "@/components/tournament/AthleteCheckinQR";
 
 interface Props {
   tournamentId: string;
 }
 
 const TabCheckin = ({ tournamentId }: Props) => {
+  const { user } = useAuth();
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -114,27 +118,48 @@ const TabCheckin = ({ tournamentId }: Props) => {
         {paid.map((e) => {
           const name = profileMap[e.user_id]?.full_name || e.athlete_name || "Atleta";
           const isChecked = !!e.checked_in_at;
+          const isMe = user?.id === e.user_id;
+          const expanded = expandedId === e.id;
           return (
-            <div key={e.id} className="flex items-center justify-between rounded-lg border border-border bg-card p-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{name}</p>
-                {isChecked && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                    <Clock className="h-3 w-3" />
-                    {format(new Date(e.checked_in_at), "dd/MM HH:mm")}
+            <div key={e.id} className="rounded-lg border border-border bg-card">
+              <div className="flex items-center justify-between p-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {name} {isMe && <span className="text-[10px] text-primary">(você)</span>}
                   </p>
-                )}
+                  {isChecked && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <Clock className="h-3 w-3" />
+                      {format(new Date(e.checked_in_at), "dd/MM HH:mm")}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {isChecked ? (
+                    <Badge className="bg-primary/20 text-primary">Presente</Badge>
+                  ) : (
+                    <Badge variant="outline">Ausente</Badge>
+                  )}
+                  {isMe && !isChecked && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setExpandedId(expanded ? null : e.id)}
+                      aria-label="Ver meu QR"
+                    >
+                      <QrCode className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Button size="sm" variant={isChecked ? "ghost" : "default"} onClick={() => toggleCheckin(e)}>
+                    {isChecked ? "Reverter" : "Check-in"}
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {isChecked ? (
-                  <Badge className="bg-primary/20 text-primary">Presente</Badge>
-                ) : (
-                  <Badge variant="outline">Ausente</Badge>
-                )}
-                <Button size="sm" variant={isChecked ? "ghost" : "default"} onClick={() => toggleCheckin(e)}>
-                  {isChecked ? "Reverter" : "Check-in"}
-                </Button>
-              </div>
+              {isMe && expanded && !isChecked && (
+                <div className="border-t border-border p-3 flex justify-center">
+                  <AthleteCheckinQR enrollmentId={e.id} compact />
+                </div>
+              )}
             </div>
           );
         })}
