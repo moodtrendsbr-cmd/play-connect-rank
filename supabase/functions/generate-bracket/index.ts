@@ -186,6 +186,7 @@ serve(async (req) => {
                 match_number: mn++,
                 entry_a_id: ge[i],
                 entry_b_id: ge[j],
+                status: "scheduled",
               });
             }
           }
