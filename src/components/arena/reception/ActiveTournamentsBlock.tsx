@@ -13,7 +13,7 @@ export const ActiveTournamentsBlock = ({ arenaId }: Props) => {
     if (!arenaId) return;
     (async () => {
       const today = new Date().toISOString().slice(0, 10);
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("tournaments")
         .select("id, name, status, start_date, end_date")
         .eq("arena_id", arenaId)
@@ -21,7 +21,7 @@ export const ActiveTournamentsBlock = ({ arenaId }: Props) => {
         .lte("start_date", today)
         .gte("end_date", today)
         .limit(5);
-      setItems((data as any) || []);
+      setItems((data as any[]) || []);
     })();
   }, [arenaId]);
 
