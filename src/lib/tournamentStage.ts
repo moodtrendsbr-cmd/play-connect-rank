@@ -13,6 +13,7 @@ export interface StageInputs {
   hasGroups: boolean;           // any modality_groups exist
   hasMatches: boolean;          // any modality_matches exist
   hasFinishedFinal: boolean;    // a champion exists
+  hasOrphans?: boolean;         // paid enrollments without modality_id
 }
 
 export interface StageInfo {
@@ -47,14 +48,21 @@ export const deriveStage = (i: StageInputs): StageId => {
     return "matches";
   }
   if (i.hasGroups) return "groups";
-  // No groups yet
-  if (i.status === "checkin" || i.paidCount >= Math.max(1, i.maxSlots * 0.8)) return "checkin";
+  // Only advance to check-in when we actually have valid entries or status was opened manually.
+  if (i.hasEntries && (i.status === "checkin" || i.paidCount > 0)) return "checkin";
   return "open";
 };
 
 export const nextActionFor = (stage: StageId, i: StageInputs): NextAction => {
   switch (stage) {
     case "open":
+      if (i.hasOrphans) {
+        return {
+          label: "Organizar inscrições",
+          hint: "Há inscrições pagas sem categoria. Organize antes de avançar.",
+          goToTab: "inscritos",
+        };
+      }
       return {
         label: "Divulgar torneio",
         hint: i.paidCount === 0 ? "Compartilhe o link e comece a receber inscrições." : `${i.paidCount} inscritos confirmados.`,
