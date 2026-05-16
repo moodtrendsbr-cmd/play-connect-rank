@@ -5,6 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Grid3X3, Video, Instagram, Map, Globe, ExternalLink, ArrowLeft } from "lucide-react";
+import { SocialActivityFeed } from "@/components/social/SocialActivityFeed";
+import { LiveBadge } from "@/components/social/LiveBadge";
 
 const ICON_MAP: Record<string, any> = {
   video: Video,
