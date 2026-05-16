@@ -25,6 +25,8 @@ import { dashboardPathFor } from "@/lib/dashboardPath";
 import {
   deriveStage, nextActionFor, type NextAction,
 } from "@/lib/tournamentStage";
+import TabResumo from "@/components/tournament/TabResumo";
+import { useTournamentPermission } from "@/hooks/useTournamentPermission";
 
 const MOOD_COMMISSION_PERCENT = 10;
 const isValidUUID = (s: string) =>
@@ -35,6 +37,8 @@ type TabKey = "resumo" | "inscritos" | "checkin" | "grupos" | "jogos" | "chave" 
 const ManageTournament = () => {
   const { id } = useParams();
   const { user, userRole, loading: authLoading } = useAuth();
+  const perm = useTournamentPermission(id);
+  const canManage = perm.canManage;
   const [params, setParams] = useSearchParams();
   const backPath = dashboardPathFor(userRole);
 
@@ -88,7 +92,7 @@ const ManageTournament = () => {
       if (!t) return;
 
       const [enrollRes, profileRes] = await Promise.all([
-        supabase.from("enrollments").select("id, status, amount_paid").eq("tournament_id", id!),
+        supabase.from("enrollments").select("id, status, amount_paid, modality_id, checked_in_at, archived_at").eq("tournament_id", id!),
         supabase.from("profiles").select("mp_collector_id").eq("user_id", t.organizer_id).single(),
       ]);
       setEnrollments(enrollRes.data || []);
@@ -101,10 +105,12 @@ const ManageTournament = () => {
 
   const paid = enrollments.filter((e) => e.status === "paid");
   const pending = enrollments.filter((e) => e.status === "pending");
+  const orphansCount = enrollments.filter((e: any) => e.status === "paid" && !e.modality_id && !e.archived_at).length;
+  const notCheckedInCount = enrollments.filter((e: any) => e.status === "paid" && e.modality_id && !e.checked_in_at && !e.archived_at).length;
 
   const stageInfo = useMemo(() => {
     if (!tournament) return null;
-    const id = deriveStage({
+    const inputs = {
       status: tournament.status,
       startDate: tournament.start_date,
       endDate: tournament.end_date,
@@ -112,17 +118,11 @@ const ManageTournament = () => {
       maxSlots: Number(tournament.max_slots) || 0,
       hasEntries, hasGroups, hasMatches,
       hasFinishedFinal: hasChampion,
-    });
-    return { id, next: nextActionFor(id, {
-      status: tournament.status,
-      startDate: tournament.start_date,
-      endDate: tournament.end_date,
-      paidCount: paid.length,
-      maxSlots: Number(tournament.max_slots) || 0,
-      hasEntries, hasGroups, hasMatches,
-      hasFinishedFinal: hasChampion,
-    }) as NextAction };
-  }, [tournament, paid.length, hasEntries, hasGroups, hasMatches, hasChampion]);
+      hasOrphans: orphansCount > 0,
+    };
+    const sid = deriveStage(inputs);
+    return { id: sid, next: nextActionFor(sid, inputs) as NextAction };
+  }, [tournament, paid.length, hasEntries, hasGroups, hasMatches, hasChampion, orphansCount]);
 
   const shareTournament = async () => {
     if (!tournament) return;
@@ -148,15 +148,31 @@ const ManageTournament = () => {
     if (a.goToTab) return setTab(a.goToTab);
   };
 
-  if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
+  if (authLoading || perm.loading) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (dataLoaded && !tournament) return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground gap-4">
-      <p className="text-lg text-muted-foreground">Torneio não encontrado ou sem permissão.</p>
+      <p className="text-lg text-muted-foreground">Torneio não encontrado.</p>
       <Button asChild><Link to={backPath}>Voltar</Link></Button>
     </div>
   );
   if (!tournament) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
+
+  // Permission gate: must be admin / organizer owner / arena owner / tenant admin
+  if (!canManage) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground gap-4 px-6 text-center">
+        <p className="text-lg font-semibold text-foreground">Esta é a Central do organizador.</p>
+        <p className="text-sm text-muted-foreground max-w-md">
+          Você está vendo como atleta. Apenas o organizador do torneio pode gerenciar inscrições, grupos e resultados.
+        </p>
+        <div className="flex gap-2">
+          <Button asChild><Link to={`/tournaments/${tournament.id}`}>Ver página pública</Link></Button>
+          <Button variant="outline" asChild><Link to={backPath}>Voltar</Link></Button>
+        </div>
+      </div>
+    );
+  }
 
   const available = Math.max(0, Number(tournament.max_slots || 0) - paid.length - pending.length);
 
@@ -288,19 +304,42 @@ const ManageTournament = () => {
             <TabsTrigger value="podio" className="gap-1.5"><Medal className="h-3.5 w-3.5" /> Pódio</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="resumo" className="mt-4 space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Etapa atual: <span className="text-foreground font-medium capitalize">{stageInfo?.id}</span>.
-              Use as abas acima ou o botão "Próxima ação" para seguir o fluxo do torneio.
-            </p>
+          <TabsContent value="resumo" className="mt-4">
+            <TabResumo
+              tournamentId={id!}
+              stageLabel={stageInfo?.id}
+              orphansCount={orphansCount}
+              completePaidCount={Math.max(0, paid.length - orphansCount)}
+              notCheckedInCount={notCheckedInCount}
+              hasGroups={hasGroups}
+              hasMatches={hasMatches}
+              onGoTab={(t) => setTab(t as TabKey)}
+              onEditConfig={() => setEditOpen(true)}
+            />
           </TabsContent>
 
           <TabsContent value="inscritos" className="mt-4">
             <TabInscritos
               tournamentId={id!}
-              canManage={true}
+              canManage={canManage}
               onDivulgar={shareTournament}
             />
+          </TabsContent>
+
+          <TabsContent value="checkin" className="mt-4">
+            <TabCheckin tournamentId={id!} />
+          </TabsContent>
+
+          <TabsContent value="grupos" className="mt-4">
+            <ModalityPicker
+              tournamentId={id!}
+              emptyTitle="Cadastre as categorias primeiro."
+              emptyDescription="Use 'Editar configurações' para adicionar categorias ao torneio."
+            >
+              {(m) => (
+                <TabGroups modalityId={m.id} numGroups={m.num_groups || 0} canManage={canManage} />
+              )}
+            </ModalityPicker>
           </TabsContent>
 
           <TabsContent value="checkin" className="mt-4">
@@ -328,7 +367,7 @@ const ManageTournament = () => {
               onEmptyCta={() => setTab("grupos")}
             >
               {(m) => (
-                <TabMatches modalityId={m.id} tournamentId={id!} isOrganizer={true} />
+                <TabMatches modalityId={m.id} tournamentId={id!} isOrganizer={canManage} />
               )}
             </ModalityPicker>
           </TabsContent>
@@ -339,7 +378,7 @@ const ManageTournament = () => {
               emptyTitle="O chaveamento aparece quando os jogos forem criados."
             >
               {(m) => (
-                <TabBracketView modalityId={m.id} isOrganizer={true} />
+                <TabBracketView modalityId={m.id} isOrganizer={canManage} />
               )}
             </ModalityPicker>
           </TabsContent>

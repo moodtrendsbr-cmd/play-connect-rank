@@ -49,7 +49,7 @@ const GenerateBracketDialog = ({ open, onOpenChange, modalityId, onGenerated }: 
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="single_elimination">Eliminatória Simples</SelectItem>
-                <SelectItem value="double_elimination">Eliminatória Dupla</SelectItem>
+                <SelectItem value="double_elimination" disabled>Eliminatória Dupla (em breve)</SelectItem>
                 <SelectItem value="round_robin">Todos contra Todos</SelectItem>
                 <SelectItem value="groups">Fase de Grupos</SelectItem>
               </SelectContent>

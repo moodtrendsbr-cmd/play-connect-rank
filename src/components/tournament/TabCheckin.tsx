@@ -24,7 +24,7 @@ const TabCheckin = ({ tournamentId }: Props) => {
       .from("enrollments")
       .select("*")
       .eq("tournament_id", tournamentId)
-      .eq("status", "paid")
+      .is("archived_at", null)
       .order("created_at");
     const list = data || [];
     setEnrollments(list);
@@ -45,7 +45,12 @@ const TabCheckin = ({ tournamentId }: Props) => {
   useEffect(() => { load(); }, [tournamentId]);
 
   const toggleCheckin = async (e: any) => {
+    // Idempotent: if already checked-in and click is "Reverter", clear. Else set.
     const newValue = e.checked_in_at ? null : new Date().toISOString();
+    if (newValue && e.checked_in_at) {
+      // already checked-in, no-op
+      return;
+    }
     const { error } = await supabase
       .from("enrollments")
       .update({ checked_in_at: newValue })
@@ -68,31 +73,45 @@ const TabCheckin = ({ tournamentId }: Props) => {
     );
   }
 
-  const checkedIn = enrollments.filter((e) => e.checked_in_at).length;
+  const paid = enrollments.filter((e) => e.status === "paid" && e.modality_id);
+  const orphans = enrollments.filter((e) => e.status === "paid" && !e.modality_id);
+  const pendingPay = enrollments.filter((e) => e.status === "pending");
+  const checkedIn = paid.filter((e) => e.checked_in_at).length;
+  const notChecked = paid.length - checkedIn;
 
   return (
     <div className="space-y-4">
       <Card className="bg-card border-border">
-        <CardContent className="p-4 flex items-center justify-between gap-3">
+        <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
           <div>
             <p className="text-xs text-muted-foreground">Presença confirmada</p>
             <p className="text-2xl font-bold text-foreground">
-              {checkedIn} <span className="text-sm text-muted-foreground">/ {enrollments.length}</span>
+              {checkedIn} <span className="text-sm text-muted-foreground">/ {paid.length}</span>
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button asChild size="sm" variant="outline" className="gap-1">
-              <Link to={`/tournaments/${tournamentId}/checkin/scan`}>
-                <QrCode className="h-4 w-4" /> Scan QR
-              </Link>
-            </Button>
-            <CheckCircle2 className="h-8 w-8 text-primary" />
-          </div>
+          <Button asChild size="sm" variant="outline" className="gap-1">
+            <Link to={`/tournaments/${tournamentId}/checkin/scan`}>
+              <QrCode className="h-4 w-4" /> Scan QR
+            </Link>
+          </Button>
         </CardContent>
       </Card>
 
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Presentes</p><p className="text-lg font-bold text-primary">{checkedIn}</p></CardContent></Card>
+        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Pendentes</p><p className="text-lg font-bold">{notChecked}</p></CardContent></Card>
+        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Pgto pendente</p><p className="text-lg font-bold text-amber-400">{pendingPay.length}</p></CardContent></Card>
+        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Sem categoria</p><p className="text-lg font-bold text-amber-400">{orphans.length}</p></CardContent></Card>
+      </div>
+
+      {orphans.length > 0 && (
+        <p className="text-xs text-amber-400">
+          {orphans.length} inscrição(ões) paga(s) sem categoria não aparecem aqui. Vá em "Inscritos" para organizar.
+        </p>
+      )}
+
       <div className="space-y-2">
-        {enrollments.map((e) => {
+        {paid.map((e) => {
           const name = profileMap[e.user_id]?.full_name || e.athlete_name || "Atleta";
           const isChecked = !!e.checked_in_at;
           return (
