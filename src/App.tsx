@@ -225,6 +225,7 @@ const App = () => (
             <Route path="/arena/dashboard" element={<ArenaShell />}>
               <Route index element={<ArenaDashboard />} />
               <Route path="torneios" element={<ArenaTournaments />} />
+              <Route path="torneios/:id" element={<RedirectToManage />} />
               <Route path="financeiro" element={<ArenaFinance />} />
               <Route path="transacoes" element={<ArenaTransactions />} />
               <Route path="alunos" element={<ArenaStudents />} />
