@@ -40,7 +40,7 @@ export default function Explore() {
     (async () => {
       const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
       const { data: att } = await (supabase as any)
-        .from("arena_attendance").select("arena_id").gte("attended_at", since).limit(500);
+        .from("arena_attendance").select("arena_id").gte("checked_in_at", since).limit(500);
       const counts: Record<string, number> = {};
       (att || []).forEach((r: any) => { if (r.arena_id) counts[r.arena_id] = (counts[r.arena_id] || 0) + 1; });
       const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([id, n]) => ({ id, n }));

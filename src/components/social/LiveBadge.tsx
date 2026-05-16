@@ -40,7 +40,7 @@ export const LiveBadge = ({ variant, arenaId, count: providedCount }: Props) => 
         const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
         const { count: c } = await (supabase as any)
           .from("arena_attendance").select("id", { count: "exact", head: true })
-          .eq("arena_id", arenaId).gte("attended_at", since);
+          .eq("arena_id", arenaId).gte("checked_in_at", since);
         setCount(c ?? 0);
         setShow((c ?? 0) >= 10);
       }
