@@ -344,6 +344,15 @@ const TournamentDetail = () => {
             </div>
           </div>
         )}
+
+        {/* Atividade do torneio */}
+        <div className="mt-8">
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="font-display text-lg text-foreground">ATIVIDADE</h3>
+            <LiveBadge variant="starting_soon" count={tournament?.start_date && new Date(tournament.start_date).getTime() - Date.now() < 2 * 3600 * 1000 && new Date(tournament.start_date).getTime() > Date.now() ? 1 : 0} />
+          </div>
+          <SocialActivityFeed tournamentId={id} limit={15} title="" realtime />
+        </div>
       </main>
     </div>
   );
