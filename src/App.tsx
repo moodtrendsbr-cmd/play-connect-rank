@@ -16,6 +16,7 @@ import Tournaments from "./pages/Tournaments";
 import TournamentDetail from "./pages/TournamentDetail";
 import TournamentShare from "./pages/TournamentShare";
 import ManageTournament from "./pages/ManageTournament";
+import RedirectToManage from "./components/tournament/RedirectToManage";
 import Brackets from "./pages/Brackets";
 import Results from "./pages/Results";
 import Payment from "./pages/Payment";
