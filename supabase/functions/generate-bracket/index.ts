@@ -264,6 +264,7 @@ serve(async (req) => {
               match_number: i + 1,
               entry_a_id: null,
               entry_b_id: null,
+              status: "scheduled",
               bracket_side: "losers",
             });
           }
