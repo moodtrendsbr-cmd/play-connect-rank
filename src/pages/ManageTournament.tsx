@@ -1,79 +1,151 @@
-import { useEffect, useState } from "react";
-import { useParams, Link, Navigate } from "react-router-dom";
+import { useEffect, useState, useMemo } from "react";
+import { useParams, Link, Navigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { toast } from "@/hooks/use-toast";
-import { AlertCircle, ArrowLeft, ChevronDown, Pencil } from "lucide-react";
-import EditTournamentForm from "@/components/tournament/EditTournamentForm";
-import TabCategorias from "@/components/tournament/TabCategorias";
-import TabCheckin from "@/components/tournament/TabCheckin";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "@/hooks/use-toast";
+import {
+  AlertCircle, ArrowLeft, ChevronDown, Pencil,
+  Share2, Users, CheckCircle2, Layers, Gamepad2, Trophy, Medal, Trash2,
+} from "lucide-react";
+import EditTournamentForm from "@/components/tournament/EditTournamentForm";
+import TabCheckin from "@/components/tournament/TabCheckin";
+import TabInscritos from "@/components/tournament/TabInscritos";
+import StageProgress from "@/components/tournament/StageProgress";
+import ModalityPicker from "@/components/tournament/ModalityPicker";
+import EmptyState from "@/components/tournament/EmptyState";
+import TabGroups from "@/components/brackets/TabGroups";
+import TabMatches from "@/components/brackets/TabMatches";
+import TabBracketView from "@/components/brackets/TabBracketView";
+import TabPlacements from "@/components/brackets/TabPlacements";
 import { dashboardPathFor } from "@/lib/dashboardPath";
+import {
+  deriveStage, nextActionFor, type NextAction,
+} from "@/lib/tournamentStage";
 
 const MOOD_COMMISSION_PERCENT = 10;
-const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+const isValidUUID = (s: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+
+type TabKey = "resumo" | "inscritos" | "checkin" | "grupos" | "jogos" | "chave" | "podio";
 
 const ManageTournament = () => {
   const { id } = useParams();
   const { user, userRole, loading: authLoading } = useAuth();
+  const [params, setParams] = useSearchParams();
   const backPath = dashboardPathFor(userRole);
+
   const [tournament, setTournament] = useState<any>(null);
   const [enrollments, setEnrollments] = useState<any[]>([]);
-  const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [hasMpAccount, setHasMpAccount] = useState(false);
+  const [hasEntries, setHasEntries] = useState(false);
+  const [hasGroups, setHasGroups] = useState(false);
+  const [hasMatches, setHasMatches] = useState(false);
+  const [hasChampion, setHasChampion] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
+  const tab = (params.get("tab") as TabKey) || "resumo";
+  const setTab = (t: TabKey) => setParams((prev) => {
+    const p = new URLSearchParams(prev);
+    p.set("tab", t);
+    return p;
+  });
+
+  const loadOps = async (tid: string) => {
+    // Modalities of this tournament
+    const { data: mods } = await supabase
+      .from("tournament_modalities")
+      .select("id")
+      .eq("tournament_id", tid);
+    const modIds = (mods || []).map((m: any) => m.id);
+
+    if (modIds.length === 0) {
+      setHasEntries(false); setHasGroups(false); setHasMatches(false); setHasChampion(false);
+      return;
+    }
+    const [entriesRes, groupsRes, matchesRes, placeRes] = await Promise.all([
+      supabase.from("modality_entries").select("id", { count: "exact", head: true }).in("modality_id", modIds),
+      supabase.from("modality_groups").select("id", { count: "exact", head: true }).in("modality_id", modIds),
+      supabase.from("modality_matches").select("id", { count: "exact", head: true }).in("modality_id", modIds),
+      supabase.from("modality_placements").select("id", { count: "exact", head: true }).in("modality_id", modIds).eq("position", 1),
+    ]);
+    setHasEntries((entriesRes.count || 0) > 0);
+    setHasGroups((groupsRes.count || 0) > 0);
+    setHasMatches((matchesRes.count || 0) > 0);
+    setHasChampion((placeRes.count || 0) > 0);
+  };
+
   useEffect(() => {
     const fetchData = async () => {
-      if (!id || !isValidUUID(id)) {
-        setDataLoaded(true);
-        setTournament(null);
-        return;
-      }
+      if (!id || !isValidUUID(id)) { setDataLoaded(true); setTournament(null); return; }
       const { data: t } = await supabase.from("tournaments").select("*").eq("id", id).maybeSingle();
       setTournament(t);
       setDataLoaded(true);
       if (!t) return;
 
       const [enrollRes, profileRes] = await Promise.all([
-        supabase.from("enrollments").select("*").eq("tournament_id", id!),
+        supabase.from("enrollments").select("id, status, amount_paid").eq("tournament_id", id!),
         supabase.from("profiles").select("mp_collector_id").eq("user_id", t.organizer_id).single(),
       ]);
-
-      const enrollData = enrollRes.data || [];
-      setEnrollments(enrollData);
+      setEnrollments(enrollRes.data || []);
       setHasMpAccount(!!(profileRes.data as any)?.mp_collector_id);
 
-      const userIds = enrollData.map((en) => en.user_id).filter(Boolean);
-      if (userIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("user_id, full_name, whatsapp")
-          .in("user_id", userIds);
-        const map: Record<string, any> = {};
-        (profiles || []).forEach((p) => { map[p.user_id] = p; });
-        setProfileMap(map);
-      }
+      await loadOps(id!);
     };
     if (id && user) fetchData();
   }, [id, user]);
 
   const paid = enrollments.filter((e) => e.status === "paid");
   const pending = enrollments.filter((e) => e.status === "pending");
-  const expired = enrollments.filter((e) => e.status === "expired");
-  const getName = (enrollment: any) => profileMap[enrollment.user_id]?.full_name || enrollment.athlete_name || "Atleta";
-  const sendReminder = async (enrollment: any) => {
-    const { error } = await supabase.rpc("enqueue_enrollment_reminder", { _enrollment_id: enrollment.id });
-    if (error) {
-      toast({ title: "Falha ao enfileirar lembrete", description: error.message, variant: "destructive" });
-      return;
+
+  const stageInfo = useMemo(() => {
+    if (!tournament) return null;
+    const id = deriveStage({
+      status: tournament.status,
+      startDate: tournament.start_date,
+      endDate: tournament.end_date,
+      paidCount: paid.length,
+      maxSlots: Number(tournament.max_slots) || 0,
+      hasEntries, hasGroups, hasMatches,
+      hasFinishedFinal: hasChampion,
+    });
+    return { id, next: nextActionFor(id, {
+      status: tournament.status,
+      startDate: tournament.start_date,
+      endDate: tournament.end_date,
+      paidCount: paid.length,
+      maxSlots: Number(tournament.max_slots) || 0,
+      hasEntries, hasGroups, hasMatches,
+      hasFinishedFinal: hasChampion,
+    }) as NextAction };
+  }, [tournament, paid.length, hasEntries, hasGroups, hasMatches, hasChampion]);
+
+  const shareTournament = async () => {
+    if (!tournament) return;
+    const url = `${window.location.origin}/tournaments/${tournament.id}`;
+    const text = `Confira ${tournament.name} no MoodPlay: ${url}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: tournament.name, text, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast({ title: "Link copiado", description: url });
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast({ title: "Link copiado", description: url });
+      } catch {}
     }
-    toast({ title: "Lembrete enfileirado", description: `Será enviado por WhatsApp para ${getName(enrollment)}.` });
+  };
+
+  const handleAction = (a: NextAction) => {
+    if (a.action === "share") return shareTournament();
+    if (a.goToTab) return setTab(a.goToTab);
   };
 
   if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
@@ -86,154 +158,206 @@ const ManageTournament = () => {
   );
   if (!tournament) return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Carregando...</div>;
 
-  const available = tournament.max_slots - paid.length - pending.length;
+  const available = Math.max(0, Number(tournament.max_slots || 0) - paid.length - pending.length);
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
-        <div className="container flex h-16 items-center gap-4">
+        <div className="container flex h-14 items-center gap-3">
           <Button variant="ghost" size="sm" asChild>
             <Link to={backPath} className="gap-2">
               <ArrowLeft className="h-4 w-4" /> Voltar
             </Link>
           </Button>
-          <Link to={backPath} className="text-2xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
+          <Link to={backPath} className="text-xl font-display text-primary text-glow">🏐 MOOD PLAY</Link>
         </div>
       </header>
 
-      <main className="container max-w-3xl py-8">
-        <h1 className="mb-2 text-4xl font-display text-foreground">GERENCIAR TORNEIO</h1>
-        <p className="text-lg text-muted-foreground mb-8">{tournament.name}</p>
-
-        <div className="mb-8 grid gap-4 grid-cols-2 sm:grid-cols-4">
-          <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{tournament.max_slots}</p><p className="text-xs text-muted-foreground">Vagas totais</p></CardContent></Card>
-          <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-primary">{paid.length}</p><p className="text-xs text-muted-foreground">Confirmadas</p></CardContent></Card>
-          <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-secondary">{pending.length}</p><p className="text-xs text-muted-foreground">Pendentes</p></CardContent></Card>
-          <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{available > 0 ? available : 0}</p><p className="text-xs text-muted-foreground">Disponíveis</p></CardContent></Card>
+      <main className="container max-w-4xl py-6 pb-20 space-y-5">
+        {/* Title block */}
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Central do torneio</p>
+            <h1 className="text-3xl sm:text-4xl font-display text-foreground leading-tight">{tournament.name}</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {tournament.city ? `${tournament.city}${tournament.state ? ", " + tournament.state : ""} · ` : ""}
+              {tournament.start_date} {tournament.end_date && tournament.end_date !== tournament.start_date ? `→ ${tournament.end_date}` : ""}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={shareTournament} className="gap-1.5">
+              <Share2 className="h-4 w-4" /> Divulgar
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/tournaments/${tournament.id}`}>Ver página</Link>
+            </Button>
+          </div>
         </div>
 
-        {/* Financial Summary */}
-        {tournament.entry_fee > 0 && (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="font-sans text-base">💰 Resumo Financeiro</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {(() => {
-                const totalRevenue = paid.length * Number(tournament.entry_fee);
-                const commission = Math.round(totalRevenue * MOOD_COMMISSION_PERCENT) / 100;
-                const netAmount = totalRevenue - commission;
-                return (
-                  <>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Total arrecadado ({paid.length} inscrições)</span>
-                      <span className="font-medium">R$ {totalRevenue.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Comissão Mood ({MOOD_COMMISSION_PERCENT}%)</span>
-                      <span className="text-destructive">- R$ {commission.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm border-t border-border pt-2">
-                      <span className="font-medium text-foreground">Valor líquido</span>
-                      <span className="font-bold text-primary">R$ {netAmount.toFixed(2)}</span>
-                    </div>
-                    {!hasMpAccount && (
-                      <div className="flex items-start gap-2 rounded-md bg-secondary/10 p-3 text-sm text-secondary mt-2">
-                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                        <p>Conta Mercado Pago não vinculada. O valor ficará no seu saldo para saque manual. <Link to="/profile" className="underline font-medium">Vincular conta MP</Link></p>
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </CardContent>
-          </Card>
+        {/* Stage progress + next action */}
+        {stageInfo && (
+          <StageProgress
+            current={stageInfo.id}
+            nextAction={stageInfo.next}
+            onAction={handleAction}
+          />
         )}
 
-        {/* Edit Tournament */}
-        <Collapsible open={editOpen} onOpenChange={setEditOpen} className="mb-8">
+        {/* KPIs */}
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+          <Card><CardContent className="pt-4 text-center">
+            <p className="text-2xl font-bold">{tournament.max_slots ?? "—"}</p>
+            <p className="text-xs text-muted-foreground">Vagas</p>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 text-center">
+            <p className="text-2xl font-bold text-primary">{paid.length}</p>
+            <p className="text-xs text-muted-foreground">Confirmados</p>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 text-center">
+            <p className="text-2xl font-bold text-secondary">{pending.length}</p>
+            <p className="text-xs text-muted-foreground">Pendentes</p>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 text-center">
+            <p className="text-2xl font-bold">{available}</p>
+            <p className="text-xs text-muted-foreground">Disponíveis</p>
+          </CardContent></Card>
+        </div>
+
+        {/* Financial summary */}
+        {Number(tournament.entry_fee) > 0 && (() => {
+          const totalRevenue = paid.length * Number(tournament.entry_fee);
+          const commission = Math.round(totalRevenue * MOOD_COMMISSION_PERCENT) / 100;
+          const net = totalRevenue - commission;
+          return (
+            <Card>
+              <CardContent className="pt-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Arrecadado ({paid.length})</span>
+                  <span className="font-medium">R$ {totalRevenue.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Comissão MoodPlay ({MOOD_COMMISSION_PERCENT}%)</span>
+                  <span className="text-destructive">- R$ {commission.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between border-t border-border pt-2">
+                  <span className="font-medium">Líquido</span>
+                  <span className="font-bold text-primary">R$ {net.toFixed(2)}</span>
+                </div>
+                {!hasMpAccount && (
+                  <div className="flex items-start gap-2 rounded-md bg-secondary/10 p-3 text-xs text-secondary mt-2">
+                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <p>Conta Mercado Pago não vinculada. <Link to="/profile" className="underline font-medium">Vincular agora</Link></p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
+
+        {/* Edit collapsible */}
+        <Collapsible open={editOpen} onOpenChange={setEditOpen}>
           <CollapsibleTrigger asChild>
-            <Button variant="outline" className="w-full justify-between gap-2 h-12">
+            <Button variant="outline" className="w-full justify-between gap-2 h-11">
               <span className="flex items-center gap-2">
                 <Pencil className="h-4 w-4" />
-                Editar Configurações do Torneio
+                Editar configurações
               </span>
               <ChevronDown className={`h-4 w-4 transition-transform ${editOpen ? "rotate-180" : ""}`} />
             </Button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="mt-4">
-            <Card>
-              <CardContent className="pt-6">
-                <EditTournamentForm
-                  tournament={tournament}
-                  userId={user.id}
-                  onSaved={(updated) => {
-                    setTournament(updated);
-                    setEditOpen(false);
-                  }}
-                />
-              </CardContent>
-            </Card>
+          <CollapsibleContent className="mt-3">
+            <Card><CardContent className="pt-6">
+              <EditTournamentForm
+                tournament={tournament}
+                userId={user.id}
+                onSaved={(updated: any) => { setTournament(updated); setEditOpen(false); }}
+              />
+            </CardContent></Card>
           </CollapsibleContent>
         </Collapsible>
 
-        <Tabs defaultValue="enrollments" className="w-full">
-          <TabsList className="bg-card border border-border mb-6 flex-wrap h-auto">
-            <TabsTrigger value="enrollments">Inscrições</TabsTrigger>
-            <TabsTrigger value="categorias">Categorias</TabsTrigger>
-            <TabsTrigger value="checkin">Check-in</TabsTrigger>
+        {/* Operational tabs */}
+        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="w-full">
+          <TabsList className="w-full justify-start overflow-x-auto bg-card border border-border h-auto flex-wrap">
+            <TabsTrigger value="resumo" className="gap-1.5">Resumo</TabsTrigger>
+            <TabsTrigger value="inscritos" className="gap-1.5"><Users className="h-3.5 w-3.5" /> Inscritos</TabsTrigger>
+            <TabsTrigger value="checkin" className="gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" /> Check-in</TabsTrigger>
+            <TabsTrigger value="grupos" className="gap-1.5"><Layers className="h-3.5 w-3.5" /> Grupos</TabsTrigger>
+            <TabsTrigger value="jogos" className="gap-1.5"><Gamepad2 className="h-3.5 w-3.5" /> Jogos</TabsTrigger>
+            <TabsTrigger value="chave" className="gap-1.5"><Trophy className="h-3.5 w-3.5" /> Chave</TabsTrigger>
+            <TabsTrigger value="podio" className="gap-1.5"><Medal className="h-3.5 w-3.5" /> Pódio</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="enrollments">
-            {/* Paid */}
-            <h2 className="text-2xl font-display text-foreground mb-4">✅ PAGOS</h2>
-            {paid.length === 0 ? <p className="text-muted-foreground mb-6">Nenhum pagamento confirmado.</p> : (
-              <div className="space-y-2 mb-8">
-                {paid.map((e) => (
-                  <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-                    <span>{getName(e)}</span>
-                    <Badge className="bg-primary/20 text-primary">✅ Pago</Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Pending */}
-            <h2 className="text-2xl font-display text-foreground mb-4">⏳ PENDENTES</h2>
-            {pending.length === 0 ? <p className="text-muted-foreground mb-6">Nenhum pendente.</p> : (
-              <div className="space-y-2 mb-8">
-                {pending.map((e) => (
-                  <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-                    <div>
-                      <span>{getName(e)}</span>
-                      <p className="text-xs text-muted-foreground">Vence: {e.expires_at ? new Date(e.expires_at).toLocaleDateString("pt-BR") : "—"}</p>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => sendReminder(e)}>Enviar lembrete</Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Expired */}
-            <h2 className="text-2xl font-display text-foreground mb-4">❌ EXPIRADOS</h2>
-            {expired.length === 0 ? <p className="text-muted-foreground mb-6">Nenhum expirado.</p> : (
-              <div className="space-y-2 mb-8">
-                {expired.map((e) => (
-                  <div key={e.id} className="flex items-center justify-between rounded-lg border border-border p-3 opacity-60">
-                    <span>{getName(e)}</span>
-                    <Badge variant="destructive">Expirado</Badge>
-                  </div>
-                ))}
-              </div>
-            )}
+          <TabsContent value="resumo" className="mt-4 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Etapa atual: <span className="text-foreground font-medium capitalize">{stageInfo?.id}</span>.
+              Use as abas acima ou o botão "Próxima ação" para seguir o fluxo do torneio.
+            </p>
           </TabsContent>
 
-          <TabsContent value="categorias">
-            <TabCategorias tournamentId={id!} />
+          <TabsContent value="inscritos" className="mt-4">
+            <TabInscritos
+              tournamentId={id!}
+              canManage={true}
+              onDivulgar={shareTournament}
+            />
           </TabsContent>
 
-          <TabsContent value="checkin">
+          <TabsContent value="checkin" className="mt-4">
             <TabCheckin tournamentId={id!} />
+          </TabsContent>
+
+          <TabsContent value="grupos" className="mt-4">
+            <ModalityPicker
+              tournamentId={id!}
+              emptyTitle="Cadastre as categorias primeiro."
+              emptyDescription="Use 'Editar configurações' para adicionar categorias ao torneio."
+            >
+              {(m) => (
+                <TabGroups modalityId={m.id} numGroups={m.num_groups || 0} canManage={true} />
+              )}
+            </ModalityPicker>
+          </TabsContent>
+
+          <TabsContent value="jogos" className="mt-4">
+            <ModalityPicker
+              tournamentId={id!}
+              emptyTitle="Os jogos ainda não foram gerados."
+              emptyDescription="Sorteie os grupos primeiro para que os jogos sejam criados."
+              emptyCtaLabel="Ir para Grupos"
+              onEmptyCta={() => setTab("grupos")}
+            >
+              {(m) => (
+                <TabMatches modalityId={m.id} tournamentId={id!} isOrganizer={true} />
+              )}
+            </ModalityPicker>
+          </TabsContent>
+
+          <TabsContent value="chave" className="mt-4">
+            <ModalityPicker
+              tournamentId={id!}
+              emptyTitle="O chaveamento aparece quando os jogos forem criados."
+            >
+              {(m) => (
+                <TabBracketView modalityId={m.id} />
+              )}
+            </ModalityPicker>
+          </TabsContent>
+
+          <TabsContent value="podio" className="mt-4">
+            <ModalityPicker
+              tournamentId={id!}
+              emptyTitle="O pódio aparece quando a final terminar."
+            >
+              {(m) => (
+                <div className="space-y-3">
+                  <TabPlacements modalityId={m.id} />
+                  <Button variant="outline" size="sm" onClick={shareTournament} className="gap-1.5">
+                    <Share2 className="h-4 w-4" /> Compartilhar resultado
+                  </Button>
+                </div>
+              )}
+            </ModalityPicker>
           </TabsContent>
         </Tabs>
       </main>
