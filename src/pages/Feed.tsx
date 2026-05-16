@@ -270,10 +270,32 @@ const Feed = () => {
     <>
       <FeedTopBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
       <main ref={mainRef} className="pt-16 pb-20 px-4 max-w-xl mx-auto space-y-4">
-        <ClipsBar />
-        <AdSlot code="feed.inline" />
-        <SocialActivityFeed limit={6} title="Atividade da rede" />
-        {loading ? (
+        {/* Toggle Atividade / Seguindo */}
+        <div className="flex gap-2 sticky top-16 z-30 -mx-4 px-4 py-2" style={{ background: "rgba(5,7,8,0.95)", backdropFilter: "blur(8px)" }}>
+          {[
+            { id: "activity", label: "Atividade" },
+            { id: "following", label: "Seguindo" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id as any)}
+              className="text-sm font-display tracking-wide px-3 py-1.5 rounded-full transition-colors"
+              style={tab === t.id
+                ? { background: "#2BFF88", color: "#050708" }
+                : { background: "rgba(255,255,255,0.04)", color: "#9CA3AF" }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "activity" ? (
+          <>
+            <ClipsBar />
+            <AdSlot code="feed.inline" />
+            <SocialActivityFeed limit={30} title="" realtime />
+          </>
+        ) : loading ? (
           <><PostSkeleton /><PostSkeleton /><PostSkeleton /></>
         ) : posts.length === 0 ? (
           <div className="text-center py-20">
