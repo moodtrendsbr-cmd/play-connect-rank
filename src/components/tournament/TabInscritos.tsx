@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, MessageCircle, Bell, Trash2, Search } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Users, MessageCircle, Bell, Trash2, Search, AlertTriangle, Archive } from "lucide-react";
 import EmptyState from "./EmptyState";
 import { toast } from "@/hooks/use-toast";
 
@@ -23,12 +24,18 @@ interface Row {
   checked_in_at: string | null;
   modality_id: string | null;
   entry_id: string | null;
+  archived_at: string | null;
   created_at: string;
 }
 
 interface ProfileLite {
   full_name: string | null;
   whatsapp: string | null;
+}
+
+interface Modality {
+  id: string;
+  name: string;
 }
 
 const statusLabel = (s: string) => {
@@ -41,18 +48,22 @@ const statusLabel = (s: string) => {
 export default function TabInscritos({ tournamentId, canManage, onDivulgar }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
   const [profileMap, setProfileMap] = useState<Record<string, ProfileLite>>({});
-  const [modalityMap, setModalityMap] = useState<Record<string, string>>({});
+  const [modalities, setModalities] = useState<Modality[]>([]);
   const [entryMembersMap, setEntryMembersMap] = useState<Record<string, string[]>>({});
+  const [orphanChoice, setOrphanChoice] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "paid" | "pending" | "expired">("all");
   const [search, setSearch] = useState("");
+
+  const modalityMap = Object.fromEntries(modalities.map((m) => [m.id, m.name]));
 
   const load = async () => {
     setLoading(true);
     const { data } = await supabase
       .from("enrollments")
-      .select("id, user_id, athlete_name, status, amount_paid, checked_in_at, modality_id, entry_id, created_at")
+      .select("id, user_id, athlete_name, status, amount_paid, checked_in_at, modality_id, entry_id, archived_at, created_at")
       .eq("tournament_id", tournamentId)
+      .is("archived_at", null)
       .order("created_at", { ascending: false });
     const list = (data || []) as Row[];
     setRows(list);
@@ -70,16 +81,11 @@ export default function TabInscritos({ tournamentId, canManage, onDivulgar }: Pr
       setProfileMap(pmap);
     }
 
-    const modalityIds = [...new Set(list.map((r) => r.modality_id).filter(Boolean) as string[])];
-    if (modalityIds.length > 0) {
-      const { data: mods } = await supabase
-        .from("tournament_modalities")
-        .select("id, name")
-        .in("id", modalityIds);
-      const mmap: Record<string, string> = {};
-      (mods || []).forEach((m: any) => { mmap[m.id] = m.name; });
-      setModalityMap(mmap);
-    }
+    const { data: mods } = await supabase
+      .from("tournament_modalities")
+      .select("id, name")
+      .eq("tournament_id", tournamentId);
+    setModalities((mods || []) as Modality[]);
 
     const entryIds = [...new Set(list.map((r) => r.entry_id).filter(Boolean) as string[])];
     if (entryIds.length > 0) {
@@ -133,20 +139,45 @@ export default function TabInscritos({ tournamentId, canManage, onDivulgar }: Pr
     load();
   };
 
+  const linkCategory = async (e: Row, modalityId: string) => {
+    const { error } = await supabase
+      .from("enrollments")
+      .update({ modality_id: modalityId, needs_category_review: false, orphan_reason: null })
+      .eq("id", e.id);
+    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Inscrição vinculada", description: "Categoria atribuída e atleta entra na lista oficial." });
+    load();
+  };
+
+  const archive = async (e: Row) => {
+    if (!confirm(`Arquivar inscrição de ${nameOf(e)}? Ela some da lista, mas não é apagada.`)) return;
+    const { error } = await supabase
+      .from("enrollments")
+      .update({ archived_at: new Date().toISOString() })
+      .eq("id", e.id);
+    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Inscrição arquivada" });
+    load();
+  };
+
   const nameOf = (e: Row) =>
     (e.user_id && profileMap[e.user_id]?.full_name) || e.athlete_name || "Atleta";
 
   const whatsappOf = (e: Row) =>
     (e.user_id && profileMap[e.user_id]?.whatsapp) || "";
 
+  const isOrphan = (r: Row) => r.status === "paid" && !r.modality_id;
+  const orphans = rows.filter(isOrphan);
+  const completas = rows.filter((r) => !isOrphan(r));
+
   const counts = {
-    all: rows.length,
-    paid: rows.filter((r) => r.status === "paid").length,
-    pending: rows.filter((r) => r.status === "pending").length,
-    expired: rows.filter((r) => r.status === "expired").length,
+    all: completas.length,
+    paid: completas.filter((r) => r.status === "paid").length,
+    pending: completas.filter((r) => r.status === "pending").length,
+    expired: completas.filter((r) => r.status === "expired").length,
   };
 
-  const filtered = rows.filter((r) => {
+  const filtered = completas.filter((r) => {
     if (filter !== "all" && r.status !== filter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -176,94 +207,181 @@ export default function TabInscritos({ tournamentId, canManage, onDivulgar }: Pr
   }
 
   return (
-    <div className="space-y-3">
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        {([
-          ["all", `Todos (${counts.all})`],
-          ["paid", `Pagos (${counts.paid})`],
-          ["pending", `Pendentes (${counts.pending})`],
-          ["expired", `Expirados (${counts.expired})`],
-        ] as const).map(([k, l]) => (
-          <button
-            key={k}
-            onClick={() => setFilter(k as any)}
-            className={`text-xs px-3 py-1.5 rounded-full border ${
-              filter === k
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-border text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {l}
-          </button>
-        ))}
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar atleta..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
-      </div>
-
-      <div className="space-y-2">
-        {filtered.map((e) => {
-          const st = statusLabel(e.status);
-          const modality = e.modality_id ? modalityMap[e.modality_id] : null;
-          const members = e.entry_id ? entryMembersMap[e.entry_id] : null;
-          const phone = whatsappOf(e);
-          const checkedIn = !!e.checked_in_at;
-
-          return (
-            <div key={e.id} className="rounded-lg border border-border bg-card p-3">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground">{nameOf(e)}</p>
-                  <div className="flex flex-wrap gap-1.5 mt-1 text-[11px] text-muted-foreground">
-                    {modality && <span>Categoria: <span className="text-foreground">{modality}</span></span>}
-                    {members && members.length > 1 && (
-                      <span>· Dupla: <span className="text-foreground">{members.join(" + ")}</span></span>
-                    )}
-                    {checkedIn && <span>· ✓ Presente</span>}
-                  </div>
-                </div>
-                <Badge className={st.className} variant="outline">{st.label}</Badge>
-              </div>
-
-              {canManage && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {e.status === "pending" && (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => sendReminder(e)} className="gap-1.5">
-                        <Bell className="h-3.5 w-3.5" /> Lembrete
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => confirmManually(e)}>
-                        Confirmar manualmente
-                      </Button>
-                    </>
-                  )}
-                  {phone && (
-                    <Button size="sm" variant="outline" asChild className="gap-1.5">
-                      <a href={`https://wa.me/${phone.replace(/\D/g, "")}`} target="_blank" rel="noopener">
-                        <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
-                      </a>
-                    </Button>
-                  )}
-                  <Button size="sm" variant="ghost" onClick={() => removeEnrollment(e)} className="gap-1.5 text-destructive">
-                    <Trash2 className="h-3.5 w-3.5" /> Remover
-                  </Button>
-                </div>
+    <div className="space-y-5">
+      {/* INCOMPLETE / ORPHANS SECTION */}
+      {orphans.length > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-semibold text-amber-300">Inscrições incompletas ({orphans.length})</p>
+              <p className="text-xs text-muted-foreground">
+                Estas inscrições foram pagas, mas ainda precisam de categoria. Elas não entram em sorteios até serem organizadas.
+              </p>
+              {modalities.length === 0 && (
+                <p className="text-xs text-amber-300 mt-2 font-medium">
+                  Crie uma categoria antes de organizar os inscritos.
+                </p>
               )}
             </div>
-          );
-        })}
+          </div>
 
-        {filtered.length === 0 && (
-          <p className="text-center text-sm text-muted-foreground py-6">Nenhum inscrito neste filtro.</p>
-        )}
+          <div className="space-y-2">
+            {orphans.map((e) => {
+              const phone = whatsappOf(e);
+              return (
+                <div key={e.id} className="rounded-lg border border-border bg-card p-3">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">{nameOf(e)}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Pago · sem categoria</p>
+                    </div>
+                  </div>
+
+                  {canManage && (
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                      {modalities.length === 1 && (
+                        <Button size="sm" onClick={() => linkCategory(e, modalities[0].id)}>
+                          Vincular a "{modalities[0].name}"
+                        </Button>
+                      )}
+                      {modalities.length > 1 && (
+                        <>
+                          <Select
+                            value={orphanChoice[e.id] || ""}
+                            onValueChange={(v) => setOrphanChoice((m) => ({ ...m, [e.id]: v }))}
+                          >
+                            <SelectTrigger className="h-9 w-[180px]">
+                              <SelectValue placeholder="Escolher categoria" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {modalities.map((m) => (
+                                <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            disabled={!orphanChoice[e.id]}
+                            onClick={() => linkCategory(e, orphanChoice[e.id])}
+                          >
+                            Vincular
+                          </Button>
+                        </>
+                      )}
+                      {phone && (
+                        <Button size="sm" variant="outline" asChild className="gap-1.5">
+                          <a href={`https://wa.me/${phone.replace(/\D/g, "")}`} target="_blank" rel="noopener">
+                            <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+                          </a>
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" onClick={() => archive(e)} className="gap-1.5 text-muted-foreground">
+                        <Archive className="h-3.5 w-3.5" /> Arquivar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* COMPLETE SECTION HEADER */}
+      <div>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+          Inscrições completas
+        </p>
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-2">
+          {([
+            ["all", `Todos (${counts.all})`],
+            ["paid", `Pagos (${counts.paid})`],
+            ["pending", `Pendentes (${counts.pending})`],
+            ["expired", `Expirados (${counts.expired})`],
+          ] as const).map(([k, l]) => (
+            <button
+              key={k}
+              onClick={() => setFilter(k as any)}
+              className={`text-xs px-3 py-1.5 rounded-full border ${
+                filter === k
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative mt-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar atleta..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
+        <div className="space-y-2 mt-3">
+          {filtered.map((e) => {
+            const st = statusLabel(e.status);
+            const modality = e.modality_id ? modalityMap[e.modality_id] : null;
+            const members = e.entry_id ? entryMembersMap[e.entry_id] : null;
+            const phone = whatsappOf(e);
+            const checkedIn = !!e.checked_in_at;
+
+            return (
+              <div key={e.id} className="rounded-lg border border-border bg-card p-3">
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">{nameOf(e)}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-1 text-[11px] text-muted-foreground">
+                      {modality && <span>Categoria: <span className="text-foreground">{modality}</span></span>}
+                      {members && members.length > 1 && (
+                        <span>· Dupla: <span className="text-foreground">{members.join(" + ")}</span></span>
+                      )}
+                      {checkedIn && <span>· ✓ Presente</span>}
+                    </div>
+                  </div>
+                  <Badge className={st.className} variant="outline">{st.label}</Badge>
+                </div>
+
+                {canManage && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {e.status === "pending" && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => sendReminder(e)} className="gap-1.5">
+                          <Bell className="h-3.5 w-3.5" /> Lembrete
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => confirmManually(e)}>
+                          Confirmar manualmente
+                        </Button>
+                      </>
+                    )}
+                    {phone && (
+                      <Button size="sm" variant="outline" asChild className="gap-1.5">
+                        <a href={`https://wa.me/${phone.replace(/\D/g, "")}`} target="_blank" rel="noopener">
+                          <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+                        </a>
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => removeEnrollment(e)} className="gap-1.5 text-destructive">
+                      <Trash2 className="h-3.5 w-3.5" /> Remover
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {filtered.length === 0 && (
+            <p className="text-center text-sm text-muted-foreground py-6">Nenhum inscrito neste filtro.</p>
+          )}
+        </div>
       </div>
     </div>
   );
