@@ -20,6 +20,7 @@ import TournamentMemories from "@/components/profile/TournamentMemories";
 import GamificationPanel from "@/components/gamification/GamificationPanel";
 import { SocialPrivacyToggle } from "@/components/social/SocialPrivacyToggle";
 import { WaIdentityPanel } from "@/components/conversational/WaIdentityPanel";
+import MyNextMatchCard from "@/components/athlete/MyNextMatchCard";
 
 const Profile = () => {
   const { user, signOut, loading: authLoading } = useAuth();
@@ -237,6 +238,8 @@ const Profile = () => {
       <div className="flex justify-end">
         <Button variant="ghost" size="sm" onClick={signOut} style={{ color: "#9CA3AF" }}>Sair</Button>
       </div>
+
+      <MyNextMatchCard />
 
       <ProfileHeader
         profileUserId={user!.id}

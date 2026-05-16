@@ -1,112 +1,150 @@
-## Fase: Arena Physical Experience
+# Torneios Operational Flow
 
-Objetivo: transformar a entrada física da arena em uma experiência conversacional ao vivo, sem ERP, sem IA exposta, sem cadastro. Toda a base (tabelas `arena_checkins`, `wa_qr_tokens`, `bookings`, `booking_checkin_links`, edge `arena-public-checkin`, RPC `arena_checkin_complete/booking_checkin_resolve`) já existe e será reaproveitada. Trabalho é majoritariamente frontend.
+Objetivo: tornar `/tournaments/:id/manage` a **Central do Torneio** — uma página única, mobile-first, sem termos técnicos — reaproveitando 100% do que já existe (`enrollments`, `tournament_modalities`, `modality_entries`, `match_results`, edge `generate-bracket`, tabs em `src/components/brackets/`).
 
-### 1. Página /arena/recepcao (nova)
+Sem novas tabelas. Sem novo backend. Sem expor IA/ORKYM. Sem refazer bracket no client.
 
-Arquivo: `src/pages/arena-dashboard/ArenaReception.tsx` (rota dentro do `ArenaLayout`).
-- Layout mobile-first, tela cheia, tipografia esportiva (Bebas para títulos curtos como "AGORA", "PRÓXIMOS").
-- Polling 15s + realtime subscription em `arena_checkins` (INSERT) e `bookings` (UPDATE) — padrão já usado em `ArenaCheckinList.tsx`.
-- 5 blocos:
-  1. **Acabou de entrar** — últimos 10 check-ins (30 min), nome + esporte + hora, animação fade-in para novos.
-  2. **Chegando agora** — bookings das próximas 2h com status de check-in (chegou / pendente / atrasado se `start_time` < now -10min).
-  3. **Próximas aulas** — `arena_classes` das próximas 3h com contagem de alunos vs presentes.
-  4. **Torneios ativos** — `tournaments` com `status='ongoing'` na arena.
-  5. **QR principal** — card grande, mostra o QR de check-in ativo (`wa_qr_tokens` kind='checkin'), botão "Abrir em tela cheia".
-- Ações rápidas (barra sticky no topo): Abrir QR cheio, Localizar reserva (busca por nome/telefone/shortcode), Registrar presença manual (dialog), Abrir conversa (link `/arena/dashboard/mensagens-wa`).
-- Adicionar item "Recepção" no topo do grupo "Hoje" do `ArenaSidebar.tsx`.
+---
 
-### 2. /arena/dashboard/qr — refino
+## 1. Central do Torneio (página única)
 
-Arquivo existente: `src/pages/arena-dashboard/ArenaQR.tsx`.
-- Adicionar coluna/contador de scans visível (já temos `scans_count`).
-- Botão "Abrir tela cheia" em cada QR → modal preto com QR gigante, nome da arena, ideal para tablet na recepção.
-- Filtro por tipo (chips: arena / check-in / quadra / torneio / aula / produto / promo / campanha).
-- Adicionar tipo `campaign` à lista `QR_KINDS` (atualmente cobre 7 dos 8 pedidos).
-- Status: mostrar "Última leitura há Xmin" (campo `last_scan_at` se existir, senão omitir).
-- Vincular QR de quadra/aula/torneio a um recurso específico via Select no dialog de criação (lista `courts`/`arena_classes`/`tournaments`).
+Reescrever `src/pages/ManageTournament.tsx` para um único hub com:
 
-### 3. Check-in conversacional (refino)
+- Header: nome, hero, data, arena, status, botões "Divulgar" (copia link + Web Share) e "Ver página pública".
+- **StageProgress** (componente novo): 6 etapas — Inscrições · Check-in · Grupos · Jogos · Finais · Encerrado. Etapa ativa é derivada de dados (`tournament.status`, presença de `modality_entries`, `match_results`, vencedor final). Cada etapa mostra ícone + label + status (✓ feito / ● ativa / ○ futura) e, na etapa ativa, um botão grande "Próxima ação" (`PrimaryActionButton`).
+- Abas: **Resumo · Inscritos · Check-in · Grupos · Jogos · Chave · Pódio**.
+- Configurações do torneio continuam dentro do `Collapsible` "Editar" (já existe).
+- Manter rota `/tournaments/:id/manage` como verdade única. Adicionar **redirects** de `/arena/dashboard/torneios/:id` e `/organizer/dashboard/eventos/:id` para a mesma página (mais simples que duplicar shell).
 
-Páginas existentes: `src/pages/PublicCheckin.tsx` + edge `arena-public-checkin`. Já cumpre <30s. Ajustes:
-- Reduzir para 1 tela: telefone + nome no mesmo passo, esportes como chips abaixo (1 toque envia).
-- Auto-foco no input, formatação BR no telefone.
-- Tela "done" mostra contador "Você é o Nº da arena hoje" (consulta count do dia).
-- Sem alterações de schema/edge.
+### Próxima ação (regra)
 
-### 4. Reserva de grupo
+| Etapa ativa            | Botão                          | Ação                                                    |
+| ---------------------- | ------------------------------ | ------------------------------------------------------- |
+| Inscrições abertas     | Divulgar torneio               | Web Share + WhatsApp + copia link                       |
+| Inscrições quase cheias| Abrir check-in                 | muda `tournament.status` para `checkin`                 |
+| Check-in               | Sortear grupos                 | abre tab Grupos com `GenerateBracketDialog`             |
+| Grupos sorteados       | Gerar jogos                    | `generate-bracket` (já existe) por modalidade           |
+| Jogos                  | Registrar resultado            | abre tab Jogos                                          |
+| Finais                 | Publicar pódio                 | abre tab Pódio                                          |
+| Encerrado              | Compartilhar pódio             | Web Share                                               |
 
-A tabela `booking_checkin_links` (shortcode) já existe e a edge resolve via `resolve_booking`. Faltam UI:
-- Em `ArenaBookings.tsx` (e na confirmação após criar reserva): botão "Link do grupo" → modal com QR + URL `/c/{shortcode}` + botão Compartilhar (Web Share API) + "Enviar no WhatsApp" (`https://wa.me/?text=...`).
-- Card "Grupo" dentro do detalhe da reserva mostrando confirmados/chegaram/pendentes (count em `arena_checkins` onde `booking_id=...`).
-- No bloco "Chegando agora" da Recepção, expandir cada reserva para listar membros e quem fez check-in.
+---
 
-### 5. Realtime / polling
+## 2. Reuso direto das abas existentes
 
-- Recepção: canal supabase em `arena_checkins` (INSERT filter `arena_id=eq.{id}`) + interval 30s para bookings/aulas.
-- Toast discreto + som curto opcional (off por padrão) quando alguém entra.
-- Indicador "AO VIVO" piscando no header.
+`src/components/brackets/Tab*.tsx` já cobrem o essencial. Vamos **renomear visualmente** (sem mexer no código interno) e plugá-las nas abas da Central:
 
-### 6. Feed social
+- **Inscritos** → nova `TabInscritos` que substitui o bloco atual de Pagos/Pendentes/Expirados em `ManageTournament`. Lista unificada vinda de `enrollments` JOIN `modality_entry_members` (via `entry_id`) → garante "uma única verdade" (memória `tournament-enrollment-fix`). Colunas: nome, categoria, dupla/equipe, pagamento, check-in, telefone (se permitido). Ações por linha: confirmar manualmente, lembrete (`enqueue_enrollment_reminder` já existe), `wa.me/{phone}`, remover.
+- **Check-in** → reusar `TabCheckin` existente; adicionar no topo card "QR do torneio" reaproveitando `FullscreenQRDialog` da Fase Arena. Botões: Compartilhar QR, Confirmar presença manual.
+- **Grupos** → reusar `TabGroups` + `GenerateBracketDialog`. Esconder labels "modality/seed/phase" via cópia (cabeçalho passa a ser "Categoria", "Posição").
+- **Jogos** → reusar `TabMatches` com filtros "Próximos / Em andamento / Finalizados". Botão por jogo: Registrar placar (`ScoreEntryDialog`), Alterar horário/quadra, Avisar jogadores (`wa.me` deep link com nomes).
+- **Chave** → reusar `TabBracketView`.
+- **Pódio** → reusar `TabPlacements`; adicionar botões "Publicar resultado" (insere evento social) e "Compartilhar pódio".
 
-`arena_checkins` tem `social_identity_id`. Reusar `SocialActivityFeed` existente: adicionar handler que, ao receber INSERT de check-in com `visibility='public'`, publica linha "{nome} está na {arena} jogando {esporte}". Sem mudar privacidade default (continua 'arena').
-- Apenas frontend: filtrar checkins públicos do dia e renderizar como cards no `Feed.tsx` já existente, behind toggle do perfil. Implementação leve: hook `useArenaPublicCheckins(arenaId)` consumido por um novo `<ArenaLiveStrip>` no perfil público da arena (`ArenaPublic.tsx`).
+Esconder a tab "Categorias" técnica atual (continua acessível via Editar).
 
-### 7. CRM automático
+---
 
-Sem nova tabela. Adicionar view client-side em `ArenaStudents.tsx`:
-- Coluna "Última visita" e "Frequência (30d)" calculadas a partir de `arena_checkins` (join por `social_identity_id` ↔ `student.social_identity_id`).
-- Filtro "Inativos > 21d" / "Frequentes" como chips.
-- Botão "Abrir conversa" por aluno usando `phone_e164`.
+## 3. Lista de torneios (Arena/Organizer)
 
-### 8. WhatsApp ações rápidas
+Refinar `ArenaTournaments.tsx` e a lista em `OrganizerDashboard` ("Meus eventos"):
 
-Em todos os cards de pessoa (Recepção, Bookings, Students):
-- Botão WhatsApp → abre `https://wa.me/{phone}` (sem comando).
-- Botão "Enviar QR" → gera link do QR check-in da arena e abre share/WhatsApp.
-- Botão "Compartilhar reserva" → usa shortcode da reserva.
+- Cada card: nome, data, modalidade, status (pill colorida), `inscritos/vagas`, nº de categorias, **próxima ação** derivada da mesma regra acima.
+- Ações: Abrir (→ Central), Divulgar (share), Ver inscritos (→ Central tab=inscritos).
+- Remover jargão ("max_slots" → "Vagas", "modality" → "Categoria").
 
-Tudo via links `wa.me`, nenhum comando técnico, nenhuma menção a tokens/IA.
+---
 
-### 9. Out of scope (não fazer)
+## 4. Experiência do atleta — "Meu jogo"
 
-- Sem novas tabelas, sem migration.
-- Sem mexer em `wa-bridge`, MoodPlay, ORKYM, control-tower.
-- Sem ERP, sem cobrança de couvert, sem catraca, sem cadastro CPF/email.
-- Sem analytics novos; reaproveita o que já está em `ArenaCheckinList`.
-- Sidebar não ganha grupos novos — só o item "Recepção" no grupo "Hoje".
+Já existe `src/components/athlete/MyNextMatchCard.tsx`. Garantir que aparece em:
 
-### Arquivos previstos
+- `AthleteDashboard` (topo, quando houver próximo jogo).
+- `Profile` do atleta logado.
+- `TournamentDetail` quando o usuário logado está inscrito (card sticky no topo).
 
-Novos:
-- `src/pages/arena-dashboard/ArenaReception.tsx`
-- `src/components/arena/reception/NowEnteringBlock.tsx`
-- `src/components/arena/reception/ArrivingBlock.tsx`
-- `src/components/arena/reception/UpcomingClassesBlock.tsx`
-- `src/components/arena/reception/ActiveTournamentsBlock.tsx`
-- `src/components/arena/reception/MainQRCard.tsx`
-- `src/components/arena/reception/FullscreenQRDialog.tsx`
-- `src/components/arena/reception/ManualPresenceDialog.tsx`
-- `src/components/arena/reception/LocateBookingDialog.tsx`
-- `src/components/arena/BookingGroupShareDialog.tsx`
-- `src/components/arena/ArenaLiveStrip.tsx`
-- `src/hooks/useArenaCheckinsLive.ts`
-- `src/hooks/useArenaPublicCheckins.ts`
+Conteúdo: torneio, categoria, próximo adversário, horário, quadra, status check-in, botão "Abrir meu QR" (reusa fullscreen QR), botão "Abrir conversa do jogo" se já existir match chat.
 
-Editados:
-- `src/App.tsx` (rota `/arena/recepcao` dentro de `ArenaLayout`)
-- `src/layouts/sidebars/ArenaSidebar.tsx` (item Recepção)
-- `src/pages/arena-dashboard/ArenaQR.tsx` (fullscreen, filtros, vínculo a recurso, tipo campaign)
-- `src/pages/arena-dashboard/ArenaBookings.tsx` (botão grupo)
-- `src/pages/arena-dashboard/ArenaStudents.tsx` (CRM frequência)
-- `src/pages/PublicCheckin.tsx` (unificar telefone+nome+esporte em uma tela)
-- `src/pages/arenas/ArenaPublic.tsx` (ArenaLiveStrip)
-- `.lovable/plan.md` (registro)
+---
 
-### Critério de sucesso
+## 5. Página pública (`TournamentDetail.tsx`)
 
-- Dono abre `/arena/recepcao` no tablet e vê quem está entrando ao vivo.
-- Cliente escaneia QR e entra em <30s, 1 tela só.
-- Reserva tem QR de grupo compartilhável em 1 toque.
-- Sidebar "Hoje" tem Recepção como primeiro item.
-- Nenhuma menção a IA, ORKYM, tokens ou comandos técnicos na UI.
+Refinar mobile-first:
+
+- Hero com `cover_image`, logo da arena, título, data, cidade.
+- Blocos: Sobre · Categorias (vagas/preço) · Inscritos (se torneio marcado público) · Grupos (se publicados) · Jogos · Resultados.
+- CTA fixo no rodapé mobile: "Inscrever-se" + "Compartilhar".
+- Esconde blocos vazios; sem mensagens técnicas.
+
+---
+
+## 6. Empty states (cópia consistente)
+
+Criar `src/components/tournament/EmptyState.tsx` reutilizado nas abas:
+
+- Inscritos vazios: "Seu torneio ainda não tem inscritos." → Divulgar
+- Sem grupos: "Quando as inscrições fecharem, você poderá sortear os grupos." → Sortear grupos (desabilitado até check-in fechar)
+- Sem jogos: "Os jogos ainda não foram gerados." → Gerar jogos
+- Sem placares: "Registre os placares para atualizar o chaveamento."
+- Sem pódio: "O pódio aparece quando a final terminar."
+
+---
+
+## 7. WhatsApp / avisos (sem IA)
+
+Apenas links `wa.me` e o RPC `enqueue_enrollment_reminder` que já existe:
+
+- "Avisar jogadores" em cada jogo → abre wa.me com texto pronto (horário/quadra).
+- "Enviar lembrete" em inscrito pendente → RPC existente.
+- "Compartilhar torneio" → Web Share API + fallback wa.me.
+
+Nenhuma menção a ORKYM/IA/tokens.
+
+---
+
+## 8. Feed social
+
+Os triggers de eventos sociais (`social_events`) para inscrição paga, check-in e resultado **já existem no backend**. Vamos apenas:
+
+- Garantir que `TabPlacements` chame o RPC/insert de evento "campeão" ao publicar pódio (se ainda não chama).
+- Não mexer em privacidade default.
+
+---
+
+## 9. Não fazer
+
+- Sem nova tabela, sem migration.
+- Sem lógica de bracket no client (continua via edge `generate-bracket`).
+- Sem nova rota técnica; consolidar tudo em `/tournaments/:id/manage`.
+- Sem ORKYM/IA/análises avançadas.
+- Sem mexer em `Brackets.tsx` standalone (continua acessível, mas Central passa a ser o caminho principal).
+
+---
+
+## Arquivos previstos
+
+**Novos**
+- `src/components/tournament/StageProgress.tsx`
+- `src/components/tournament/PrimaryActionButton.tsx`
+- `src/components/tournament/TabInscritos.tsx` (unifica enrollment + entry + member)
+- `src/components/tournament/TabPodio.tsx` (wrapper de `TabPlacements` com ações)
+- `src/components/tournament/EmptyState.tsx`
+- `src/lib/tournamentStage.ts` (derivar etapa atual + próxima ação)
+
+**Editados**
+- `src/pages/ManageTournament.tsx` (reestrutura completa com tabs)
+- `src/pages/TournamentDetail.tsx` (refino público mobile-first + CTA sticky)
+- `src/pages/Tournaments.tsx` / `ArenaTournaments.tsx` / `OrganizerDashboard.tsx` (cards com próxima ação)
+- `src/pages/athlete/AthleteDashboard.tsx` (garantir `MyNextMatchCard`)
+- `src/pages/Profile.tsx` (mostrar `MyNextMatchCard` quando atleta)
+- `src/App.tsx` (redirects `/arena/dashboard/torneios/:id` e `/organizer/dashboard/eventos/:id` → `/tournaments/:id/manage`)
+- `src/components/brackets/TabGroups.tsx` / `TabMatches.tsx` (apenas cópia: "Categoria", "Posição", filtros próximos/andamento/finalizados; sem mudar lógica)
+- `.lovable/plan.md`
+
+## Critério de sucesso
+
+- Uma página resolve criar → divulgar → inscritos → check-in → grupos → jogos → chave → pódio.
+- Barra de progresso sempre indica próxima ação.
+- Atleta vê "Meu jogo" em dashboard, perfil e página do torneio.
+- Lista de inscritos vem do fluxo único `enrollment → modality → entry → member`.
+- Mobile-first, botões grandes, zero termos técnicos visíveis.

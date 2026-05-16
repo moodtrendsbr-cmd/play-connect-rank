@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Store, Settings, ArrowLeft, Share2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import MyNextMatchCard from "@/components/athlete/MyNextMatchCard";
 
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 
@@ -170,6 +171,12 @@ const TournamentDetail = () => {
 
       <main className="container max-w-2xl py-8 pb-24">
         <h1 className="text-4xl font-display text-foreground">🏐 {tournament.name}</h1>
+
+        {user && alreadyEnrolled && (
+          <div className="mt-4">
+            <MyNextMatchCard />
+          </div>
+        )}
 
         <div className="mt-6 space-y-3 text-foreground">
           <p>📍 {tournament.city} - {tournament.state}</p>

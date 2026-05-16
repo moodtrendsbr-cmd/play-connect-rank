@@ -16,6 +16,7 @@ import Tournaments from "./pages/Tournaments";
 import TournamentDetail from "./pages/TournamentDetail";
 import TournamentShare from "./pages/TournamentShare";
 import ManageTournament from "./pages/ManageTournament";
+import RedirectToManage from "./components/tournament/RedirectToManage";
 import Brackets from "./pages/Brackets";
 import Results from "./pages/Results";
 import Payment from "./pages/Payment";
@@ -224,6 +225,7 @@ const App = () => (
             <Route path="/arena/dashboard" element={<ArenaShell />}>
               <Route index element={<ArenaDashboard />} />
               <Route path="torneios" element={<ArenaTournaments />} />
+              <Route path="torneios/:id" element={<RedirectToManage />} />
               <Route path="financeiro" element={<ArenaFinance />} />
               <Route path="transacoes" element={<ArenaTransactions />} />
               <Route path="alunos" element={<ArenaStudents />} />
@@ -251,6 +253,7 @@ const App = () => (
             <Route path="/organizer/dashboard" element={<OrganizerShell />}>
               <Route index element={<OrganizerDashboard />} />
               <Route path="eventos" element={<OrganizerEvents />} />
+              <Route path="eventos/:id" element={<RedirectToManage />} />
               <Route path="inscricoes" element={<OrganizerEnrollments />} />
               <Route path="jogos" element={<OrganizerGames />} />
               <Route path="financeiro" element={<OrganizerFinance />} />
