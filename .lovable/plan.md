@@ -1,106 +1,112 @@
-# Sprint Arena Operational Excellence — Dashboard "Hoje"
+## Fase: Arena Physical Experience
 
-Refatorar `src/pages/arena-dashboard/ArenaDashboard.tsx` em central operacional simples, sem novas features de backend, sem ERP, sem IA visível. Apenas reagrupar dados que já existem em torno de quatro perguntas: o que está rolando agora, o que vem nas próximas horas, o que precisa de atenção, o que posso fazer rápido.
+Objetivo: transformar a entrada física da arena em uma experiência conversacional ao vivo, sem ERP, sem IA exposta, sem cadastro. Toda a base (tabelas `arena_checkins`, `wa_qr_tokens`, `bookings`, `booking_checkin_links`, edge `arena-public-checkin`, RPC `arena_checkin_complete/booking_checkin_resolve`) já existe e será reaproveitada. Trabalho é majoritariamente frontend.
 
-## Escopo
+### 1. Página /arena/recepcao (nova)
 
-**Arquivo principal:** `src/pages/arena-dashboard/ArenaDashboard.tsx` (rewrite focado).
-**Componentes novos** (apenas UI, sob `src/components/arena/`):
-- `NowBlock.tsx` — bloco "Agora"
-- `NextHoursBlock.tsx` — bloco "Próximas horas"
-- `AttentionBlock.tsx` — até 3 cards problema+ação
-- `QuickActionsBar.tsx` — barra de ações rápidas
+Arquivo: `src/pages/arena-dashboard/ArenaReception.tsx` (rota dentro do `ArenaLayout`).
+- Layout mobile-first, tela cheia, tipografia esportiva (Bebas para títulos curtos como "AGORA", "PRÓXIMOS").
+- Polling 15s + realtime subscription em `arena_checkins` (INSERT) e `bookings` (UPDATE) — padrão já usado em `ArenaCheckinList.tsx`.
+- 5 blocos:
+  1. **Acabou de entrar** — últimos 10 check-ins (30 min), nome + esporte + hora, animação fade-in para novos.
+  2. **Chegando agora** — bookings das próximas 2h com status de check-in (chegou / pendente / atrasado se `start_time` < now -10min).
+  3. **Próximas aulas** — `arena_classes` das próximas 3h com contagem de alunos vs presentes.
+  4. **Torneios ativos** — `tournaments` com `status='ongoing'` na arena.
+  5. **QR principal** — card grande, mostra o QR de check-in ativo (`wa_qr_tokens` kind='checkin'), botão "Abrir em tela cheia".
+- Ações rápidas (barra sticky no topo): Abrir QR cheio, Localizar reserva (busca por nome/telefone/shortcode), Registrar presença manual (dialog), Abrir conversa (link `/arena/dashboard/mensagens-wa`).
+- Adicionar item "Recepção" no topo do grupo "Hoje" do `ArenaSidebar.tsx`.
 
-**Não tocar:** sidebar, shells, rotas, edge functions, RPCs, schemas, ORKYM, Control Tower IA. `NextStepsCard` permanece (onboarding).
+### 2. /arena/dashboard/qr — refino
 
-## Estrutura nova de "Hoje"
+Arquivo existente: `src/pages/arena-dashboard/ArenaQR.tsx`.
+- Adicionar coluna/contador de scans visível (já temos `scans_count`).
+- Botão "Abrir tela cheia" em cada QR → modal preto com QR gigante, nome da arena, ideal para tablet na recepção.
+- Filtro por tipo (chips: arena / check-in / quadra / torneio / aula / produto / promo / campanha).
+- Adicionar tipo `campaign` à lista `QR_KINDS` (atualmente cobre 7 dos 8 pedidos).
+- Status: mostrar "Última leitura há Xmin" (campo `last_scan_at` se existir, senão omitir).
+- Vincular QR de quadra/aula/torneio a um recurso específico via Select no dialog de criação (lista `courts`/`arena_classes`/`tournaments`).
 
-```text
-HEADER  Nome da arena · "terça, 14h32"
-QUICK ACTIONS BAR  [Abrir QR] [Nova reserva] [Criar torneio] [Resultado] [Conversas]
-─────────────────────────────────────────────
-AGORA         quadras ocupadas · jogos/aulas em andamento · check-ins (5min) · próximo jogo (1h)
-PRÓXIMAS HORAS  reservas/aulas/torneios das próximas ~6h em timeline simples
-PRECISA DE ATENÇÃO  até 3 cards (vazio importante · reserva pendente · cobrança próxima · torneio com poucas inscrições · aluno inativo)
-─────────────────────────────────────────────
-NEXT STEPS (existente, só se houver pendência de setup)
-```
+### 3. Check-in conversacional (refino)
 
-Remover do dashboard atual: KPI grid genérico (`Receita do mês`, `Recebimentos 7d`, `Vencimentos 7d`, `Pendências`, `Reservas hoje` numérico, `Aulas hoje` numérico, `Torneios ativos` numérico, `Alunos ativos`), seções "Seu dinheiro", "Movimento da arena", card WhatsApp, card QrEntry duplicado, atalhos repetidos. Esses dados continuam acessíveis via sidebar — o dashboard para de ser vitrine de números.
+Páginas existentes: `src/pages/PublicCheckin.tsx` + edge `arena-public-checkin`. Já cumpre <30s. Ajustes:
+- Reduzir para 1 tela: telefone + nome no mesmo passo, esportes como chips abaixo (1 toque envia).
+- Auto-foco no input, formatação BR no telefone.
+- Tela "done" mostra contador "Você é o Nº da arena hoje" (consulta count do dia).
+- Sem alterações de schema/edge.
 
-## Detalhes por bloco
+### 4. Reserva de grupo
 
-### Quick Actions Bar (topo, sticky no mobile)
-Barra horizontal scrollável no mobile, grid no desktop. Botões:
-- Abrir QR → `/arena/dashboard/qr`
-- Nova reserva → `/arena/dashboard/reservas` (lista, criar manual já existe)
-- Criar torneio → `/create-tournament`
-- Registrar resultado → `/arena/dashboard/torneios`
-- Conversas → `/arena/dashboard/mensagens-wa`
+A tabela `booking_checkin_links` (shortcode) já existe e a edge resolve via `resolve_booking`. Faltam UI:
+- Em `ArenaBookings.tsx` (e na confirmação após criar reserva): botão "Link do grupo" → modal com QR + URL `/c/{shortcode}` + botão Compartilhar (Web Share API) + "Enviar no WhatsApp" (`https://wa.me/?text=...`).
+- Card "Grupo" dentro do detalhe da reserva mostrando confirmados/chegaram/pendentes (count em `arena_checkins` onde `booking_id=...`).
+- No bloco "Chegando agora" da Recepção, expandir cada reserva para listar membros e quem fez check-in.
 
-### Agora
-Queries (todas em `bookings`, `arena_classes`, `arena_attendance` — tabelas existentes):
-- Reservas com `booking_date = today` e `start_time <= now <= end_time`, status≠canceled → "X de Y quadras ocupadas" + lista das ocupadas (quadra · cliente · até HH:MM).
-- `arena_classes` com `start_at <= now <= end_at` → aulas em andamento (turma · professor).
-- `arena_attendance` últimos 30 min → "N check-ins recentes".
-- Próximo `bookings` nas próximas 60 min → card destacado "Próximo: quadra X às HH:MM".
+### 5. Realtime / polling
 
-Empty: "Nenhuma quadra ocupada agora" + link "Ver agenda do dia".
+- Recepção: canal supabase em `arena_checkins` (INSERT filter `arena_id=eq.{id}`) + interval 30s para bookings/aulas.
+- Toast discreto + som curto opcional (off por padrão) quando alguém entra.
+- Indicador "AO VIVO" piscando no header.
 
-### Próximas horas
-Lista cronológica unificada (próximas ~6h, limit 8) misturando:
-- `bookings` futuras hoje (HH:MM · quadra · cliente)
-- `arena_classes` futuras hoje (HH:MM · turma)
-- `tournaments` que começam hoje (badge "torneio")
+### 6. Feed social
 
-Ordenado por horário. Cada item tem chevron clicável que leva ao detalhe correspondente.
+`arena_checkins` tem `social_identity_id`. Reusar `SocialActivityFeed` existente: adicionar handler que, ao receber INSERT de check-in com `visibility='public'`, publica linha "{nome} está na {arena} jogando {esporte}". Sem mudar privacidade default (continua 'arena').
+- Apenas frontend: filtrar checkins públicos do dia e renderizar como cards no `Feed.tsx` já existente, behind toggle do perfil. Implementação leve: hook `useArenaPublicCheckins(arenaId)` consumido por um novo `<ArenaLiveStrip>` no perfil público da arena (`ArenaPublic.tsx`).
 
-Empty: "Sem mais agendamentos hoje" → CTA "Divulgar horários" (`/arena/dashboard/perfil`).
+### 7. CRM automático
 
-### Precisa de atenção (máx. 3)
-Pipeline determinístico em ordem de prioridade, mostra os 3 primeiros que dispararem:
-1. **Cobrança vencendo em 48h** — query `arena_billing_cycles` pending com `due_at <= now+48h` → ação "Ver cobranças".
-2. **Reserva pendente de pagamento >2h** — `bookings` status pending criados há >2h hoje → ação "Revisar".
-3. **Torneio com <30% de inscrição e início <7d** — derivado de `tournaments` + `enrollments` count → ação "Divulgar".
-4. **Buraco na agenda em horário nobre** — janela ≥2h vazia entre 18h–22h hoje → ação "Promover horário".
-5. **Aluno inativo** — `arena_students` sem `arena_attendance` últimos 21d → ação "Reativar aluno".
+Sem nova tabela. Adicionar view client-side em `ArenaStudents.tsx`:
+- Coluna "Última visita" e "Frequência (30d)" calculadas a partir de `arena_checkins` (join por `social_identity_id` ↔ `student.social_identity_id`).
+- Filtro "Inativos > 21d" / "Frequentes" como chips.
+- Botão "Abrir conversa" por aluno usando `phone_e164`.
 
-Cada card: ícone semafórico (amber/red), título curto ("3 cobranças vencem esta semana"), 1 linha de contexto, botão único. Sem cards = bloco escondido (não mostrar "tudo ok" placebo).
+### 8. WhatsApp ações rápidas
 
-### Empty states
-Linguagem humana, sempre com CTA acionável. Sem "—" ou "0".
+Em todos os cards de pessoa (Recepção, Bookings, Students):
+- Botão WhatsApp → abre `https://wa.me/{phone}` (sem comando).
+- Botão "Enviar QR" → gera link do QR check-in da arena e abre share/WhatsApp.
+- Botão "Compartilhar reserva" → usa shortcode da reserva.
 
-## Visual / UX
+Tudo via links `wa.me`, nenhum comando técnico, nenhuma menção a tokens/IA.
 
-- Tipografia: heading Bebas Neue, body Inter (já no projeto). Sentence case.
-- Tokens semânticos (`bg-card`, `border-border`, `text-foreground`, `text-muted-foreground`, `text-primary`). Acentos `text-primary` (verde #2BFF88) somente em estados vivos (ocupada, ao vivo, próximo).
-- Pulsing dot verde discreto em "Agora" quando há atividade ao vivo (CSS `animate-pulse`).
-- Mobile-first: blocos em `space-y-6`, cards `p-4`, fontes ≥ `text-sm`, toques ≥ 44px. Quick actions horizontalmente scrolláveis com `overflow-x-auto snap-x`.
-- Densidade: máximo ~1 viewport mobile para Agora + Quick Actions; resto rola.
+### 9. Out of scope (não fazer)
 
-## Dados — reaproveitamento
+- Sem novas tabelas, sem migration.
+- Sem mexer em `wa-bridge`, MoodPlay, ORKYM, control-tower.
+- Sem ERP, sem cobrança de couvert, sem catraca, sem cadastro CPF/email.
+- Sem analytics novos; reaproveita o que já está em `ArenaCheckinList`.
+- Sidebar não ganha grupos novos — só o item "Recepção" no grupo "Hoje".
 
-Todas as tabelas/queries já existem (`bookings`, `arena_classes`, `arena_attendance`, `arena_billing_cycles`, `tournaments`, `enrollments`, `arena_students`). Nenhuma migração. Nenhuma RPC nova. Apenas novas combinações no client.
+### Arquivos previstos
 
-Carregamento: `Promise.all` único no `useEffect` do dashboard, passando subsets para cada bloco via props. Refresh manual via botão discreto no header (ícone refresh) e auto-refresh leve a cada 60s para o bloco Agora apenas.
+Novos:
+- `src/pages/arena-dashboard/ArenaReception.tsx`
+- `src/components/arena/reception/NowEnteringBlock.tsx`
+- `src/components/arena/reception/ArrivingBlock.tsx`
+- `src/components/arena/reception/UpcomingClassesBlock.tsx`
+- `src/components/arena/reception/ActiveTournamentsBlock.tsx`
+- `src/components/arena/reception/MainQRCard.tsx`
+- `src/components/arena/reception/FullscreenQRDialog.tsx`
+- `src/components/arena/reception/ManualPresenceDialog.tsx`
+- `src/components/arena/reception/LocateBookingDialog.tsx`
+- `src/components/arena/BookingGroupShareDialog.tsx`
+- `src/components/arena/ArenaLiveStrip.tsx`
+- `src/hooks/useArenaCheckinsLive.ts`
+- `src/hooks/useArenaPublicCheckins.ts`
 
-## Fora de escopo (explícito)
+Editados:
+- `src/App.tsx` (rota `/arena/recepcao` dentro de `ArenaLayout`)
+- `src/layouts/sidebars/ArenaSidebar.tsx` (item Recepção)
+- `src/pages/arena-dashboard/ArenaQR.tsx` (fullscreen, filtros, vínculo a recurso, tipo campaign)
+- `src/pages/arena-dashboard/ArenaBookings.tsx` (botão grupo)
+- `src/pages/arena-dashboard/ArenaStudents.tsx` (CRM frequência)
+- `src/pages/PublicCheckin.tsx` (unificar telefone+nome+esporte em uma tela)
+- `src/pages/arenas/ArenaPublic.tsx` (ArenaLiveStrip)
+- `.lovable/plan.md` (registro)
 
-- Sem alterar sidebar (entradas para Financeiro/Alunos/etc continuam lá).
-- Sem novos endpoints, edge functions, schemas.
-- Sem analytics/gráficos.
-- Sem expor ORKYM/IA na "Hoje".
-- `OrkymInsightsCard`/`OrkymActionsCard` (mencionados na memória Phase 11.2) **são removidos da Hoje** — passam a viver apenas em `/arena/dashboard/control-tower` se ainda existir (verificar antes; se a sidebar não os referencia, ignorar).
-- WhatsApp connect deixa de ser banner permanente — vira 1 dos cards de "Atenção" só se desconectado.
+### Critério de sucesso
 
-## Relatório final (entregável após implementação)
-
-- Diff resumido: 1 arquivo refatorado + 4 componentes novos.
-- Removido: 4 KPIs genéricos, 2 grids de atalhos duplicados, banner WhatsApp, QrEntryCard duplicado.
-- Novo: Agora, Próximas horas, Atenção (regra dos 3), Quick Actions sticky.
-- Mobile QA via preview a 375px e 768px.
-- Lista de gaps detectados (ex.: campos faltantes, queries lentas) — sem corrigir, apenas reportar.
-
-## Critério de sucesso
-
-Dono da arena abre `/arena/dashboard` no celular e em ≤3 segundos enxerga: o que está rolando, o que vem, o que precisa fazer. Sem rolagem para encontrar a primeira ação útil.
+- Dono abre `/arena/recepcao` no tablet e vê quem está entrando ao vivo.
+- Cliente escaneia QR e entra em <30s, 1 tela só.
+- Reserva tem QR de grupo compartilhável em 1 toque.
+- Sidebar "Hoje" tem Recepção como primeiro item.
+- Nenhuma menção a IA, ORKYM, tokens ou comandos técnicos na UI.
