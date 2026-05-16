@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import {
   Trophy, MapPin, Users, Activity, CalendarPlus, Medal, CheckCircle2,
-  Flame, Star, Zap, Award, TrendingUp,
+  Flame, Star, Zap, Award, TrendingUp, ChevronsUp,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -34,6 +34,7 @@ const META: Record<string, { icon: JSX.Element; accent?: boolean; label?: string
   class_attendance:   { icon: <Activity className="h-4 w-4" style={{ color: ACCENT }} /> },
   tournament_won:     { icon: <Trophy className="h-5 w-5" style={{ color: ACCENT }} />, accent: true, label: "CAMPEÃO" },
   tournament_podium:  { icon: <Medal className="h-4 w-4" style={{ color: ACCENT }} />, label: "PÓDIO" },
+  tournament_advance: { icon: <ChevronsUp className="h-4 w-4" style={{ color: ACCENT }} />, label: "AVANÇOU" },
   level_up:           { icon: <TrendingUp className="h-4 w-4" style={{ color: ACCENT }} />, label: "NÍVEL" },
   streak_milestone:   { icon: <Flame className="h-4 w-4" style={{ color: "#FF6A00" }} />, label: "SEQUÊNCIA" },
   badge_earned:       { icon: <Award className="h-4 w-4" style={{ color: ACCENT }} />, label: "CONQUISTA" },
@@ -43,7 +44,7 @@ const META: Record<string, { icon: JSX.Element; accent?: boolean; label?: string
 
 const ctaFor = (item: SocialFeedItem): { to: string; label: string } | null => {
   const tid = item.payload?.tournament_id;
-  if (tid && ["tournament_join","match_win","tournament_won","tournament_podium","tournament_created"].includes(item.event_type)) {
+  if (tid && ["tournament_join","match_win","tournament_won","tournament_podium","tournament_created","tournament_advance"].includes(item.event_type)) {
     return { to: `/tournaments/${tid}`, label: "Ver torneio" };
   }
   if (item.arena_name) return { to: `#`, label: "Ver arena" };
