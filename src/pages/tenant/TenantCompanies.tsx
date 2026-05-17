@@ -35,7 +35,7 @@ export default function TenantCompanies() {
     ]);
     setCompanies((c.data ?? []) as Company[]);
     setArenas((a.data ?? []) as Arena[]);
-    setLinks((l.data ?? []) as Link[]);
+    setLinks((l.data ?? []) as unknown as Link[]);
     setLoading(false);
   };
 

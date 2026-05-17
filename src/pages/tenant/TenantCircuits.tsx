@@ -34,7 +34,7 @@ export default function TenantCircuits() {
       .select("*")
       .eq("tenant_id", tenant.id)
       .order("created_at", { ascending: false });
-    const list = (data ?? []) as Circuit[];
+    const list = (data ?? []) as unknown as Circuit[];
     setItems(list);
 
     if (list.length > 0) {
