@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   Gauge, Building2, Users, Store, DollarSign, Settings, Trophy, MessageCircle,
-  UserCheck, QrCode, Package, ShieldCheck,
+  Layers, CalendarDays, Globe,
 } from "lucide-react";
 
 const groups = [
@@ -26,29 +26,28 @@ const groups = [
     label: "Rede",
     items: [
       { title: "Arenas", url: "/tenant/arenas", icon: Building2 },
-      { title: "Eventos", url: "/tenant/torneios", icon: Trophy },
-      { title: "Empresas", url: "/tenant/empresas", icon: Store },
       { title: "Organizadores", url: "/tenant/membros", icon: Users },
+      { title: "Empresas e patrocinadores", url: "/tenant/empresas", icon: Store },
     ],
   },
   {
-    label: "Visão da rede",
+    label: "Eventos",
     items: [
-      { title: "Perfis das arenas", url: "/tenant/arenas/perfis", icon: UserCheck },
-      { title: "QR físico", url: "/tenant/qr", icon: QrCode },
-      { title: "Produtos", url: "/tenant/produtos", icon: Package },
-      { title: "Equipe", url: "/tenant/equipe", icon: ShieldCheck },
+      { title: "Torneios", url: "/tenant/torneios", icon: Trophy },
+      { title: "Circuitos", url: "/tenant/circuitos", icon: Layers },
+      { title: "Calendário", url: "/tenant/calendario", icon: CalendarDays },
     ],
   },
   {
     label: "Receita",
     items: [
-      { title: "Receita", url: "/tenant/financeiro", icon: DollarSign },
+      { title: "Financeiro", url: "/tenant/financeiro", icon: DollarSign },
     ],
   },
   {
-    label: "Configurações",
+    label: "Identidade",
     items: [
+      { title: "Perfil da rede", url: "/tenant/perfil", icon: Globe },
       { title: "Configurações", url: "/tenant/dominios", icon: Settings },
     ],
   },

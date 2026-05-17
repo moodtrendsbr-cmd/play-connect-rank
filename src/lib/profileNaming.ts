@@ -1,5 +1,5 @@
 /**
- * MoodPlay — Glossário oficial de naming por perfil (Phase 11.8).
+ * MoodPlay — Glossário oficial de naming por perfil (Phase 11.8 + Strategic Ops).
  *
  * Single source of truth para labels visíveis nos shells, sidebars,
  * dashboards e CTAs. Use estas constantes em vez de literais soltos
@@ -11,14 +11,15 @@
  * - "Campanhas" — substitui "ads / publicidade / advertising"
  * - "Ações ORKYM" — substitui "Ações sugeridas / Ações IA"
  * - "Autonomia" — substitui "Controle automático / Governança IA"
- * - "Control Tower" — termo unificado para a visão de controle
+ * - "Control Tower" — termo unificado para visão de controle (admin/arena/org/company)
+ * - "Central da Rede" — termo do Tenant (NÃO usar Control Tower no Tenant)
  */
 
 export type ProfileKey = "admin" | "tenant" | "arena" | "organizer" | "athlete" | "company";
 
 export const PROFILE_NAMING: Record<ProfileKey, { roleChip: string; defaultContext: string; towerLabel: string }> = {
   admin:     { roleChip: "Admin",        defaultContext: "MoodPlay global", towerLabel: "Control Tower" },
-  tenant:    { roleChip: "Rede",         defaultContext: "MoodPlay",        towerLabel: "Control Tower da Rede" },
+  tenant:    { roleChip: "Rede",         defaultContext: "MoodPlay",        towerLabel: "Central da Rede" },
   arena:     { roleChip: "Arena",        defaultContext: "MoodPlay",        towerLabel: "Control Tower da Arena" },
   organizer: { roleChip: "Organizador",  defaultContext: "MoodPlay",        towerLabel: "Event Control Tower" },
   athlete:   { roleChip: "Atleta",       defaultContext: "MoodPlay",        towerLabel: "Athlete Hub" },
