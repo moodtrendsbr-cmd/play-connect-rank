@@ -2195,6 +2195,59 @@ export type Database = {
         }
         Relationships: []
       }
+      circuits: {
+        Row: {
+          cover_image_url: string | null
+          created_at: string
+          description: string | null
+          end_date: string | null
+          id: string
+          is_active: boolean
+          is_public: boolean
+          name: string
+          slug: string | null
+          start_date: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          is_public?: boolean
+          name: string
+          slug?: string | null
+          start_date?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          is_public?: boolean
+          name?: string
+          slug?: string | null
+          start_date?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circuits_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clips: {
         Row: {
           author_id: string
@@ -5361,6 +5414,88 @@ export type Database = {
         }
         Relationships: []
       }
+      sponsor_arena_links: {
+        Row: {
+          arena_id: string
+          company_id: string
+          created_at: string
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          notes: string | null
+          starts_at: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          arena_id: string
+          company_id: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          starts_at?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          arena_id?: string
+          company_id?: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          starts_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_arena_links_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_arena_links_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_arena_links_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_arena_links_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_contact_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_arena_links_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_arena_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sponsored_posts: {
         Row: {
           active: boolean
@@ -6085,6 +6220,7 @@ export type Database = {
           arena_id: string | null
           categories: string[] | null
           category: Database["public"]["Enums"]["tournament_category"]
+          circuit_id: string | null
           city: string
           created_at: string
           default_split_config: Json | null
@@ -6121,6 +6257,7 @@ export type Database = {
           arena_id?: string | null
           categories?: string[] | null
           category?: Database["public"]["Enums"]["tournament_category"]
+          circuit_id?: string | null
           city?: string
           created_at?: string
           default_split_config?: Json | null
@@ -6157,6 +6294,7 @@ export type Database = {
           arena_id?: string | null
           categories?: string[] | null
           category?: Database["public"]["Enums"]["tournament_category"]
+          circuit_id?: string | null
           city?: string
           created_at?: string
           default_split_config?: Json | null
@@ -6198,6 +6336,13 @@ export type Database = {
             columns: ["arena_id"]
             isOneToOne: false
             referencedRelation: "arenas_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournaments_circuit_id_fkey"
+            columns: ["circuit_id"]
+            isOneToOne: false
+            referencedRelation: "circuits"
             referencedColumns: ["id"]
           },
         ]
