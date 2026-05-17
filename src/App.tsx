@@ -143,6 +143,10 @@ import TenantWhatsAppRouting from "./pages/tenant/TenantWhatsAppRouting";
 import ArenaMessages from "./pages/arena-dashboard/ArenaMessages";
 import TenantMessages from "./pages/tenant/TenantMessages";
 import TenantTournaments from "./pages/tenant/TenantTournaments";
+import TenantCircuits from "./pages/tenant/TenantCircuits";
+import TenantCalendar from "./pages/tenant/TenantCalendar";
+import TenantFinance from "./pages/tenant/TenantFinance";
+import TenantProfile from "./pages/tenant/TenantProfile";
 import TournamentCheckinScan from "./pages/TournamentCheckinScan";
 import OrganizerMessages from "./pages/organizer/OrganizerMessages";
 import ConnectWhatsApp from "./pages/connect/ConnectWhatsApp";
@@ -310,13 +314,16 @@ const App = () => (
               <Route path="arenas" element={<OrganizerArenas />} />
               <Route path="empresas" element={<TenantCompanies />} />
               <Route path="membros" element={<OrganizerMembers />} />
-              <Route path="financeiro" element={<OrganizerFinance />} />
+              <Route path="financeiro" element={<TenantFinance />} />
               <Route path="pagamento" element={<OrganizerPayment />} />
               <Route path="dominios" element={<OrganizerDomains />} />
               <Route path="whatsapp-routing" element={<TenantWhatsAppRouting />} />
               <Route path="mensagens-wa" element={<TenantMessages />} />
               <Route path="tournaments" element={<TenantTournaments />} />
               <Route path="torneios" element={<TenantTournaments />} />
+              <Route path="circuitos" element={<TenantCircuits />} />
+              <Route path="calendario" element={<TenantCalendar />} />
+              <Route path="perfil" element={<TenantProfile />} />
               <Route path="arenas/perfis" element={<TenantArenaProfiles />} />
               <Route path="qr" element={<TenantQR />} />
               <Route path="produtos" element={<TenantProducts />} />
