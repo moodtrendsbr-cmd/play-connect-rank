@@ -62,9 +62,6 @@ const CompanyShell = () => {
   if (resolved && !companyId && !isSuperAdmin) {
     return <Navigate to="/onboarding/company" replace />;
   }
-  if (isSuperAdmin && resolved && !companyId) {
-    return <Navigate to="/admin" replace />;
-  }
   if (!isSuperAdmin && resolved && companyId && !waLoading && !connected) {
     return <Navigate to="/company/connect-whatsapp" replace state={{ from: location.pathname }} />;
   }
@@ -86,7 +83,16 @@ const CompanyShell = () => {
             </div>
           </header>
           <main className="flex-1 p-6">
-            <Outlet />
+            {isSuperAdmin && resolved && !companyId ? (
+              <div className="rounded-lg border border-border bg-card p-6">
+                <h1 className="text-xl font-semibold text-foreground">Nenhuma empresa cadastrada</h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  O perfil de empresa está correto, mas ainda não existe uma empresa disponível para pré-visualização.
+                </p>
+              </div>
+            ) : (
+              <Outlet context={{ company: companyId ? { id: companyId, name: companyName } : null }} />
+            )}
           </main>
         </div>
       </div>

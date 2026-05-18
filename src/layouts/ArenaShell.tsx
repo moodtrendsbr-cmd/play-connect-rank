@@ -60,9 +60,10 @@ const ArenaShell = () => {
 
   const isAdmin = userRole === "admin";
 
-  // No arena owned: send to onboarding (admin goes back to /admin)
-  if (resolved && !arenaId) {
-    return <Navigate to={isAdmin ? "/admin" : "/onboarding/arena"} replace />;
+  // No arena owned: owners go to onboarding; admin stays inside the arena profile shell.
+  // This prevents profile preview routes like /arena/dashboard from bouncing back to /admin.
+  if (resolved && !arenaId && !isAdmin) {
+    return <Navigate to="/onboarding/arena" replace />;
   }
 
   // Gate: arena owners must connect WhatsApp before using the dashboard.
@@ -87,7 +88,16 @@ const ArenaShell = () => {
             </div>
           </header>
           <main className="flex-1 p-6">
-            <Outlet context={{ arena }} />
+            {resolved && !arenaId && isAdmin ? (
+              <div className="rounded-lg border border-border bg-card p-6">
+                <h1 className="text-xl font-semibold text-foreground">Nenhuma arena cadastrada</h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  O perfil de arena está correto, mas ainda não existe uma arena disponível para pré-visualização.
+                </p>
+              </div>
+            ) : (
+              <Outlet context={{ arena }} />
+            )}
           </main>
         </div>
       </div>
