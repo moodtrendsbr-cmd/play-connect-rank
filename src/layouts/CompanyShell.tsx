@@ -91,7 +91,7 @@ const CompanyShell = () => {
                 </p>
               </div>
             ) : (
-              <Outlet />
+              <Outlet context={{ company: companyId ? { id: companyId, name: companyName } : null }} />
             )}
           </main>
         </div>
