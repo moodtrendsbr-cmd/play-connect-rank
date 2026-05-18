@@ -18,16 +18,26 @@ const CompanyShell = () => {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase
+      let { data } = await supabase
         .from("companies")
         .select("id, name")
         .eq("owner_user_id", user.id)
         .maybeSingle();
+      // Admin preview fallback.
+      if (!data && userRole === "admin") {
+        const { data: anyCompany } = await supabase
+          .from("companies")
+          .select("id, name")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        data = anyCompany ?? null;
+      }
       if (data?.name) setCompanyName(data.name);
       if (data?.id) setCompanyId(data.id);
       setResolved(true);
     })();
-  }, [user]);
+  }, [user, userRole]);
 
   const scope = companyId ? { scope_type: "company" as const, company_id: companyId } : null;
   const { loading: waLoading, connected } = useWhatsAppConnectionStatus(scope);
