@@ -19,13 +19,23 @@ const ArenaShell = () => {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      // Only load arenas owned by this user. NO fallback to other arenas.
-      const { data } = await supabase
+      let { data } = await supabase
         .from("arenas")
         .select("*")
         .eq("owner_user_id", user.id)
         .limit(1)
         .maybeSingle();
+
+      // Admin preview fallback: load first arena if admin doesn't own one.
+      if (!data && userRole === "admin") {
+        const { data: anyArena } = await supabase
+          .from("arenas")
+          .select("*")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        data = anyArena ?? null;
+      }
 
       setArena(data ?? null);
       setArenaId(data?.id ?? null);
