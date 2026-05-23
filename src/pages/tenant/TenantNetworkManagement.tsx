@@ -71,14 +71,15 @@ export default function TenantNetworkManagement() {
       .select("user_id")
       .eq("email", form.email.trim().toLowerCase())
       .maybeSingle();
-    if (!prof?.user_id) {
+    const userId = (prof as any)?.user_id as string | undefined;
+    if (!userId) {
       setSaving(false);
       toast({ title: "Usuário não encontrado", description: "Esse e-mail ainda não tem cadastro na plataforma.", variant: "destructive" });
       return;
     }
     const { error } = await supabase.from("tenant_memberships").insert({
       tenant_id: tenant.id,
-      user_id: prof.user_id,
+      user_id: userId,
       role: form.role,
     });
     setSaving(false);

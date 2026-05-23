@@ -34,10 +34,10 @@ export default function TenantCircuitDetail() {
 
       const { data: ts } = await supabase
         .from("tournaments")
-        .select("id, name, start_date, end_date, arena, city, state, status, tenant_id")
+        .select("id, name, start_date, end_date, arena, city, state")
         .eq("circuit_id", id)
         .order("start_date", { ascending: true });
-      const list = (ts ?? []) as Tournament[];
+      const list = ((ts ?? []) as any[]) as Tournament[];
       setTournaments(list);
 
       // Patrocinadores — derivar via tournaments do circuito
