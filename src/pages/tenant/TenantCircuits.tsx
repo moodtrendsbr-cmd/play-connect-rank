@@ -118,7 +118,7 @@ export default function TenantCircuits() {
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {items.map((c) => (
-            <Card key={c.id}>
+            <Card key={c.id} className="cursor-pointer hover:border-primary/40 transition-colors" onClick={() => (window.location.href = `/tenant/circuitos/${c.id}`)}>
               <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
                 <CardTitle className="text-sm font-semibold">{c.name}</CardTitle>
                 <Badge variant="outline">{counts[c.id] ?? 0} torneio{(counts[c.id] ?? 0) !== 1 ? "s" : ""}</Badge>

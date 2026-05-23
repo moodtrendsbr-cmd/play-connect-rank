@@ -5418,6 +5418,8 @@ export type Database = {
         Row: {
           arena_id: string
           company_id: string
+          contract_end: string | null
+          contract_start: string | null
           created_at: string
           ends_at: string | null
           id: string
@@ -5425,11 +5427,14 @@ export type Database = {
           notes: string | null
           starts_at: string | null
           tenant_id: string
+          tournament_id: string | null
           updated_at: string
         }
         Insert: {
           arena_id: string
           company_id: string
+          contract_end?: string | null
+          contract_start?: string | null
           created_at?: string
           ends_at?: string | null
           id?: string
@@ -5437,11 +5442,14 @@ export type Database = {
           notes?: string | null
           starts_at?: string | null
           tenant_id: string
+          tournament_id?: string | null
           updated_at?: string
         }
         Update: {
           arena_id?: string
           company_id?: string
+          contract_end?: string | null
+          contract_start?: string | null
           created_at?: string
           ends_at?: string | null
           id?: string
@@ -5449,6 +5457,7 @@ export type Database = {
           notes?: string | null
           starts_at?: string | null
           tenant_id?: string
+          tournament_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -5492,6 +5501,20 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_arena_links_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_enrollment_counts"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "sponsor_arena_links_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
         ]

@@ -1,209 +1,133 @@
-# Tenant Strategic Operations Sprint
+## Tenant Cleanup + Circuit Activation Sprint
 
-Transformar o Tenant em **central estratégica da rede esportiva** — não admin técnico, não operação de arena. Sem novas tabelas, sem edge functions, sem alterar runtime ORKYM/IA: apenas reorganização de UX, queries derivadas e refinamento dos módulos existentes.
+Finaliza a transformação do Tenant em central estratégica de rede. Sem novas engines, sem IA nova, sem expor runtime/ORKYM/bindings.
 
-## Princípios
+### 1. Rotas órfãs removidas
 
-- **Tenant ≠ Arena.** Nada de estoque, bar, caixa, pedidos físicos.
-- **Zero IA exposta.** Remover Control Tower, ORKYM, "ações automáticas", "kill switch", usage meters, autonomy tier do dashboard principal. Manter acesso interno apenas em `/tenant/dominios` (configurações avançadas) se necessário.
-- **Linguagem humana.** "Pendências importantes" não "alertas abertos"; "Automação ativa" opcional ou removido.
-- **Reuso total** de queries e tabelas atuais (`arenas`, `tournaments`, `tenant_memberships`, `companies`, `v_organizer_balances_canonical`, `transaction_splits`, `arena_billing_cycles`, `arena_operational_events`).
+Remover de `src/App.tsx` (rotas e imports) e da sidebar:
+- `/tenant/produtos` + `TenantProducts.tsx`
+- `/tenant/qr` + `TenantQR.tsx`
+- `/tenant/whatsapp-routing` + `TenantWhatsAppRouting.tsx` (mover apenas para Admin se já não existir lá; senão remover)
+- `/tenant/equipe` (substituída — ver §3)
 
-## 1. Renomeação (glossário tenant)
+Apagar arquivos órfãos correspondentes. Limpar imports/links restantes via `rg`.
 
-Atualizar `src/lib/profileNaming.ts` (PROFILE_NAMING.tenant) + strings em `TenantShell.tsx`, `TenantSidebar.tsx`, `TenantDashboard.tsx`:
+### 2. WhatsApp do Tenant humanizado
 
-| Antes | Depois |
-|---|---|
-| Control Tower da Rede | Central da Rede |
-| Visão Executiva | Visão da Rede |
-| MoodPlay Default / Rede Default | `{tenant.name}` real |
-| Ações automáticas | (remover do dashboard) |
-| Alertas abertos | Pendências importantes |
-| Mensagens (técnico) | (remover do KPI principal) |
-| Conversas | Conversas da rede |
+**`TenantConnectWhatsApp.tsx` → "Comunicação da Rede"**
+Remover toda menção a ORKYM, IA, runtime, binding, provider, auditoria. Reescrever copy do `ConnectWhatsAppLayout` + `WhatsAppConnectionPanel` para mostrar apenas:
+- número conectado · status · última sincronização · QR · botão reconectar
 
-Header do shell: `Rede · {tenant.name}` (já está) — remover chip Free/tier do header principal.
+A lógica do hook `useWhatsAppConnectionStatus` é mantida (já abstraída); só o texto/UX muda.
 
-## 2. Dashboard principal `/tenant/dashboard`
+**Badge no `TenantShell`**: manter ícone/status, sem termos técnicos no tooltip.
 
-Reescrita do `TenantDashboard.tsx` com 4 blocos estratégicos (substitui os 5 atuais técnicos):
+### 3. Gestão da Rede (substitui "Equipe")
 
-### 2.1 Rede (substitui "Visão executiva")
-KPIs: Arenas ativas · Organizadores ativos · Eventos ativos · Torneios da semana · Patrocinadores ativos.
-Queries: `arenas` (is_active), `tenant_memberships`, `tournaments` (status in upcoming/registrations_open/in_progress; created_at semana), `companies` (tenant_id, is_active/sponsor flag).
+Nova página `src/pages/tenant/TenantNetworkManagement.tsx` em `/tenant/gestao-rede`.
 
-### 2.2 Crescimento
-Cards de insight derivados de queries simples:
-- Arena com maior crescimento (delta de torneios/inscrições últimos 30d vs 30d anteriores)
-- Horários mais movimentados (agregação `bookings.start_time` por hora — top 3)
-- Esportes mais praticados (agregação `tournaments.modality` ou `bookings.modality`)
-- Arenas com baixa atividade (sem torneios/bookings 30d)
-- Taxa de ocupação média (bookings confirmados / slots disponíveis estimados)
-- Crescimento da rede (arenas/organizadores novos 30d)
+Sidebar: grupo "Identidade" recebe item "Gestão da Rede" (ícone Users), `/tenant/equipe` removido.
 
-Implementação: hook novo `useTenantInsights(tenantId)` em `src/hooks/` consolidando queries paralelas (sem novas tabelas).
+Reusa `tenant_memberships` (já existe): listar gestores, adicionar por email, remover, definir role (`owner`/`admin`/`member` = "Gestor"/"Organizador"). Vínculo com arenas continua via `arenas.tenant_id`. Sem staff físico/caixa/recepção.
 
-### 2.3 Receita
-Reusar `RevenueDashboardPanel` mas com **separação por fonte** já existente em `financial_transactions.source_type`:
-- Torneios (enrollment)
-- Patrocínios (sponsorship)
-- Produtos próprios (marketplace com vendor=tenant)
-- Taxas (platform_fee)
-- Repasses (payout/withdrawal)
+Renomes globais via grep: "Equipe" → "Gestão da Rede", "Operadores" → "Gestores".
 
-Filtros: período (7d/30d/90d), comparação com período anterior, tendência (sparkline simples já no GrowthDashboardPanel ou cálculo inline).
+### 4. Circuitos ativados (P0)
 
-### 2.4 Inteligência da rede
-Cards humanos (sem termos técnicos):
-- "Arena em destaque" (top receita 30d)
-- "Torneio em alta" (mais inscrições semana)
-- "Esporte crescendo" (modalidade com maior delta)
-- "Melhor conversão" (arena com maior % booking pago)
-- "Horário de pico" (hora mais movimentada da rede)
+**4.1 `CreateTournament.tsx`**
+- Adicionar `<Select>` "Circuito (opcional)" carregando `circuits` do tenant do usuário.
+- Botão "+ Novo circuito" abre Dialog inline (nome + temporada) que insere em `circuits` e seleciona.
+- `circuit_id` enviado no insert de `tournaments`.
 
-**Remover** do dashboard: UsageMeter, KillSwitchPanel, OrkymActionsCard, ControlTowerAIPanel, tier badge, "ações automáticas", "mensagens".
+**4.2 `ManageTournament.tsx`**
+- Mesmo select para alterar/remover circuito do torneio existente.
 
-## 3. Sidebar reorganizada
+**4.3 `TournamentDetail.tsx`**
+- Se `circuit_id`, badge "Etapa do circuito · {nome}" linkando para `/tenant/circuitos/{id}` (ou rota pública futura). Logo do circuito quando houver.
 
-`TenantSidebar.tsx` — agrupar por intenção estratégica:
+**4.4 `TenantCircuits.tsx` + nova `TenantCircuitDetail.tsx` em `/tenant/circuitos/:id`**
+Refinar página de detalhe (mesmo que básica):
+- header com nome/temporada/logo
+- lista de etapas (tournaments do circuit_id ordenadas por start_date)
+- arenas envolvidas (distinct via tournaments→arena)
+- ranking básico (placeholder com link futuro)
+- próximos eventos · campeões (de torneios concluídos) · patrocinadores (sponsor_arena_links filtrado por arenas do circuito)
 
-```
-Visão geral
-  Visão geral                 /tenant/dashboard
+### 5. Insights corrigidos
 
-Rede
-  Arenas                      /tenant/arenas
-  Organizadores               /tenant/membros
-  Empresas & Patrocinadores   /tenant/empresas
+Em `useTenantInsights.ts` + `TenantDashboard.tsx`:
+- "Arena em destaque" = maior ocupação 30d (bookings/horas livres)
+- "Arena crescendo" = maior delta receita período vs anterior
+- "Esporte em alta" = mais inscrições absolutas 30d
+- "Esporte crescendo" = maior delta % período
+- "Torneio em alta" = maior nº inscrições reais (não mais o criado recentemente)
 
-Eventos
-  Eventos & Torneios          /tenant/torneios
-  Circuitos                   /tenant/circuitos    (novo)
-  Calendário                  /tenant/calendario   (novo)
+Remover duplicações ("Arena mais ativa" = "Arena em destaque" some).
 
-Receita
-  Financeiro                  /tenant/financeiro
+### 6. Financeiro
 
-Identidade
-  Perfil da rede              /tenant/perfil       (novo)
-  Configurações               /tenant/dominios
+`TenantFinance.tsx`:
+- Card "Receita por arena" (group by arena via splits/transactions já existentes)
+- "Arena mais rentável" no topo
+- Breakdown por tipo (torneio/reserva/produto)
+- Comparação período anterior (delta % e seta)
 
-Conversas
-  Conversas                   /tenant/mensagens-wa
-```
+Sem migrations: agrega no client a partir das queries atuais.
 
-Remover: "Visão da rede" (Perfis das arenas, QR físico, Produtos, Equipe) — mover para sub-abas dentro dos módulos pertinentes (Produtos → dentro de Empresas; Equipe → Configurações; QR físico → Arena, não Tenant).
+### 7. Patrocinadores
 
-## 4. Módulos a refinar
+Migration leve adiciona em `sponsor_arena_links`:
+- `tournament_id uuid null references tournaments(id) on delete cascade`
+- `contract_start date null`, `contract_end date null`
+- índice em `tournament_id`
 
-### 4.1 `/tenant/arenas` (TenantArenaProfiles.tsx + nova ArenaDetail)
-- Listagem com cards: nome, cidade, status, ocupação 30d, torneios ativos, receita 30d
-- Botão "Criar arena" (já existe fluxo admin — replicar com tenant_id pré-preenchido)
-- Detalhe arena tenant-side: performance, ocupação, eventos, **sem** bar/estoque/caixa
+UI em `TenantCompanies.tsx` (ou nova aba "Patrocínios"):
+- vínculo patrocinador ↔ arena ↔ torneio (opcional)
+- lista de ativos + "próximos vencimentos" (contract_end ≤ 30d)
 
-### 4.2 `/tenant/torneios` (TenantTournaments.tsx)
-- Calendário visual + lista
-- Filtros: arena, modalidade, status, patrocinador
-- CTAs: Criar evento / Criar torneio / Criar circuito
-- Coluna "patrocinadores" e "organizadores" por torneio
+### 8. Conversas
 
-### 4.3 `/tenant/circuitos` (novo)
-Página listando circuitos (sequência de torneios). Se não existir tabela `circuits`, criar agrupamento virtual por `tournaments.circuit_name` ou tag. **Confirmar com user antes de criar tabela.**
+`TenantMessages.tsx` ganha filtros por origem: Arenas · Organizadores · Patrocinadores · Suporte. Filtragem client-side baseada em metadata do contato (role do peer). Linguagem "Central de Relacionamento da Rede".
 
-### 4.4 `/tenant/membros` → renomear UI para "Organizadores"
-- Listagem com torneios realizados, receita gerada, status
-- Aprovar/revogar organizador (via `tenant_memberships.status`)
+### 9. Segurança RLS
 
-### 4.5 `/tenant/empresas` → "Empresas & Patrocinadores"
-TenantCompanies.tsx hoje é ComingSoon. Implementar:
-- Listagem de companies (tenant_id)
-- Cadastrar patrocinador
-- Vincular a arenas (nova tabela `sponsor_arena_links` ou reuso de `sponsorships`/`ad_campaigns` — confirmar)
-- Vincular a torneios (reusar `ad_campaigns.kind='tournament_sponsorship'`)
-- Acompanhar ativações (métricas de `ad_impressions`)
+Migration corrige `sponsor_arena_links`:
+- DROP "Sponsor links visible to all"
+- SELECT policy restrita a: admin (`has_role`), membros do tenant via `tenant_memberships`, owner da arena envolvida.
 
-### 4.6 `/tenant/perfil` (novo — TenantProfile.tsx)
-Página pública/editável do perfil da rede:
-- Logo, hero, descrição, cidades atendidas
-- Listas: arenas, patrocinadores, organizadores, torneios
-- Feed da rede (reusar `SocialActivityFeed` filtrado por tenant)
-- Upload via `ImageUploadField` para bucket `tenant-assets` (criar bucket público se ainda não existir)
+### 10. Performance
 
-### 4.7 `/tenant/financeiro` — refinar
-Hoje básico. Reescrever com:
-- **Entradas** segmentadas: torneios, patrocínios, ativações, taxas, produtos, inscrições
-- **Saídas** segmentadas: premiações, repasses, gateway, marketing, operacional
-- **Filtros**: período, arena, evento, torneio, patrocinador, organizador, tipo
-- Exportação CSV (botão simples client-side)
+- `useTenantInsights` envolto em `useMemo` por inputs
+- `React.memo` em cards de KPI repetidos
+- Consolidar queries duplicadas no Dashboard (uma única chamada de arenas reusada)
+- Sem refactor estrutural
 
-## 5. Empty states
+### 11. Mobile UX
 
-Padronizar em todas páginas tenant via componente reutilizável (criar `src/components/tenant/EmptyState.tsx` ou reusar `ComingSoonPage`):
-- Arenas vazias → "Sua rede ainda não tem arenas. Adicione a primeira." + CTA
-- Sem patrocinadores → "Conecte marcas que querem patrocinar seus torneios." + CTA
-- Sem torneios → "Crie o primeiro torneio da rede." + CTA
-- Sem organizadores → "Convide organizadores para operar seus eventos." + CTA
+`overflow-x-auto` + `min-w-0` em tabelas de Financeiro/Circuitos/Empresas. Filtros em `flex-wrap`. Headers stick em scroll horizontal.
 
-## 6. Mobile-first
+### 12. Empty states
 
-Todos cards/grids do dashboard: `grid-cols-1` mobile, `md:grid-cols-2`, `lg:grid-cols-3/4`. Sidebar já colapsa via `useSidebar`. KPIs em 2 colunas no mobile.
+Padronizar uso de `EmptyState` (já existe) em: Gestão Rede · Patrocinadores · Circuitos · Financeiro · Conversas. CTA sempre acionável.
 
-## 7. Separação Tenant vs Arena (UX rule)
+### 13. Testes manuais (checklist no relatório)
 
-Adicionar memory `mem://constraints/tenant-vs-arena.md`:
-- Tenant: rede, estratégia, expansão, perfil rede, produtos da rede
-- Arena: operação física, bar, estoque, caixa, pedidos, lojinha interna
-- Tenant pode ter produtos próprios (merchandising da rede) — separar de "produtos da arena"
+Criar circuito → criar torneio vinculado → editar → ver no detail → vincular patrocinador a torneio → adicionar gestor → connect whatsapp limpo → financeiro com breakdown → mobile sem overflow → sidebar sem itens removidos → todas rotas tenant resolvendo.
 
-## 8. Testes (manual smoke)
+### 14. Detalhes técnicos
 
-- Criar torneio via `/tenant/torneios`
-- Cadastrar patrocinador e vincular arena/torneio
-- Aprovar organizador
-- Criar/editar arena
-- Filtros financeiro
-- Editar perfil tenant + upload de imagens
-- Sidebar e rotas em 375px/768px/1280px
-- Build TS sem erros
+**Arquivos removidos:** `src/pages/tenant/TenantProducts.tsx`, `TenantQR.tsx`, `TenantTeam.tsx`, `TenantWhatsAppRouting.tsx`.
 
-## 9. Out of scope
+**Arquivos novos:** `TenantNetworkManagement.tsx`, `TenantCircuitDetail.tsx`.
 
-- Novas tabelas (exceto confirmação prévia: `circuits`, `sponsor_arena_links`, bucket `tenant-assets`)
-- Edge functions novas
-- Alterar lógica ORKYM/IA/runtime
-- Operação física de arena (bar/estoque/caixa)
-- Analytics complexos (BI completo)
+**Arquivos editados:** `src/App.tsx`, `src/layouts/sidebars/TenantSidebar.tsx`, `src/layouts/TenantShell.tsx`, `TenantConnectWhatsApp.tsx`, `TenantDashboard.tsx`, `TenantFinance.tsx`, `TenantCompanies.tsx`, `TenantCircuits.tsx`, `TenantMessages.tsx`, `useTenantInsights.ts`, `CreateTournament.tsx`, `ManageTournament.tsx`, `TournamentDetail.tsx`.
 
-## 10. Decisões pendentes (perguntar antes de implementar)
+**Migrations (2):**
+1. `sponsor_arena_links` ALTER (tournament_id, contract_start, contract_end) + nova RLS SELECT escopada.
+2. (Se necessário) ajustes mínimos para suportar query de ranking de circuitos.
 
-1. **Circuitos**: criar tabela `circuits` ou agrupar virtualmente por campo já existente?
-2. **Sponsor↔Arena**: criar tabela de vínculo dedicada ou reusar `ad_campaigns`?
-3. **Bucket `tenant-assets`**: criar agora ou reusar `arena-assets`?
+**Memória:** atualizar `mem/constraints/tenant-vs-arena.md` e `mem/features/tenant-control-tower.md` com rotas removidas e Circuit Activation.
 
-## Arquivos a tocar
+### Critério de sucesso
 
-**Editar:**
-- `src/lib/profileNaming.ts`
-- `src/layouts/TenantShell.tsx`
-- `src/layouts/sidebars/TenantSidebar.tsx`
-- `src/pages/tenant/TenantDashboard.tsx` (reescrita parcial)
-- `src/pages/tenant/TenantCompanies.tsx` (sair de ComingSoon)
-- `src/pages/tenant/TenantTournaments.tsx`
-- `src/pages/tenant/TenantArenaProfiles.tsx`
-- `src/App.tsx` (novas rotas)
-
-**Criar:**
-- `src/hooks/useTenantInsights.ts`
-- `src/components/tenant/EmptyState.tsx`
-- `src/components/tenant/NetworkInsightCard.tsx`
-- `src/pages/tenant/TenantProfile.tsx`
-- `src/pages/tenant/TenantFinance.tsx` (refinado, substituir base atual)
-- `src/pages/tenant/TenantCircuits.tsx` (se decisão #1 = virtual)
-- `src/pages/tenant/TenantCalendar.tsx`
-- `mem://constraints/tenant-vs-arena.md`
-
-**Não tocar:**
-- Edge functions, supabase/migrations (exceto decisões aprovadas)
-- ORKYM, IA, autonomy, control-tower-ai
-- Componentes de arena (bar/estoque/caixa)
+Tenant parece operador de rede esportiva (não admin técnico, não arena, não painel SaaS). Zero menção a ORKYM/runtime/binding na UI Tenant. Circuitos utilizáveis ponta a ponta. Build TypeScript verde.

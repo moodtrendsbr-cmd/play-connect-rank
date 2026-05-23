@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/hooks/useTenant";
@@ -22,21 +21,21 @@ const TenantConnectWhatsApp = () => {
 
   return (
     <ConnectWhatsAppLayout
-      scopeLabel="Rede · Tenant Admin"
+      scopeLabel="Comunicação da rede"
       title="Conecte o WhatsApp da sua rede e"
-      highlight="opere tudo por conversa"
-      subtitle="Reservas, torneios, matrículas, cobranças, campanhas e atendimento acontecem pelo WhatsApp com a inteligência da ORKYM."
+      highlight="centralize a comunicação"
+      subtitle="Esse é o número principal pelo qual sua rede conversa com atletas, arenas, organizadores e patrocinadores."
       backHref="/tenant/dashboard"
     >
       <WhatsAppConnectionPanel
         scope_type="tenant"
         tenant_id={tenant.id}
-        title="Conexão da rede"
-        description="Conecte o WhatsApp principal. A ORKYM coordena arenas, alertas, aprovações e operação conversacional."
+        title="WhatsApp da rede"
+        description="Conecte um número para que sua rede tenha um canal único de comunicação."
         redirectOnSuccess="/tenant/dashboard"
         valueBlocks={[
-          { title: "Operação da rede", items: ["Visão por arena", "Aprovações por chat", "Alertas em tempo real"] },
-          { title: "Inteligência ORKYM", items: ["Decisões automatizadas", "Insights conversacionais", "Auditoria completa"] },
+          { title: "O que aparece aqui", items: ["Número conectado", "Status atual", "Última sincronização"] },
+          { title: "O que você pode fazer", items: ["Ler o QR para conectar", "Reconectar quando precisar", "Atualizar o status manualmente"] },
         ]}
       />
     </ConnectWhatsAppLayout>
