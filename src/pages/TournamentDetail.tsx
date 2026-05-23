@@ -37,6 +37,13 @@ const TournamentDetail = () => {
       const { data } = await supabase.from("tournaments").select("*").eq("id", id).maybeSingle();
       setTournament(data);
 
+      if ((data as any)?.circuit_id) {
+        const { data: c } = await supabase.from("circuits" as any).select("id, name").eq("id", (data as any).circuit_id).maybeSingle();
+        if (c) setCircuit({ id: (c as any).id, name: (c as any).name });
+      } else {
+        setCircuit(null);
+      }
+
       const { count } = await supabase.from("enrollments").select("*", { count: "exact", head: true }).eq("tournament_id", id!);
       setEnrollmentCount(count || 0);
 
