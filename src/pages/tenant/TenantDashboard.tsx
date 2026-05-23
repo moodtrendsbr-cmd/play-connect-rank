@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Building2, Users, Store, DollarSign, Trophy, RefreshCw, ArrowRight,
   Network, TrendingUp, Sparkles, Clock, Activity, AlertTriangle, Flame,
-  Award, Target, MapPin, CalendarDays,
+  Target, MapPin, CalendarDays,
 } from "lucide-react";
 import { useTenantInsights } from "@/hooks/useTenantInsights";
 import { NetworkInsightCard } from "@/components/tenant/NetworkInsightCard";
