@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   Gauge, Building2, Users, Store, DollarSign, Settings, Trophy, MessageCircle,
-  Layers, CalendarDays, Globe,
+  Layers, CalendarDays, Globe, UsersRound,
 } from "lucide-react";
 
 const groups = [
@@ -26,6 +26,7 @@ const groups = [
     label: "Rede",
     items: [
       { title: "Arenas", url: "/tenant/arenas", icon: Building2 },
+      { title: "Gestão da rede", url: "/tenant/gestao-rede", icon: UsersRound },
       { title: "Organizadores", url: "/tenant/membros", icon: Users },
       { title: "Empresas e patrocinadores", url: "/tenant/empresas", icon: Store },
     ],
@@ -54,7 +55,7 @@ const groups = [
   {
     label: "Conversas",
     items: [
-      { title: "Conversas", url: "/tenant/mensagens-wa", icon: MessageCircle },
+      { title: "Comunicação da rede", url: "/tenant/mensagens-wa", icon: MessageCircle },
     ],
   },
 ];

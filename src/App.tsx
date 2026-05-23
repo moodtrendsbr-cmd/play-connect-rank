@@ -97,9 +97,8 @@ import ArenaCheckinList from "./pages/arena-dashboard/ArenaCheckinList";
 import ArenaReception from "./pages/arena-dashboard/ArenaReception";
 import PublicCheckin from "./pages/PublicCheckin";
 import TenantArenaProfiles from "./pages/tenant/TenantArenaProfiles";
-import TenantQR from "./pages/tenant/TenantQR";
-import TenantProducts from "./pages/tenant/TenantProducts";
-import TenantTeam from "./pages/tenant/TenantTeam";
+import TenantNetworkManagement from "./pages/tenant/TenantNetworkManagement";
+import TenantCircuitDetail from "./pages/tenant/TenantCircuitDetail";
 import AdminControlTower from "./pages/admin/AdminControlTower";
 import AdminInternalTools from "./pages/admin/AdminInternalTools";
 import Explore from "./pages/Explore";
@@ -139,7 +138,7 @@ import AdminWhatsAppInstances from "./pages/admin/AdminWhatsAppInstances";
 import AdminWhatsAppMessages from "./pages/admin/AdminWhatsAppMessages";
 import AdminWhatsAppBindings from "./pages/admin/AdminWhatsAppBindings";
 import AdminWhatsAppLeads from "./pages/admin/AdminWhatsAppLeads";
-import TenantWhatsAppRouting from "./pages/tenant/TenantWhatsAppRouting";
+
 import ArenaMessages from "./pages/arena-dashboard/ArenaMessages";
 import TenantMessages from "./pages/tenant/TenantMessages";
 import TenantTournaments from "./pages/tenant/TenantTournaments";
@@ -317,17 +316,16 @@ const App = () => (
               <Route path="financeiro" element={<TenantFinance />} />
               <Route path="pagamento" element={<OrganizerPayment />} />
               <Route path="dominios" element={<OrganizerDomains />} />
-              <Route path="whatsapp-routing" element={<TenantWhatsAppRouting />} />
               <Route path="mensagens-wa" element={<TenantMessages />} />
               <Route path="tournaments" element={<TenantTournaments />} />
               <Route path="torneios" element={<TenantTournaments />} />
               <Route path="circuitos" element={<TenantCircuits />} />
+              <Route path="circuitos/:id" element={<TenantCircuitDetail />} />
               <Route path="calendario" element={<TenantCalendar />} />
               <Route path="perfil" element={<TenantProfile />} />
               <Route path="arenas/perfis" element={<TenantArenaProfiles />} />
-              <Route path="qr" element={<TenantQR />} />
-              <Route path="produtos" element={<TenantProducts />} />
-              <Route path="equipe" element={<TenantTeam />} />
+              <Route path="gestao-rede" element={<TenantNetworkManagement />} />
+              <Route path="equipe" element={<Navigate to="/tenant/gestao-rede" replace />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
