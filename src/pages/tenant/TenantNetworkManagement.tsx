@@ -66,7 +66,7 @@ export default function TenantNetworkManagement() {
   const handleAdd = async () => {
     if (!tenant?.id || !form.email.trim()) return;
     setSaving(true);
-    const { data: prof } = await supabase
+    const { data: prof } = await (supabase as any)
       .from("profiles")
       .select("user_id")
       .eq("email", form.email.trim().toLowerCase())
