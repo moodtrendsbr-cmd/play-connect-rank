@@ -66,7 +66,37 @@ const EditTournamentForm = ({ tournament, userId, onSaved }: EditTournamentFormP
     split_platform: String(tournament.default_split_config?.platform_pct ?? ""),
     split_organizer: String(tournament.default_split_config?.organizer_pct ?? ""),
     split_arena: String(tournament.default_split_config?.arena_pct ?? ""),
+    circuit_id: tournament.circuit_id || "",
   });
+
+  const [circuits, setCircuits] = useState<{ id: string; name: string }[]>([]);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [newCircuitName, setNewCircuitName] = useState("");
+  const [creatingCircuit, setCreatingCircuit] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      if (!userId) return;
+      const { data: mem } = await (supabase as any).from("tenant_memberships").select("tenant_id").eq("user_id", userId).limit(1).maybeSingle();
+      const tId = (mem as any)?.tenant_id;
+      if (!tId) return;
+      setTenantId(tId);
+      const { data } = await supabase.from("circuits" as any).select("id, name").eq("tenant_id", tId).order("created_at", { ascending: false });
+      setCircuits(((data ?? []) as any[]).map((c) => ({ id: c.id, name: c.name })));
+    })();
+  }, [userId]);
+
+  const handleCreateCircuit = async () => {
+    if (!tenantId || !newCircuitName.trim()) return;
+    setCreatingCircuit(true);
+    const { data, error } = await (supabase as any).from("circuits").insert({ tenant_id: tenantId, name: newCircuitName.trim() }).select("id, name").single();
+    setCreatingCircuit(false);
+    if (error) { toast({ title: "Erro ao criar circuito", description: error.message, variant: "destructive" }); return; }
+    setCircuits((p) => [{ id: data.id, name: data.name }, ...p]);
+    setForm((f) => ({ ...f, circuit_id: data.id }));
+    setNewCircuitName("");
+    toast({ title: "Circuito criado" });
+  };
 
   const [slotConfig, setSlotConfig] = useState<SlotConfig[]>(
     Array.isArray(tournament.slot_config) ? tournament.slot_config : []
