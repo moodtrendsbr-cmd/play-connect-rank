@@ -235,6 +235,44 @@ export default function TenantFinance() {
         </Card>
       </div>
 
+      {/* Receita por arena */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center justify-between">
+            <span>Receita por arena</span>
+            {topArena && (
+              <span className="text-xs text-emerald-500 font-normal">
+                Mais rentável · {topArena.name}
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {revenueByArena.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sem receita por arena no período.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {revenueByArena.map((a) => {
+                const pct = topArena ? Math.round((a.value / topArena.value) * 100) : 0;
+                return (
+                  <li key={a.id} className="py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm truncate">{a.name}</span>
+                      <span className="text-sm font-semibold tabular-nums text-emerald-500">{fmtBRL(a.value)}</span>
+                    </div>
+                    <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full bg-emerald-500/70" style={{ width: `${pct}%` }} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+
+
       {/* Lista detalhada */}
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm font-medium flex items-center gap-2"><Filter className="h-4 w-4" /> Movimentações</CardTitle></CardHeader>
