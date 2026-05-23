@@ -270,6 +270,7 @@ const CreateTournament = () => {
       rules_file_url: form.rules_file_url || null,
       image_url: form.image_url || null,
       match_enabled: form.match_enabled,
+      circuit_id: form.circuit_id || null,
     } as any).select("id, tenant_id").single();
 
     if (error || !created) {
