@@ -158,11 +158,11 @@ const TenantDashboard = () => {
           subtitle="Onde sua rede está evoluindo nos últimos 30 dias"
         />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          <NetworkInsightCard icon={Flame}    accent="amber"   label="Arena mais ativa" value={insights.topArenaName} hint="bookings + torneios 30d" />
+          <NetworkInsightCard icon={Flame}    accent="amber"   label="Arena em destaque" value={insights.topArenaName} hint="maior ocupação 30d" />
+          <NetworkInsightCard icon={TrendingUp} accent="emerald" label="Arena crescendo" value={insights.topArenaGrowingName} hint="maior crescimento de receita" />
           <NetworkInsightCard icon={Clock}    accent="sky"     label="Horário de pico" value={insights.peakHour} hint="hora mais movimentada" />
-          <NetworkInsightCard icon={Activity} accent="emerald" label="Esporte em destaque" value={insights.topSport} hint="modalidade com mais torneios" />
+          <NetworkInsightCard icon={Activity} accent="emerald" label="Esporte em alta" value={insights.topSport} hint="mais inscrições 30d" />
           <NetworkInsightCard icon={Building2} accent="primary" label="Novas arenas" value={insights.newArenas30d} hint="nos últimos 30d" />
-          <NetworkInsightCard icon={Users}    accent="violet"  label="Novos organizadores" value={insights.newOrganizers30d} hint="nos últimos 30d" />
           <NetworkInsightCard icon={AlertTriangle} accent="amber" label="Arenas paradas" value={insights.lowActivityArenas} hint="sem movimento 30d" />
         </div>
       </section>
@@ -193,17 +193,10 @@ const TenantDashboard = () => {
         />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Card className="bg-card border-border">
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium flex items-center gap-2"><Award className="h-4 w-4 text-amber-500" /> Arena em destaque</CardTitle></CardHeader>
-            <CardContent>
-              <p className="text-lg font-semibold text-foreground truncate">{insights.topArenaName ?? "—"}</p>
-              <p className="text-xs text-muted-foreground">maior atividade da rede</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
             <CardHeader className="pb-2"><CardTitle className="text-sm font-medium flex items-center gap-2"><Trophy className="h-4 w-4 text-primary" /> Torneio em alta</CardTitle></CardHeader>
             <CardContent>
               <p className="text-lg font-semibold text-foreground truncate">{insights.trendingTournament ?? "—"}</p>
-              <p className="text-xs text-muted-foreground">mais recente da rede</p>
+              <p className="text-xs text-muted-foreground">mais inscrições reais nos últimos 30 dias</p>
             </CardContent>
           </Card>
           <Card className="bg-card border-border">
@@ -216,8 +209,15 @@ const TenantDashboard = () => {
           <Card className="bg-card border-border">
             <CardHeader className="pb-2"><CardTitle className="text-sm font-medium flex items-center gap-2"><MapPin className="h-4 w-4 text-sky-500" /> Esporte crescendo</CardTitle></CardHeader>
             <CardContent>
-              <p className="text-lg font-semibold text-foreground truncate">{insights.topSport ?? "—"}</p>
-              <p className="text-xs text-muted-foreground">modalidade com mais torneios criados</p>
+              <p className="text-lg font-semibold text-foreground truncate">{insights.topSportGrowing ?? "—"}</p>
+              <p className="text-xs text-muted-foreground">modalidade com maior crescimento % no período</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4 text-violet-500" /> Novos organizadores</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-lg font-semibold text-foreground truncate">{insights.newOrganizers30d}</p>
+              <p className="text-xs text-muted-foreground">entraram na rede nos últimos 30 dias</p>
             </CardContent>
           </Card>
         </div>
