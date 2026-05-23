@@ -74,7 +74,39 @@ const CreateTournament = () => {
     rules_file_url: "",
     image_url: "",
     match_enabled: true,
+    circuit_id: "",
   });
+
+  const [circuits, setCircuits] = useState<{ id: string; name: string }[]>([]);
+  const [newCircuitName, setNewCircuitName] = useState("");
+  const [creatingCircuit, setCreatingCircuit] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      if (!user) return;
+      const { data: mem } = await (supabase as any).from("tenant_memberships").select("tenant_id").eq("user_id", user.id).limit(1).maybeSingle();
+      const tenantId = (mem as any)?.tenant_id;
+      if (!tenantId) return;
+      const { data } = await supabase.from("circuits" as any).select("id, name").eq("tenant_id", tenantId).order("created_at", { ascending: false });
+      setCircuits(((data ?? []) as any[]).map((c) => ({ id: c.id, name: c.name })));
+    })();
+  }, [user]);
+
+  const handleCreateCircuit = async () => {
+    if (!user || !newCircuitName.trim()) return;
+    const { data: mem } = await (supabase as any).from("tenant_memberships").select("tenant_id").eq("user_id", user.id).limit(1).maybeSingle();
+    const tenantId = (mem as any)?.tenant_id;
+    if (!tenantId) { toast({ title: "Apenas redes podem criar circuitos", variant: "destructive" }); return; }
+    setCreatingCircuit(true);
+    const { data, error } = await (supabase as any).from("circuits").insert({ tenant_id: tenantId, name: newCircuitName.trim() }).select("id, name").single();
+    setCreatingCircuit(false);
+    if (error) { toast({ title: "Erro ao criar circuito", description: error.message, variant: "destructive" }); return; }
+    setCircuits((p) => [{ id: data.id, name: data.name }, ...p]);
+    setForm((f) => ({ ...f, circuit_id: data.id }));
+    setNewCircuitName("");
+    toast({ title: "Circuito criado" });
+  };
+
 
   // Builder state (sequential per-gender)
   const [builder, setBuilder] = useState({
