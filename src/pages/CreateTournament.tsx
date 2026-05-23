@@ -402,6 +402,35 @@ const CreateTournament = () => {
             );
           })()}
 
+          {/* Circuito (opcional, somente redes) */}
+          {circuits.length > 0 || newCircuitName !== "" ? (
+            <div className="space-y-2">
+              <Label>Circuito (opcional)</Label>
+              <div className="flex gap-2">
+                <Select value={form.circuit_id || "__none__"} onValueChange={(v) => update("circuit_id", v === "__none__" ? "" : v)}>
+                  <SelectTrigger className="flex-1"><SelectValue placeholder="Sem circuito" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sem circuito</SelectItem>
+                    {circuits.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="+ Novo circuito (nome)"
+                  value={newCircuitName}
+                  onChange={(e) => setNewCircuitName(e.target.value)}
+                />
+                <Button type="button" variant="outline" onClick={handleCreateCircuit} disabled={creatingCircuit || !newCircuitName.trim()}>
+                  {creatingCircuit ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar"}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Vincula este torneio como etapa de um circuito da sua rede.</p>
+            </div>
+          ) : null}
+
+
+
           {/* 3. Builder Sequencial de Categorias */}
           <div className="rounded-lg border border-border bg-card p-4 space-y-4">
             <Label className="text-base font-semibold">Configurar Categorias por Gênero</Label>
