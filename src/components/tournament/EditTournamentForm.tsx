@@ -239,6 +239,7 @@ const EditTournamentForm = ({ tournament, userId, onSaved }: EditTournamentFormP
             arena_pct: parseFloat(form.split_arena) || 0,
           }
         : null,
+      circuit_id: form.circuit_id || null,
     } as any).eq("id", tournament.id).select("*").single();
 
     setLoading(false);
