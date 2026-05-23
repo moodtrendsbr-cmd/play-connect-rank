@@ -86,6 +86,18 @@ export default function TenantFinance() {
   const totalExits = exits.reduce((s, t) => s + Number(t.total_amount || 0), 0);
   const net = totalEntries - totalExits;
 
+  const revenueByArena = useMemo(() => {
+    const m = new Map<string, number>();
+    entries.forEach((t) => {
+      if (!t.arena_id) return;
+      m.set(t.arena_id, (m.get(t.arena_id) ?? 0) + Number(t.total_amount || 0));
+    });
+    return [...m.entries()]
+      .map(([id, v]) => ({ id, name: arenas.find((a) => a.id === id)?.name ?? "Arena", value: v }))
+      .sort((a, b) => b.value - a.value);
+  }, [entries, arenas]);
+  const topArena = revenueByArena[0];
+
   const exportCsv = () => {
     const header = "data,tipo,fonte,arena,status,valor\n";
     const rows = filtered.map((t) => {
