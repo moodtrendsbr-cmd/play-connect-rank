@@ -78,6 +78,7 @@ const CreateTournament = () => {
   });
 
   const [circuits, setCircuits] = useState<{ id: string; name: string }[]>([]);
+  const [tenantId, setTenantId] = useState<string | null>(null);
   const [newCircuitName, setNewCircuitName] = useState("");
   const [creatingCircuit, setCreatingCircuit] = useState(false);
 
@@ -85,12 +86,14 @@ const CreateTournament = () => {
     (async () => {
       if (!user) return;
       const { data: mem } = await (supabase as any).from("tenant_memberships").select("tenant_id").eq("user_id", user.id).limit(1).maybeSingle();
-      const tenantId = (mem as any)?.tenant_id;
-      if (!tenantId) return;
-      const { data } = await supabase.from("circuits" as any).select("id, name").eq("tenant_id", tenantId).order("created_at", { ascending: false });
+      const tId = (mem as any)?.tenant_id;
+      if (!tId) return;
+      setTenantId(tId);
+      const { data } = await supabase.from("circuits" as any).select("id, name").eq("tenant_id", tId).order("created_at", { ascending: false });
       setCircuits(((data ?? []) as any[]).map((c) => ({ id: c.id, name: c.name })));
     })();
   }, [user]);
+
 
   const handleCreateCircuit = async () => {
     if (!user || !newCircuitName.trim()) return;
@@ -270,6 +273,7 @@ const CreateTournament = () => {
       rules_file_url: form.rules_file_url || null,
       image_url: form.image_url || null,
       match_enabled: form.match_enabled,
+      circuit_id: form.circuit_id || null,
     } as any).select("id, tenant_id").single();
 
     if (error || !created) {
@@ -401,6 +405,35 @@ const CreateTournament = () => {
               </div>
             );
           })()}
+
+          {/* Circuito (opcional, somente redes) */}
+          {tenantId ? (
+            <div className="space-y-2">
+              <Label>Circuito (opcional)</Label>
+              <div className="flex gap-2">
+                <Select value={form.circuit_id || "__none__"} onValueChange={(v) => update("circuit_id", v === "__none__" ? "" : v)}>
+                  <SelectTrigger className="flex-1"><SelectValue placeholder="Sem circuito" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sem circuito</SelectItem>
+                    {circuits.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="+ Novo circuito (nome)"
+                  value={newCircuitName}
+                  onChange={(e) => setNewCircuitName(e.target.value)}
+                />
+                <Button type="button" variant="outline" onClick={handleCreateCircuit} disabled={creatingCircuit || !newCircuitName.trim()}>
+                  {creatingCircuit ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar"}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Vincula este torneio como etapa de um circuito da sua rede.</p>
+            </div>
+          ) : null}
+
+
 
           {/* 3. Builder Sequencial de Categorias */}
           <div className="rounded-lg border border-border bg-card p-4 space-y-4">
