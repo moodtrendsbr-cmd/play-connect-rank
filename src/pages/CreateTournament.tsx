@@ -407,7 +407,7 @@ const CreateTournament = () => {
           })()}
 
           {/* Circuito (opcional, somente redes) */}
-          {circuits.length > 0 || newCircuitName !== "" ? (
+          {tenantId ? (
             <div className="space-y-2">
               <Label>Circuito (opcional)</Label>
               <div className="flex gap-2">
