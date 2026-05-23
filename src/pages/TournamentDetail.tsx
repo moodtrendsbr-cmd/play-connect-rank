@@ -182,6 +182,15 @@ const TournamentDetail = () => {
       <main className="container max-w-2xl py-8 pb-24">
         <h1 className="text-4xl font-display text-foreground">🏐 {tournament.name}</h1>
 
+        {circuit && (
+          <Link
+            to={`/tenant/circuitos/${circuit.id}`}
+            className="inline-flex items-center gap-1.5 mt-3 px-2.5 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"
+          >
+            🏆 Etapa do circuito · {circuit.name}
+          </Link>
+        )}
+
         {user && alreadyEnrolled && (
           <div className="mt-4">
             <MyNextMatchCard />
