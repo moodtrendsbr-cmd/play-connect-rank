@@ -25,6 +25,7 @@ const TournamentDetail = () => {
   const [loading, setLoading] = useState(false);
   const [partners, setPartners] = useState<any[]>([]);
   const [sponsors, setSponsors] = useState<any[]>([]);
+  const [circuit, setCircuit] = useState<{ id: string; name: string } | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
