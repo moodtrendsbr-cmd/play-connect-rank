@@ -78,6 +78,7 @@ const CreateTournament = () => {
   });
 
   const [circuits, setCircuits] = useState<{ id: string; name: string }[]>([]);
+  const [tenantId, setTenantId] = useState<string | null>(null);
   const [newCircuitName, setNewCircuitName] = useState("");
   const [creatingCircuit, setCreatingCircuit] = useState(false);
 
@@ -85,12 +86,14 @@ const CreateTournament = () => {
     (async () => {
       if (!user) return;
       const { data: mem } = await (supabase as any).from("tenant_memberships").select("tenant_id").eq("user_id", user.id).limit(1).maybeSingle();
-      const tenantId = (mem as any)?.tenant_id;
-      if (!tenantId) return;
-      const { data } = await supabase.from("circuits" as any).select("id, name").eq("tenant_id", tenantId).order("created_at", { ascending: false });
+      const tId = (mem as any)?.tenant_id;
+      if (!tId) return;
+      setTenantId(tId);
+      const { data } = await supabase.from("circuits" as any).select("id, name").eq("tenant_id", tId).order("created_at", { ascending: false });
       setCircuits(((data ?? []) as any[]).map((c) => ({ id: c.id, name: c.name })));
     })();
   }, [user]);
+
 
   const handleCreateCircuit = async () => {
     if (!user || !newCircuitName.trim()) return;
