@@ -86,6 +86,18 @@ export default function TenantFinance() {
   const totalExits = exits.reduce((s, t) => s + Number(t.total_amount || 0), 0);
   const net = totalEntries - totalExits;
 
+  const revenueByArena = useMemo(() => {
+    const m = new Map<string, number>();
+    entries.forEach((t) => {
+      if (!t.arena_id) return;
+      m.set(t.arena_id, (m.get(t.arena_id) ?? 0) + Number(t.total_amount || 0));
+    });
+    return [...m.entries()]
+      .map(([id, v]) => ({ id, name: arenas.find((a) => a.id === id)?.name ?? "Arena", value: v }))
+      .sort((a, b) => b.value - a.value);
+  }, [entries, arenas]);
+  const topArena = revenueByArena[0];
+
   const exportCsv = () => {
     const header = "data,tipo,fonte,arena,status,valor\n";
     const rows = filtered.map((t) => {
@@ -222,6 +234,44 @@ export default function TenantFinance() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Receita por arena */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center justify-between">
+            <span>Receita por arena</span>
+            {topArena && (
+              <span className="text-xs text-emerald-500 font-normal">
+                Mais rentável · {topArena.name}
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {revenueByArena.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sem receita por arena no período.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {revenueByArena.map((a) => {
+                const pct = topArena ? Math.round((a.value / topArena.value) * 100) : 0;
+                return (
+                  <li key={a.id} className="py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm truncate">{a.name}</span>
+                      <span className="text-sm font-semibold tabular-nums text-emerald-500">{fmtBRL(a.value)}</span>
+                    </div>
+                    <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full bg-emerald-500/70" style={{ width: `${pct}%` }} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+
 
       {/* Lista detalhada */}
       <Card>

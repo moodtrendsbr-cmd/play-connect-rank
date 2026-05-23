@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,7 +66,37 @@ const EditTournamentForm = ({ tournament, userId, onSaved }: EditTournamentFormP
     split_platform: String(tournament.default_split_config?.platform_pct ?? ""),
     split_organizer: String(tournament.default_split_config?.organizer_pct ?? ""),
     split_arena: String(tournament.default_split_config?.arena_pct ?? ""),
+    circuit_id: tournament.circuit_id || "",
   });
+
+  const [circuits, setCircuits] = useState<{ id: string; name: string }[]>([]);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [newCircuitName, setNewCircuitName] = useState("");
+  const [creatingCircuit, setCreatingCircuit] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      if (!userId) return;
+      const { data: mem } = await (supabase as any).from("tenant_memberships").select("tenant_id").eq("user_id", userId).limit(1).maybeSingle();
+      const tId = (mem as any)?.tenant_id;
+      if (!tId) return;
+      setTenantId(tId);
+      const { data } = await supabase.from("circuits" as any).select("id, name").eq("tenant_id", tId).order("created_at", { ascending: false });
+      setCircuits(((data ?? []) as any[]).map((c) => ({ id: c.id, name: c.name })));
+    })();
+  }, [userId]);
+
+  const handleCreateCircuit = async () => {
+    if (!tenantId || !newCircuitName.trim()) return;
+    setCreatingCircuit(true);
+    const { data, error } = await (supabase as any).from("circuits").insert({ tenant_id: tenantId, name: newCircuitName.trim() }).select("id, name").single();
+    setCreatingCircuit(false);
+    if (error) { toast({ title: "Erro ao criar circuito", description: error.message, variant: "destructive" }); return; }
+    setCircuits((p) => [{ id: data.id, name: data.name }, ...p]);
+    setForm((f) => ({ ...f, circuit_id: data.id }));
+    setNewCircuitName("");
+    toast({ title: "Circuito criado" });
+  };
 
   const [slotConfig, setSlotConfig] = useState<SlotConfig[]>(
     Array.isArray(tournament.slot_config) ? tournament.slot_config : []
@@ -209,6 +239,7 @@ const EditTournamentForm = ({ tournament, userId, onSaved }: EditTournamentFormP
             arena_pct: parseFloat(form.split_arena) || 0,
           }
         : null,
+      circuit_id: form.circuit_id || null,
     } as any).eq("id", tournament.id).select("*").single();
 
     setLoading(false);
@@ -228,6 +259,31 @@ const EditTournamentForm = ({ tournament, userId, onSaved }: EditTournamentFormP
         <Label>Nome do Torneio</Label>
         <Input value={form.name} onChange={(e) => update("name", e.target.value)} className="mt-1" />
       </div>
+
+      {/* Circuito (apenas redes) */}
+      {tenantId && (
+        <div className="space-y-2">
+          <Label>Circuito (opcional)</Label>
+          <Select value={form.circuit_id || "__none__"} onValueChange={(v) => update("circuit_id", v === "__none__" ? "" : v)}>
+            <SelectTrigger><SelectValue placeholder="Sem circuito" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Sem circuito</SelectItem>
+              {circuits.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <div className="flex gap-2">
+            <Input
+              placeholder="+ Novo circuito (nome)"
+              value={newCircuitName}
+              onChange={(e) => setNewCircuitName(e.target.value)}
+            />
+            <Button type="button" variant="outline" onClick={handleCreateCircuit} disabled={creatingCircuit || !newCircuitName.trim()}>
+              {creatingCircuit ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar"}
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Vincula este torneio como etapa de um circuito da sua rede.</p>
+        </div>
+      )}
 
       {/* Modalidade */}
       {(() => {
