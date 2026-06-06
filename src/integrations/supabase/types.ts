@@ -5663,34 +5663,46 @@ export type Database = {
           canceled_at: string | null
           company_id: string
           created_at: string
+          current_period_end: string | null
           id: string
           next_billing_at: string | null
           plan_id: string
+          provider: string | null
+          provider_subscription_id: string | null
           started_at: string
           status: string
           tenant_id: string | null
+          trial_ends_at: string | null
         }
         Insert: {
           canceled_at?: string | null
           company_id: string
           created_at?: string
+          current_period_end?: string | null
           id?: string
           next_billing_at?: string | null
           plan_id: string
+          provider?: string | null
+          provider_subscription_id?: string | null
           started_at?: string
           status?: string
           tenant_id?: string | null
+          trial_ends_at?: string | null
         }
         Update: {
           canceled_at?: string | null
           company_id?: string
           created_at?: string
+          current_period_end?: string | null
           id?: string
           next_billing_at?: string | null
           plan_id?: string
+          provider?: string | null
+          provider_subscription_id?: string | null
           started_at?: string
           status?: string
           tenant_id?: string | null
+          trial_ends_at?: string | null
         }
         Relationships: [
           {
@@ -6975,31 +6987,49 @@ export type Database = {
       withdrawal_requests: {
         Row: {
           amount: number
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
+          executed_at: string | null
+          failure_reason: string | null
           id: string
           organizer_id: string
           pix_key: string
           processed_at: string | null
+          provider: string | null
+          provider_payment_id: string | null
           status: string
           tenant_id: string | null
         }
         Insert: {
           amount: number
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
+          executed_at?: string | null
+          failure_reason?: string | null
           id?: string
           organizer_id: string
           pix_key: string
           processed_at?: string | null
+          provider?: string | null
+          provider_payment_id?: string | null
           status?: string
           tenant_id?: string | null
         }
         Update: {
           amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
+          executed_at?: string | null
+          failure_reason?: string | null
           id?: string
           organizer_id?: string
           pix_key?: string
           processed_at?: string | null
+          provider?: string | null
+          provider_payment_id?: string | null
           status?: string
           tenant_id?: string | null
         }
