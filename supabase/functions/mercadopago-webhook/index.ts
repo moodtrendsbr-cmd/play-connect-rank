@@ -1,163 +1,92 @@
+// MercadoPago webhook unificado — roteia payment + preapproval para o handler
+// compartilhado em _shared/mp.ts. Idempotente, assinatura validada.
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  getServiceClient, recordWebhookEvent, verifyMpSignature,
+  processMpPayment, getMpPreapproval, mapMpStatus,
+} from "../_shared/mp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-signature, x-request-id",
 };
 
-const MOOD_COMMISSION_PERCENT = 10;
-
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const MERCADO_PAGO_ACCESS_TOKEN = Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN");
-    if (!MERCADO_PAGO_ACCESS_TOKEN) {
-      throw new Error("MERCADO_PAGO_ACCESS_TOKEN not configured");
-    }
-
     const body = await req.json();
-
-    if (body.type === "payment" || body.topic === "payment") {
-      const paymentId = body.data?.id || body.id;
-
-      // Idempotency: skip if already processed
-      const idemClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-      const { error: idemErr } = await idemClient.from("webhook_events").insert({
-        provider: "mercadopago", event_id: String(paymentId), payload: body, processed_at: new Date().toISOString(),
+    const type = body.type || body.topic;
+    const dataId = String(body.data?.id ?? body.id ?? "");
+    if (!dataId) {
+      return new Response(JSON.stringify({ received: true, skipped: "no_id" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-      if (idemErr && (idemErr as any).code === "23505") {
-        return new Response(JSON.stringify({ received: true, replay: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-        headers: { Authorization: `Bearer ${MERCADO_PAGO_ACCESS_TOKEN}` },
-      });
-
-      const payment = await paymentResponse.json();
-
-      if (!paymentResponse.ok) {
-        throw new Error(`MP payment fetch error [${paymentResponse.status}]: ${JSON.stringify(payment)}`);
-      }
-
-      if (payment.status === "approved") {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
-
-        // Parse external_reference (new format: JSON object, old format: array of IDs)
-        let enrollmentIds: string[] = [];
-        let tournamentId: string | null = null;
-        let hasSplit = false;
-        let boostCampaignId: string | null = null;
-
-        try {
-          const ref = JSON.parse(payment.external_reference);
-          if (Array.isArray(ref)) {
-            enrollmentIds = ref;
-          } else if (ref?.source_type === "boost") {
-            boostCampaignId = ref.campaign_id ?? null;
-          } else {
-            enrollmentIds = ref.enrollment_ids || [];
-            tournamentId = ref.tournament_id || null;
-            hasSplit = ref.has_split || false;
-          }
-        } catch {
-          enrollmentIds = [payment.external_reference];
-        }
-
-        // Phase M: handle boost payment — flip financial_transactions to paid;
-        // the trg_boost_activate_on_paid trigger will activate the campaign.
-        if (boostCampaignId) {
-          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-          const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-          const supabase = createClient(supabaseUrl, supabaseKey);
-
-          const { error: ftxErr } = await supabase
-            .from("financial_transactions")
-            .update({
-              status: "paid",
-              paid_at: new Date().toISOString(),
-              payment_reference: String(paymentId),
-            })
-            .eq("source_type", "boost")
-            .eq("source_id", boostCampaignId);
-
-          if (ftxErr) {
-            console.error("Boost ftx update error:", ftxErr);
-          } else {
-            console.log(`Boost campaign ${boostCampaignId} marked paid via webhook`);
-          }
-
-          return new Response(JSON.stringify({ received: true, boost: true }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        // Update enrollments
-        for (const enrollmentId of enrollmentIds) {
-          const { error } = await supabase
-            .from("enrollments")
-            .update({ status: "paid", payment_id: String(paymentId) })
-            .eq("id", enrollmentId);
-
-          if (error) {
-            console.error(`Error updating enrollment ${enrollmentId}:`, error);
-          } else {
-            console.log(`Enrollment ${enrollmentId} marked as paid`);
-          }
-        }
-
-        // Credit organizer balance if no split was done
-        if (!hasSplit && tournamentId) {
-          const { data: tournament } = await supabase
-            .from("tournaments")
-            .select("organizer_id, entry_fee")
-            .eq("id", tournamentId)
-            .single();
-
-          if (tournament) {
-            const totalAmount = payment.transaction_amount || (Number(tournament.entry_fee) * enrollmentIds.length);
-            const commission = Math.round(totalAmount * MOOD_COMMISSION_PERCENT) / 100;
-            const orgAmount = totalAmount - commission;
-
-            // Check if already credited
-            const { data: existing } = await supabase
-              .from("organizer_balances")
-              .select("id")
-              .eq("payment_id", String(paymentId))
-              .limit(1);
-
-            if (!existing || existing.length === 0) {
-              await supabase.from("organizer_balances").insert({
-                organizer_id: tournament.organizer_id,
-                tournament_id: tournamentId,
-                amount: orgAmount,
-                commission,
-                payment_id: String(paymentId),
-                status: "paid",
-              });
-              console.log(`Credited organizer ${tournament.organizer_id}: R$${orgAmount}`);
-            }
-          }
-        }
-      }
     }
 
-    return new Response(JSON.stringify({ received: true }), {
+    // Verifica assinatura quando MP_WEBHOOK_SECRET configurado
+    const sigOk = await verifyMpSignature(req, dataId);
+    if (!sigOk) {
+      console.warn("[mp-webhook] invalid signature for", dataId);
+      return new Response(JSON.stringify({ error: "invalid_signature" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabase = getServiceClient();
+
+    // Idempotência (provider, event_id)
+    const eventKey = `${type}:${dataId}:${body.action ?? ""}`;
+    const fresh = await recordWebhookEvent(supabase, "mercadopago", eventKey, body);
+    if (!fresh) {
+      return new Response(JSON.stringify({ received: true, replay: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (type === "payment") {
+      const result = await processMpPayment(supabase, dataId);
+      return new Response(JSON.stringify({ received: true, ...result }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (type === "preapproval" || type === "subscription_preapproval") {
+      const pre = await getMpPreapproval(dataId);
+      // pre.status: authorized | paused | cancelled | pending
+      const subId = pre.external_reference;
+      if (subId) {
+        let nextStatus = "active";
+        if (pre.status === "paused") nextStatus = "overdue";
+        else if (pre.status === "cancelled") nextStatus = "cancelled";
+        else if (pre.status === "pending") nextStatus = "pending";
+        await supabase.from("subscriptions").update({
+          status: nextStatus,
+          provider: "mercadopago",
+          provider_subscription_id: String(pre.id),
+        }).eq("id", subId);
+      }
+      return new Response(JSON.stringify({ received: true, preapproval: pre.status }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (type === "authorized_payment" || type === "subscription_authorized_payment") {
+      // Cobrança recorrente paga — MP envia paymentId; processa normalmente
+      const result = await processMpPayment(supabase, dataId);
+      return new Response(JSON.stringify({ received: true, recurring: true, ...result }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ received: true, ignored: type }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: unknown) {
-    console.error("Webhook error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+  } catch (err: any) {
+    console.error("[mp-webhook] error:", err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
