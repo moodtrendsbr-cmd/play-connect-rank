@@ -1,133 +1,94 @@
-## Tenant Cleanup + Circuit Activation Sprint
+# Plano — Financeiro MoodPlay para Produção Real
 
-Finaliza a transformação do Tenant em central estratégica de rede. Sem novas engines, sem IA nova, sem expor runtime/ORKYM/bindings.
+Escopo restrito: **cobrança, recebimento, repasse, recorrência, auditoria**. Nenhum módulo novo, nenhuma feature de UX nova. Tudo gira em torno das tabelas e edge functions já existentes.
 
-### 1. Rotas órfãs removidas
+## Diagnóstico atual (evidências)
 
-Remover de `src/App.tsx` (rotas e imports) e da sidebar:
-- `/tenant/produtos` + `TenantProducts.tsx`
-- `/tenant/qr` + `TenantQR.tsx`
-- `/tenant/whatsapp-routing` + `TenantWhatsAppRouting.tsx` (mover apenas para Admin se já não existir lá; senão remover)
-- `/tenant/equipe` (substituída — ver §3)
+- Secrets: `MERCADO_PAGO_ACCESS_TOKEN` ✅, `MERCADO_PAGO_PUBLIC_KEY` ✅, **`MP_WEBHOOK_SECRET` ausente** → `_shared/mp.ts:verifyMpSignature` cai em "compat mode" e aceita qualquer POST.
+- `create-booking-payment/index.ts`: se `MP_TOKEN` faltar, marca booking como `confirmed` sem cobrança. Mesmo com token, faz `update status=confirmed` quando MP responde `approved` mas **não usa idempotência** nem registra `financial_transactions` (somente o webhook genérico faz, e só pra enrollment/boost).
+- `mercadopago-webhook`: trata enrollment + boost. Não trata **booking**, **subscription**, **marketplace order** nem **refund/cancelled/expired**. Não chama `verifyMpSignature`. Idempotência via `webhook_events` ok.
+- `marketplace-webhook` e `booking-webhook` existem em paralelo — fragmentação. Precisam convergir num roteador único por `external_reference.source_type`.
+- `subscriptions` (tenant/arena/company): tabela existe, mas **não há job de cobrança recorrente** nem geração automática de `arena_billing_cycles`. Status flui só por update manual.
+- `withdrawal_requests` + `request-withdrawal`: cria pedido com saldo validado, mas **não há executor de payout** (nem MP Money Out, nem PIX manual com confirmação). Aprovação/execução não existem como código.
+- `featured_listings` tem `trg_featured_activate_on_paid`; `ad_campaigns` tem `trg_boost_activate_on_paid`. Triggers ok — o que falta é garantir que **todos os fluxos** marquem `financial_transactions.status='paid'` corretamente.
 
-Apagar arquivos órfãos correspondentes. Limpar imports/links restantes via `rg`.
+## Mudanças propostas
 
-### 2. WhatsApp do Tenant humanizado
+### A1 — MP Produção + webhook secret
+- Solicitar via `add_secret`: `MP_WEBHOOK_SECRET` (assinatura `x-signature`). Sem isso, modo produção é inseguro.
+- Adicionar `mercadopago-webhook` ao painel de webhooks MP (instrução pro user — não criável via código). Validar com `smoke-test-payment` chamando MP real R$ 1,00 e capturar evidência (payment id, status approved, row em `webhook_events`, row em `financial_transactions`).
 
-**`TenantConnectWhatsApp.tsx` → "Comunicação da Rede"**
-Remover toda menção a ORKYM, IA, runtime, binding, provider, auditoria. Reescrever copy do `ConnectWhatsAppLayout` + `WhatsAppConnectionPanel` para mostrar apenas:
-- número conectado · status · última sincronização · QR · botão reconectar
+### A2 — Webhook hardening (uma função, todos os fluxos)
+- `mercadopago-webhook` passa a:
+  - Chamar `verifyMpSignature` (rejeita 401 se inválido quando secret existir).
+  - Rotear por `external_reference.source_type`: `enrollment | booking | subscription | marketplace_order | boost | featured`.
+  - Tratar status MP: `approved`, `rejected`, `cancelled`, `refunded`, `charged_back`, `in_process` → mapear pra `financial_transactions.status` (`paid|failed|cancelled|refunded|pending`).
+  - Sempre upsert em `financial_transactions` (uma linha por payment_id, idempotente).
+- `booking-webhook` e `marketplace-webhook` viram thin wrappers que delegam pro handler compartilhado em `_shared/mp.ts` (`processMpPayment(supabase, paymentId)`).
 
-A lógica do hook `useWhatsAppConnectionStatus` é mantida (já abstraída); só o texto/UX muda.
+### A3 — Reservas pagas de verdade
+- `create-booking-payment`:
+  - Remover branch "sem MP_TOKEN → confirmed". Se faltar token → 503.
+  - Booking nasce `pending_payment`. Só vira `confirmed` via webhook (`approved`) ou retorno síncrono cartão.
+  - Adicionar `external_reference = {source_type:'booking', booking_id, tenant_id, arena_id}`.
+  - Adicionar `X-Idempotency-Key` = booking_id (já tem).
+  - Criar `financial_transactions` row `pending` no momento da criação do pagamento.
+- Trigger SQL: ao `financial_transactions.status='paid'` com `source_type='booking'`, atualizar `bookings.status='confirmed'` + creditar split. Refunded → `bookings.status='canceled'`.
 
-**Badge no `TenantShell`**: manter ícone/status, sem termos técnicos no tooltip.
+### A4 — Assinaturas recorrentes
+- Usar **Mercado Pago Preapproval** (`/preapproval`) para criar planos recorrentes reais para Tenant/Arena/Company.
+- Nova edge `create-subscription-preapproval` (não é "feature nova" — é a implementação faltante do que `subscriptions` já promete).
+- `mercadopago-webhook` passa a tratar `topic=preapproval` e `topic=authorized_payment`:
+  - Cria `arena_billing_cycles` (ou equivalente p/ company/tenant) quando cobrança recorrente bate.
+  - Flui status: `trial → active → overdue → cancelled` baseado em payment status e dunning (3 tentativas MP).
+- Cron `expire-pending-payments` é estendido para marcar `subscriptions.status='overdue'` após N dias sem pagamento.
 
-### 3. Gestão da Rede (substitui "Equipe")
+### A5 — Saques (payout real)
+- Decisão: MP Money Out só funciona em contas marketplace homologadas. Como split MP já é usado quando `collector_id` existe, o saque do **organizador conectado já é automático** (vai direto pra conta dele). Documentar isso.
+- Para casos sem split (saldo em `organizer_balances` retido na conta Mood), implementar payout PIX via MP `/v1/payments` com `payment_method_id='pix'` para a `pix_key` do `withdrawal_requests`. Estados: `pending → approved (admin) → processing → paid | failed`.
+- Nova edge `execute-withdrawal` (admin-only, JWT + role check) que dispara o PIX e atualiza status. Registrar `financial_transactions` `source_type='withdrawal'`.
+- Tela admin (`AdminFinances`) ganha botão "executar" — sem mudar layout, só ligar handler existente.
 
-Nova página `src/pages/tenant/TenantNetworkManagement.tsx` em `/tenant/gestao-rede`.
+### A6 — Boosts e Featured (validação)
+- Triggers já existem. Validar end-to-end com smoke:
+  - Comprar boost R$ 1 → webhook → `financial_transactions.status=paid` → `trg_boost_activate_on_paid` ativa `ad_campaigns.status='active'`.
+  - Idem `featured_listings`.
+- Adicionar testes em `smoke-test-payment` que cobrem os 6 `source_type`.
 
-Sidebar: grupo "Identidade" recebe item "Gestão da Rede" (ícone Users), `/tenant/equipe` removido.
+### A7 — Relatório de evidências
+Entregar arquivo `/mnt/documents/financial-go-live-evidence.md` com:
+- Payment IDs reais (sandbox e produção R$ 1,00).
+- Linhas de `webhook_events` + `financial_transactions` (printadas).
+- Booking confirmado por webhook.
+- Assinatura criada + 1º ciclo cobrado.
+- Withdrawal pending → executed → paid.
+- Featured + boost ativados via pagamento.
 
-Reusa `tenant_memberships` (já existe): listar gestores, adicionar por email, remover, definir role (`owner`/`admin`/`member` = "Gestor"/"Organizador"). Vínculo com arenas continua via `arenas.tenant_id`. Sem staff físico/caixa/recepção.
+## Detalhes técnicos
 
-Renomes globais via grep: "Equipe" → "Gestão da Rede", "Operadores" → "Gestores".
+**Tabelas tocadas (somente DML/trigger, sem schema novo):**
+- `financial_transactions` — vira fonte canônica. Adicionar trigger `trg_apply_payment_side_effects` que despacha por `source_type` (booking confirm, subscription cycle, withdrawal paid).
+- `subscriptions` — adicionar colunas `provider_subscription_id text`, `current_period_end timestamptz`, `trial_ends_at timestamptz` (migration mínima).
+- `withdrawal_requests` — adicionar `executed_at timestamptz`, `provider_payment_id text`, `failure_reason text`.
+- `webhook_events` — já existe, mantém idempotência.
 
-### 4. Circuitos ativados (P0)
+**Edge functions tocadas:**
+- editar: `mercadopago-webhook`, `create-booking-payment`, `booking-webhook`, `marketplace-webhook`, `request-withdrawal`, `smoke-test-payment`, `_shared/mp.ts`, `expire-pending-payments`.
+- criar (implementação faltante, não feature nova): `create-subscription-preapproval`, `execute-withdrawal`.
 
-**4.1 `CreateTournament.tsx`**
-- Adicionar `<Select>` "Circuito (opcional)" carregando `circuits` do tenant do usuário.
-- Botão "+ Novo circuito" abre Dialog inline (nome + temporada) que insere em `circuits` e seleciona.
-- `circuit_id` enviado no insert de `tournaments`.
+**Secrets necessários:** `MP_WEBHOOK_SECRET` (será solicitado via `add_secret`).
 
-**4.2 `ManageTournament.tsx`**
-- Mesmo select para alterar/remover circuito do torneio existente.
+**Ordem de execução:**
+1. Pedir `MP_WEBHOOK_SECRET`.
+2. Migration (colunas + trigger despachador).
+3. Refatorar `_shared/mp.ts` (`processMpPayment`).
+4. Atualizar webhooks + `create-booking-payment`.
+5. Implementar preapproval + executor de saque.
+6. Estender `smoke-test-payment` + rodar.
+7. Gerar relatório de evidências.
 
-**4.3 `TournamentDetail.tsx`**
-- Se `circuit_id`, badge "Etapa do circuito · {nome}" linkando para `/tenant/circuitos/{id}` (ou rota pública futura). Logo do circuito quando houver.
-
-**4.4 `TenantCircuits.tsx` + nova `TenantCircuitDetail.tsx` em `/tenant/circuitos/:id`**
-Refinar página de detalhe (mesmo que básica):
-- header com nome/temporada/logo
-- lista de etapas (tournaments do circuit_id ordenadas por start_date)
-- arenas envolvidas (distinct via tournaments→arena)
-- ranking básico (placeholder com link futuro)
-- próximos eventos · campeões (de torneios concluídos) · patrocinadores (sponsor_arena_links filtrado por arenas do circuito)
-
-### 5. Insights corrigidos
-
-Em `useTenantInsights.ts` + `TenantDashboard.tsx`:
-- "Arena em destaque" = maior ocupação 30d (bookings/horas livres)
-- "Arena crescendo" = maior delta receita período vs anterior
-- "Esporte em alta" = mais inscrições absolutas 30d
-- "Esporte crescendo" = maior delta % período
-- "Torneio em alta" = maior nº inscrições reais (não mais o criado recentemente)
-
-Remover duplicações ("Arena mais ativa" = "Arena em destaque" some).
-
-### 6. Financeiro
-
-`TenantFinance.tsx`:
-- Card "Receita por arena" (group by arena via splits/transactions já existentes)
-- "Arena mais rentável" no topo
-- Breakdown por tipo (torneio/reserva/produto)
-- Comparação período anterior (delta % e seta)
-
-Sem migrations: agrega no client a partir das queries atuais.
-
-### 7. Patrocinadores
-
-Migration leve adiciona em `sponsor_arena_links`:
-- `tournament_id uuid null references tournaments(id) on delete cascade`
-- `contract_start date null`, `contract_end date null`
-- índice em `tournament_id`
-
-UI em `TenantCompanies.tsx` (ou nova aba "Patrocínios"):
-- vínculo patrocinador ↔ arena ↔ torneio (opcional)
-- lista de ativos + "próximos vencimentos" (contract_end ≤ 30d)
-
-### 8. Conversas
-
-`TenantMessages.tsx` ganha filtros por origem: Arenas · Organizadores · Patrocinadores · Suporte. Filtragem client-side baseada em metadata do contato (role do peer). Linguagem "Central de Relacionamento da Rede".
-
-### 9. Segurança RLS
-
-Migration corrige `sponsor_arena_links`:
-- DROP "Sponsor links visible to all"
-- SELECT policy restrita a: admin (`has_role`), membros do tenant via `tenant_memberships`, owner da arena envolvida.
-
-### 10. Performance
-
-- `useTenantInsights` envolto em `useMemo` por inputs
-- `React.memo` em cards de KPI repetidos
-- Consolidar queries duplicadas no Dashboard (uma única chamada de arenas reusada)
-- Sem refactor estrutural
-
-### 11. Mobile UX
-
-`overflow-x-auto` + `min-w-0` em tabelas de Financeiro/Circuitos/Empresas. Filtros em `flex-wrap`. Headers stick em scroll horizontal.
-
-### 12. Empty states
-
-Padronizar uso de `EmptyState` (já existe) em: Gestão Rede · Patrocinadores · Circuitos · Financeiro · Conversas. CTA sempre acionável.
-
-### 13. Testes manuais (checklist no relatório)
-
-Criar circuito → criar torneio vinculado → editar → ver no detail → vincular patrocinador a torneio → adicionar gestor → connect whatsapp limpo → financeiro com breakdown → mobile sem overflow → sidebar sem itens removidos → todas rotas tenant resolvendo.
-
-### 14. Detalhes técnicos
-
-**Arquivos removidos:** `src/pages/tenant/TenantProducts.tsx`, `TenantQR.tsx`, `TenantTeam.tsx`, `TenantWhatsAppRouting.tsx`.
-
-**Arquivos novos:** `TenantNetworkManagement.tsx`, `TenantCircuitDetail.tsx`.
-
-**Arquivos editados:** `src/App.tsx`, `src/layouts/sidebars/TenantSidebar.tsx`, `src/layouts/TenantShell.tsx`, `TenantConnectWhatsApp.tsx`, `TenantDashboard.tsx`, `TenantFinance.tsx`, `TenantCompanies.tsx`, `TenantCircuits.tsx`, `TenantMessages.tsx`, `useTenantInsights.ts`, `CreateTournament.tsx`, `ManageTournament.tsx`, `TournamentDetail.tsx`.
-
-**Migrations (2):**
-1. `sponsor_arena_links` ALTER (tournament_id, contract_start, contract_end) + nova RLS SELECT escopada.
-2. (Se necessário) ajustes mínimos para suportar query de ranking de circuitos.
-
-**Memória:** atualizar `mem/constraints/tenant-vs-arena.md` e `mem/features/tenant-control-tower.md` com rotas removidas e Circuit Activation.
-
-### Critério de sucesso
-
-Tenant parece operador de rede esportiva (não admin técnico, não arena, não painel SaaS). Zero menção a ORKYM/runtime/binding na UI Tenant. Circuitos utilizáveis ponta a ponta. Build TypeScript verde.
+## Fora de escopo (não fazer)
+- Nenhuma tela nova. UX existente fica intacta.
+- Nenhuma alteração em ORKYM, WhatsApp, gamificação, ranking.
+- Sem mexer em `auth.*`, `storage.*`.
+- Sem cobrança recorrente em provedor que não seja MP (Stripe/Paddle ficam fora; usuário já está em MP).
