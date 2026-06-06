@@ -49,10 +49,21 @@ Deno.serve(async (req) => {
       .select("id");
     if (e2) throw e2;
 
+    // Subscriptions: marca como overdue quando next_billing_at vencido há > 3 dias
+    const overdueCutoff = new Date(Date.now() - 3 * 86400 * 1000).toISOString();
+    const { data: overdueSubs, error: e3 } = await admin
+      .from("subscriptions")
+      .update({ status: "overdue" })
+      .in("status", ["active", "trial"])
+      .lt("next_billing_at", overdueCutoff)
+      .select("id");
+    if (e3) throw e3;
+
     return json({
       ok: true,
       expired_enrollments: nEnrollments ?? 0,
       expired_bookings: bookings?.length ?? 0,
+      overdue_subscriptions: overdueSubs?.length ?? 0,
     });
   } catch (err: any) {
     return json({ error: err?.message ?? "Unknown error" }, 500);
