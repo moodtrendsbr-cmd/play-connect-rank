@@ -1,70 +1,44 @@
+// Thin wrapper: delega para o handler compartilhado em _shared/mp.ts.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getServiceClient, recordWebhookEvent, verifyMpSignature, processMpPayment } from "../_shared/mp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-signature, x-request-id",
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const MERCADO_PAGO_ACCESS_TOKEN = Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN");
-    if (!MERCADO_PAGO_ACCESS_TOKEN) throw new Error("MERCADO_PAGO_ACCESS_TOKEN not configured");
-
     const body = await req.json();
-
-    if (body.type === "payment" || body.topic === "payment") {
-      const paymentId = body.data?.id || body.id;
-
-      const idemClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-      const { error: idemErr } = await idemClient.from("webhook_events").insert({
-        provider: "mercadopago-marketplace", event_id: String(paymentId), payload: body, processed_at: new Date().toISOString(),
+    const type = body.type || body.topic;
+    const dataId = String(body.data?.id ?? body.id ?? "");
+    if (type !== "payment" || !dataId) {
+      return new Response(JSON.stringify({ received: true, ignored: type }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-      if (idemErr && (idemErr as any).code === "23505") {
-        return new Response(JSON.stringify({ received: true, replay: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-        headers: { Authorization: `Bearer ${MERCADO_PAGO_ACCESS_TOKEN}` },
-      });
-      const payment = await paymentResponse.json();
-      if (!paymentResponse.ok) throw new Error(`MP fetch error: ${JSON.stringify(payment)}`);
-
-      if (payment.status === "approved") {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
-
-        try {
-          const ref = JSON.parse(payment.external_reference);
-          if (ref.type === "marketplace" && ref.order_id) {
-            await supabase
-              .from("marketplace_orders")
-              .update({ status: "paid", payment_id: String(paymentId) } as any)
-              .eq("id", ref.order_id);
-            console.log(`Marketplace order ${ref.order_id} marked as paid`);
-          }
-        } catch {
-          console.log("Not a marketplace payment, skipping");
-        }
-      }
     }
-
-    return new Response(JSON.stringify({ received: true }), {
+    const sigOk = await verifyMpSignature(req, dataId);
+    if (!sigOk) {
+      return new Response(JSON.stringify({ error: "invalid_signature" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const supabase = getServiceClient();
+    const fresh = await recordWebhookEvent(supabase, "mercadopago", `payment:${dataId}`, body);
+    if (!fresh) {
+      return new Response(JSON.stringify({ received: true, replay: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const result = await processMpPayment(supabase, dataId);
+    return new Response(JSON.stringify({ received: true, ...result }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: unknown) {
-    console.error("Webhook error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+  } catch (err: any) {
+    console.error("[marketplace-webhook] error:", err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
